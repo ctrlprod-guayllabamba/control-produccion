@@ -1,0 +1,996 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0">
+<title>Mi Trabajo — Producción</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+:root{--b:#1a2b4a;--o:#e8631a;--g:#166534;--gl:#d4edda;--r:#721c24;--rl:#f8d7da;--y:#856404;--yl:#fff3cd;--gr:#6c757d;--bg:#f4f6f9;--w:#fff;--bd:#dee2e6}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);min-height:100vh}
+/* TOPBAR */
+.tb{background:var(--b);color:#fff;padding:0 1rem;display:flex;align-items:center;height:54px;gap:.75rem;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+.tb-icon{width:36px;height:36px;border-radius:50%;background:var(--o);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.tb-name{font-size:14px;font-weight:700}.tb-role{font-size:11px;color:rgba(255,255,255,.6)}
+.tb-right{margin-left:auto;text-align:right}
+.tb-date{font-size:11px;color:rgba(255,255,255,.5)}
+.sync-dot{font-size:9px;color:rgba(134,239,172,.8)}
+/* SCREENS */
+.sc{display:none;padding:1rem 1rem 76px}.sc.on{display:block}
+/* LOGIN */
+.login-title{font-size:22px;font-weight:700;color:var(--b);text-align:center;margin:1.5rem 0 .5rem}
+.login-sub{font-size:13px;color:var(--gr);text-align:center;margin-bottom:1.5rem}
+.w-card{background:var(--w);border:2px solid var(--bd);border-radius:14px;padding:.875rem 1.125rem;margin-bottom:.625rem;display:flex;align-items:center;gap:12px;cursor:pointer;transition:border-color .12s}
+.w-card:active{border-color:var(--o);background:#fff8f5}
+.w-av{width:46px;height:46px;border-radius:50%;background:var(--b);color:#fff;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.w-name{font-size:15px;font-weight:700;color:var(--b)}
+.w-sub{font-size:12px;color:var(--gr);margin-top:2px}
+.w-fase{font-size:11px;background:var(--yl);color:var(--y);padding:2px 8px;border-radius:10px;display:inline-block;margin-top:4px}
+/* HOME */
+.home-card{background:var(--w);border:1.5px solid var(--bd);border-radius:14px;padding:1.25rem;text-align:center;margin-bottom:.875rem}
+.btn-big{width:100%;padding:1.125rem;background:var(--o);color:#fff;border:none;border-radius:14px;font-size:18px;font-weight:700;cursor:pointer;margin-bottom:.75rem}
+.btn-big:active{opacity:.85}
+/* STEP BAR */
+.stepbar{display:flex;margin-bottom:1rem;background:var(--w);border:1.5px solid var(--bd);border-radius:12px;overflow:hidden}
+.sb-s{flex:1;padding:.5rem .25rem;text-align:center;font-size:10px;font-weight:700;color:var(--gr);border-right:1px solid var(--bd)}
+.sb-s:last-child{border-right:none}
+.sb-s .sn{font-size:9px;display:block;margin-bottom:2px}
+.sb-s.done{background:#fff8f5;color:var(--o)}
+.sb-s.active{background:var(--o);color:#fff}
+/* FASE GRID */
+.fase-grid{display:grid;grid-template-columns:1fr 1fr;gap:.75rem}
+.fase-btn{background:var(--w);border:2px solid var(--bd);border-radius:14px;padding:1rem .5rem;text-align:center;cursor:pointer}
+.fase-btn:active,.fase-btn.sel{border-color:var(--o);background:#fff8f5}
+.fi{font-size:28px;display:block;margin-bottom:.375rem}
+.fn{font-size:12px;font-weight:700;color:var(--b)}
+.fd{font-size:10px;color:var(--gr);margin-top:2px}
+.my-fase{font-size:9px;background:var(--o);color:#fff;padding:1px 6px;border-radius:8px;margin-top:3px;display:inline-block}
+/* LISTS */
+.cj-item,.pt-item{background:var(--w);border:2px solid var(--bd);border-radius:12px;padding:.875rem 1rem;margin-bottom:.625rem;cursor:pointer;display:flex;align-items:center;gap:10px}
+.cj-item:active,.pt-item:active{border-color:var(--o);background:#fff8f5}
+.cj-av{width:40px;height:40px;border-radius:9px;background:var(--b);color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;text-align:center;line-height:1.2;flex-shrink:0}
+.cj-name{font-size:14px;font-weight:700;color:var(--b)}.cj-desc{font-size:12px;color:var(--gr);margin-top:1px}
+.cj-prog{font-size:11px;font-weight:700;color:var(--o);margin-top:3px}
+.bar-w{height:5px;background:var(--bd);border-radius:3px;margin-top:5px;overflow:hidden}
+.bar-f{height:100%;border-radius:3px;background:var(--o)}.bar-f.full{background:var(--g)}
+.pr-code{font-size:16px;font-weight:700;color:var(--b)}.pr-pend{font-size:13px;font-weight:700;color:var(--o)}
+.pr-perf{font-size:12px;color:var(--gr);font-family:monospace;margin-top:2px}
+.pr-info{display:flex;gap:10px;font-size:11px;color:var(--gr);margin-top:3px;flex-wrap:wrap}
+/* CARD */
+.card{background:var(--w);border:1.5px solid var(--bd);border-radius:14px;padding:1rem 1.125rem;margin-bottom:.75rem}
+.card-t{font-size:13px;font-weight:700;color:var(--b);margin-bottom:.875rem;display:flex;align-items:center;gap:8px}
+/* FIELD */
+.field{margin-bottom:.875rem}
+.field label{display:block;font-size:11px;font-weight:700;color:var(--gr);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.375rem}
+.field input,.field select,.field textarea{width:100%;padding:12px 13px;font-size:15px;border:1.5px solid var(--bd);border-radius:10px;font-family:inherit;color:#1a1a2e;background:var(--w);-webkit-appearance:none}
+.field input:focus,.field select:focus{outline:none;border-color:var(--o);box-shadow:0 0 0 3px rgba(232,99,26,.1)}
+.field input[readonly]{background:#f8f9fa;color:var(--gr)}
+.field textarea{resize:none;min-height:68px}
+.frow{display:flex;gap:.625rem}.frow .field{flex:1}
+/* NUM */
+.num-big{font-size:44px;font-weight:700;text-align:center;border:2px solid var(--bd);border-radius:14px;padding:.5rem;color:var(--b);width:100%;-webkit-appearance:none}
+.num-big:focus{border-color:var(--o);outline:none}
+.num-ctrl{display:flex;gap:.5rem;margin-top:.5rem}
+.nbtn{flex:1;padding:.875rem;font-size:22px;font-weight:700;background:var(--w);border:1.5px solid var(--bd);border-radius:10px;cursor:pointer;color:var(--b)}
+.nbtn:active{background:#eef4ff}
+/* CALIDAD */
+.cal-row{display:flex;gap:.5rem}
+.cal-btn{flex:1;padding:.75rem .25rem;border-radius:10px;border:2px solid var(--bd);text-align:center;cursor:pointer;font-size:11px;font-weight:700}
+.cal-btn .ci{font-size:22px;display:block;margin-bottom:3px}
+.cal-btn.ok-sel{border-color:#22c55e;background:var(--gl);color:var(--g)}
+.cal-btn.rep-sel{border-color:#f59e0b;background:var(--yl);color:var(--y)}
+.cal-btn.rec-sel{border-color:#ef4444;background:var(--rl);color:var(--r)}
+/* EXTRA BOXES */
+.ebox{border-radius:12px;padding:.875rem 1rem;margin-bottom:.875rem}
+.eb-blue{background:#eef4ff;border:1.5px solid #bfdbfe}
+.eb-blue .eb-t{color:#1e40af}
+.eb-yellow{background:var(--yl);border:1.5px solid #fcd34d}
+.eb-yellow .eb-t{color:#92400e}
+.eb-green{background:var(--gl);border:1.5px solid #86efac}
+.eb-green .eb-t{color:var(--g)}
+.eb-t{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.75rem}
+/* INFO */
+.info-box{background:var(--yl);border-radius:10px;padding:.75rem 1rem;font-size:13px;color:var(--y);margin-bottom:.875rem;display:flex;gap:8px}
+.info-ok{background:var(--gl);border:1px solid #86efac;color:var(--g)}
+/* BUTTONS */
+.btn-main{width:100%;padding:1.0625rem;background:var(--o);color:#fff;border:none;border-radius:14px;font-size:17px;font-weight:700;cursor:pointer}
+.btn-main:active{opacity:.85}
+.btn-blue{background:var(--b);color:#fff;border:none;border-radius:14px;font-size:16px;font-weight:700;cursor:pointer;padding:.9375rem;width:100%;margin-top:.625rem}
+.btn-back{background:none;border:none;color:var(--b);font-size:14px;font-weight:700;cursor:pointer;padding:.5rem 0;display:flex;align-items:center;gap:5px;margin-bottom:.75rem}
+/* SUCCESS */
+.ok-box{background:var(--gl);border:2px solid #86efac;border-radius:14px;padding:1.5rem;text-align:center;margin-bottom:.875rem}
+/* HISTORY */
+.hist-item{background:var(--w);border:1.5px solid var(--bd);border-radius:12px;padding:.875rem 1rem;margin-bottom:.625rem}
+.hi-badge{font-size:11px;font-weight:700;color:#fff;padding:3px 10px;border-radius:20px;display:inline-block}
+.fc{background:#1e40af}.fa{background:#065f46}.fsold{background:#92400e}
+.fperf{background:#9d174d}.flim{background:#5b21b6}.fpin{background:#991b1b}
+/* BOTTOM NAV */
+.bnav{position:fixed;bottom:0;left:0;right:0;background:var(--w);border-top:1px solid var(--bd);display:flex;height:58px;z-index:50}
+.nb{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;border:none;background:none;font-size:10px;font-weight:700;color:var(--gr)}
+.nb.active{color:var(--o)}.nb .ni{font-size:20px}
+/* LOADING */
+.loading{text-align:center;padding:2rem;color:var(--gr);font-size:13px}
+</style>
+</head>
+<body>
+<div class="tb">
+  <div class="tb-icon" id="top-icon">👷</div>
+  <div style="flex:1;min-width:0">
+    <div class="tb-name" id="top-name">Mi Trabajo Diario</div>
+    <div class="tb-role" id="top-role">Selecciona tu nombre</div>
+  </div>
+  <div class="tb-right">
+    <div class="tb-date" id="top-date"></div>
+    <div class="sync-dot" id="sync-dot">⚪ cargando</div>
+  </div>
+</div>
+
+<!-- LOGIN -->
+<div class="sc on" id="sc-login">
+  <div class="login-title">¿Quién eres?</div>
+  <div class="login-sub">Toca tu nombre para comenzar</div>
+  <div id="worker-list"></div>
+</div>
+
+<!-- HOME -->
+<div class="sc" id="sc-home">
+  <div class="home-card">
+    <div style="font-size:46px" id="home-icon">👷</div>
+    <div style="font-size:18px;font-weight:700;color:var(--b);margin:.375rem 0 .125rem" id="home-name">—</div>
+    <div style="font-size:12px;color:var(--gr)" id="home-role">—</div>
+    <div style="font-size:13px;color:var(--gr);margin-top:.625rem" id="home-date">—</div>
+  </div>
+  <button class="btn-big" onclick="go('sc-fase')">✚  Registrar mi trabajo</button>
+  <div class="card">
+    <div class="card-t">📋 Mis registros de hoy</div>
+    <div id="home-hist"><div style="text-align:center;color:var(--gr);font-size:13px;padding:.75rem">Nada aún hoy.</div></div>
+    <div style="margin-top:.75rem;padding-top:.75rem;border-top:1px solid var(--bd)">
+      <button onclick="exportarMisDatos()" style="width:100%;padding:.75rem;background:var(--b);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;">
+        📤 Enviar mis datos al supervisor
+      </button>
+      <div style="font-size:11px;color:var(--gr);text-align:center;margin-top:.5rem">
+        Descarga un archivo y envíaselo al supervisor por WhatsApp
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- FASE -->
+<div class="sc" id="sc-fase">
+  <button class="btn-back" onclick="go('sc-home')">← Inicio</button>
+  <div style="font-size:17px;font-weight:700;color:var(--b);margin-bottom:.875rem">¿Qué hiciste hoy?</div>
+  <div class="fase-grid" id="fase-grid"></div>
+</div>
+
+<!-- CONJUNTO -->
+<div class="sc" id="sc-cj">
+  <button class="btn-back" onclick="go('sc-fase')">← Cambiar fase</button>
+  <div id="sb-cj"></div>
+  <div style="font-size:16px;font-weight:700;color:var(--b);margin-bottom:.375rem" id="cj-title">Selecciona el conjunto</div>
+  <div style="font-size:12px;color:var(--gr);margin-bottom:.875rem" id="cj-sub"></div>
+  <div id="cj-list"><div class="loading">Cargando...</div></div>
+</div>
+
+<!-- PARTE -->
+<div class="sc" id="sc-parte">
+  <button class="btn-back" onclick="go('sc-cj')">← Cambiar conjunto</button>
+  <div id="sb-parte"></div>
+  <div style="font-size:16px;font-weight:700;color:var(--b);margin-bottom:.375rem">Selecciona la pieza</div>
+  <div style="font-size:12px;color:var(--gr);margin-bottom:.875rem" id="parte-sub"></div>
+  <div id="parte-list"></div>
+</div>
+
+<!-- PLANCHA (corte paso 1) -->
+<div class="sc" id="sc-plancha">
+  <button class="btn-back" onclick="go('sc-parte')">← Cambiar pieza</button>
+  <div id="sb-plancha"></div>
+  <div class="info-box" style="background:#eef4ff;border:1px solid #bfdbfe;color:#1e40af">
+    <span style="font-size:16px">ℹ</span>
+    <span>Paso 1: registra la plancha. Paso 2: cuántas piezas cortaste. Paso 3: el sobrante.</span>
+  </div>
+  <div class="card">
+    <div class="card-t">🗃 Datos de la plancha</div>
+    <div class="field"><label>N° Plancha / N° Colada</label>
+      <input type="text" id="pl-num" placeholder="Ej: PL-2024-042" style="font-size:16px;font-weight:700">
+    </div>
+    <div class="field"><label>Material / Grado de acero</label>
+      <select id="pl-mat" style="font-size:15px">
+        <option value="A588-50">A588-50</option><option value="A572-50">A572-50</option>
+        <option value="A36">A36</option><option value="otro">Otro</option>
+      </select>
+    </div>
+    <div class="frow">
+      <div class="field"><label>Espesor (mm)</label><input type="number" id="pl-esp" inputmode="numeric" placeholder="12" oninput="calcPlancha()"></div>
+      <div class="field"><label>Ancho (mm)</label><input type="number" id="pl-ancho" inputmode="numeric" placeholder="1500" oninput="calcPlancha()"></div>
+      <div class="field"><label>Largo (mm)</label><input type="number" id="pl-largo" inputmode="numeric" placeholder="6000" oninput="calcPlancha()"></div>
+    </div>
+    <div class="frow">
+      <div class="field"><label>Cantidad de planchas</label><input type="number" id="pl-qty" value="1" min="1" oninput="calcPlancha()"></div>
+      <div class="field"><label>Peso total plancha (kg) AUTO</label><input type="number" id="pl-peso" readonly placeholder="calculado" style="background:#f0fdf4;font-weight:700"></div>
+    </div>
+    <div id="pl-resumen" style="display:none;background:#eef4ff;border-radius:10px;padding:.75rem;font-size:13px;color:#1e40af;margin-top:.25rem"></div>
+    <button class="btn-main" style="margin-top:.5rem" onclick="irACortes()">Siguiente — Registrar piezas cortadas →</button>
+  </div>
+</div>
+
+<!-- CORTES (paso 2) -->
+<div class="sc" id="sc-cortes">
+  <button class="btn-back" onclick="go('sc-plancha')">← Cambiar plancha</button>
+  <div id="sb-cortes"></div>
+  <div class="ebox eb-yellow">
+    <div class="eb-t">🗃 Plancha en uso</div>
+    <div id="plancha-txt" style="font-size:13px;color:#92400e"></div>
+  </div>
+  <div class="card">
+    <div class="card-t">✂ Piezas cortadas de <span id="corte-pr-lbl" style="color:var(--o)"></span></div>
+    <div class="field"><label>¿Cuántas piezas cortaste?</label>
+      <input type="number" class="num-big" id="ct-qty" inputmode="numeric" min="1" placeholder="0" oninput="calcCtPeso()">
+      <div class="num-ctrl">
+        <button class="nbtn" onclick="adj('ct-qty',-10)">−10</button>
+        <button class="nbtn" onclick="adj('ct-qty',-1)">−1</button>
+        <button class="nbtn" onclick="adj('ct-qty',1)">+1</button>
+        <button class="nbtn" onclick="adj('ct-qty',10)">+10</button>
+      </div>
+    </div>
+    <div class="field" style="display:none" id="ct-peso-row">
+      <label>Peso piezas cortadas (kg) AUTO</label>
+      <input type="number" id="ct-peso-pzas" readonly style="background:#f0fdf4;font-weight:700">
+    </div>
+    <div class="field"><label>¿Cómo salieron las piezas?</label>
+      <div class="cal-row">
+        <div class="cal-btn ok-sel" id="cal-ok" onclick="setCal('ok')"><span class="ci">✅</span>Buenas</div>
+        <div class="cal-btn" id="cal-rep" onclick="setCal('rep')"><span class="ci">⚠️</span>Reproceso</div>
+        <div class="cal-btn" id="cal-rec" onclick="setCal('rec')"><span class="ci">❌</span>Rechazo</div>
+      </div>
+    </div>
+    <div class="field"><label>Notas (opcional)</label>
+      <textarea id="ct-obs" placeholder="Ej: corte limpio, defecto en borde..."></textarea>
+    </div>
+    <button class="btn-main" onclick="irASobrante()">Siguiente — Registrar sobrante →</button>
+  </div>
+</div>
+
+<!-- SOBRANTE (paso 3) -->
+<div class="sc" id="sc-sob">
+  <button class="btn-back" onclick="go('sc-cortes')">← Volver a piezas</button>
+  <div id="sb-sob"></div>
+  <div class="ebox eb-yellow">
+    <div class="eb-t">🗃 Plancha origen</div>
+    <div id="sob-plancha-txt" style="font-size:13px;color:#92400e"></div>
+  </div>
+  <div class="card">
+    <div class="card-t">📦 Sobrante de plancha</div>
+    <div class="field"><label>¿Hay sobrante reutilizable?</label>
+      <select id="sob-hay" onchange="toggleSob()" style="font-size:15px">
+        <option value="si">Sí — queda material sobrante</option>
+        <option value="no">No — todo usado / desperdicio</option>
+      </select>
+    </div>
+    <div id="sob-fields">
+      <div class="ebox eb-green">
+        <div class="eb-t">📐 Dimensiones del sobrante</div>
+        <div style="font-size:12px;color:var(--g);margin-bottom:.5rem">
+          N° colada del sobrante: <strong id="sob-colada-lbl">—</strong> (mismo que plancha original)
+        </div>
+        <div class="frow">
+          <div class="field"><label>Espesor (mm)</label><input type="number" id="sob-esp" inputmode="numeric" placeholder="igual plancha" oninput="calcSob()" style="border-color:#86efac"></div>
+          <div class="field"><label>Ancho (mm)</label><input type="number" id="sob-ancho" inputmode="numeric" placeholder="mm" oninput="calcSob()" style="border-color:#86efac"></div>
+          <div class="field"><label>Largo (mm)</label><input type="number" id="sob-largo" inputmode="numeric" placeholder="mm" oninput="calcSob()" style="border-color:#86efac"></div>
+        </div>
+        <div class="frow">
+          <div class="field"><label>Cantidad piezas sobrantes</label><input type="number" id="sob-qty" value="1" min="1" oninput="calcSob()" style="border-color:#86efac"></div>
+          <div class="field"><label>Peso sobrante (kg) AUTO</label><input type="number" id="sob-peso" readonly placeholder="calculado" style="background:#f0fdf4;font-weight:700;border-color:#86efac"></div>
+        </div>
+        <div class="frow">
+          <div class="field"><label>Destino</label>
+            <select id="sob-dest" style="font-size:15px;border-color:#86efac">
+              <option value="stock">📦 Stock — reutilizable</option>
+              <option value="waste">🗑 Desperdicio</option>
+            </select>
+          </div>
+          <div class="field"><label>Ubicación / Referencia</label>
+            <input type="text" id="sob-ref" placeholder="Rack A-3, Bodega..." style="border-color:#86efac">
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="sob-desp-box" style="display:none;margin-bottom:.875rem">
+      <div style="background:var(--rl);border-radius:10px;padding:.75rem;font-size:13px;color:var(--r);font-weight:700" id="sob-desp-txt">Desperdicio: — kg</div>
+    </div>
+    <button class="btn-main" id="btn-guardar-corte" onclick="guardarCorte()">✔  Guardar registro de corte</button>
+  </div>
+</div>
+
+<!-- FORM OTRAS FASES -->
+<div class="sc" id="sc-form">
+  <button class="btn-back" id="form-back-btn">← Volver</button>
+  <div id="sb-form"></div>
+  <div id="form-content"></div>
+</div>
+
+<!-- OK -->
+<div class="sc" id="sc-ok">
+  <div class="ok-box">
+    <div style="font-size:50px">✅</div>
+    <div style="font-size:18px;font-weight:700;color:var(--g);margin:.375rem 0 .25rem">¡Guardado!</div>
+    <div style="font-size:13px;color:var(--gr)" id="ok-detail">—</div>
+  </div>
+  <div class="card">
+    <div class="card-t">📋 Mis registros de hoy</div>
+    <div id="ok-hist"></div>
+  </div>
+  <button class="btn-main" onclick="go('sc-fase')">✚  Registrar otro trabajo</button>
+  <button class="btn-blue" onclick="go('sc-home')">🏠  Ir al inicio</button>
+</div>
+
+<!-- PENDIENTES -->
+<div class="sc" id="sc-pend">
+  <div style="font-size:17px;font-weight:700;color:var(--b);margin-bottom:.875rem">Mis pendientes</div>
+  <div id="pend-content"><div class="loading">Cargando...</div></div>
+</div>
+
+<!-- BOTTOM NAV -->
+<div class="bnav">
+  <button class="nb active" id="nb-home" onclick="navTo('home')"><span class="ni">🏠</span>Inicio</button>
+  <button class="nb" id="nb-reg"  onclick="navTo('reg')"><span class="ni">✚</span>Registrar</button>
+  <button class="nb" id="nb-pend" onclick="navTo('pend')"><span class="ni">⚠</span>Pendientes</button>
+</div>
+
+<script>
+// ======= DATOS TEKLA =======
+const TEKLA=[{cj:'E-T-1',desc:'Viga HI300 — 113 uds',partes:[{pr:'pr64',perfil:'HI300-10-12*300',long:3000,plan:113,pu:234.56},{pr:'pr65',perfil:'PL12*300',long:300,plan:226,pu:8.48},{pr:'pr98',perfil:'PL8*100',long:100,plan:452,pu:0.61}]},{cj:'E-T-2',desc:'Viga HI300 — 2 uds',partes:[{pr:'pr65',perfil:'PL12*300',long:300,plan:4,pu:8.48},{pr:'pr73',perfil:'HI300-10-12*300',long:3000,plan:2,pu:234.56},{pr:'pr86',perfil:'PL10*205',long:800,plan:2,pu:12.43}]},{cj:'E-T-3',desc:'Viga HI300 — 111 uds',partes:[{pr:'pr65',perfil:'PL12*300',long:300,plan:222,pu:8.48},{pr:'pr73',perfil:'HI300-10-12*300',long:3000,plan:111,pu:234.56},{pr:'pr115',perfil:'PL10*205',long:800,plan:111,pu:12.43}]},{cj:'E-T-4',desc:'Viga HI250 — 1 ud',partes:[{pr:'pr65',perfil:'PL12*300',long:300,plan:6,pu:8.48},{pr:'pr68',perfil:'HI250-10-20*300',long:7827,plan:1,pu:865.9},{pr:'pr72',perfil:'HI300-10-12*300',long:349,plan:6,pu:27.29},{pr:'pr80',perfil:'PL20*235',long:520,plan:3,pu:16.92},{pr:'pr84',perfil:'PL10*145',long:206,plan:18,pu:2.27},{pr:'pr85',perfil:'PL10*206',long:350,plan:6,pu:4.41},{pr:'pr119',perfil:'HI250-10-20*250',long:1686,plan:2,pu:137.15}]},{cj:'E-T-6',desc:'Viga HI250 — 54 uds (L=6m)',partes:[{pr:'pr63',perfil:'HI250-10-20*300',long:6000,plan:54,pu:664.11},{pr:'pr65',perfil:'PL12*300',long:300,plan:216,pu:8.48},{pr:'pr72',perfil:'HI300-10-12*300',long:349,plan:216,pu:27.29},{pr:'pr80',perfil:'PL20*235',long:520,plan:108,pu:16.92},{pr:'pr84',perfil:'PL10*145',long:206,plan:648,pu:2.27},{pr:'pr85',perfil:'PL10*206',long:350,plan:216,pu:4.41},{pr:'pr119',perfil:'HI250-10-20*250',long:1686,plan:108,pu:137.15}]},{cj:'E-T-7',desc:'Viga HI250 — 54 uds (L=6m)',partes:[{pr:'pr63',perfil:'HI250-10-20*300',long:6000,plan:54,pu:664.11},{pr:'pr65',perfil:'PL12*300',long:300,plan:216,pu:8.48},{pr:'pr72',perfil:'HI300-10-12*300',long:349,plan:216,pu:27.29},{pr:'pr84',perfil:'PL10*145',long:206,plan:648,pu:2.27},{pr:'pr85',perfil:'PL10*206',long:350,plan:216,pu:4.41},{pr:'pr119',perfil:'HI250-10-20*250',long:1686,plan:108,pu:137.15}]},{cj:'E-T-10',desc:'Ángulo L80×8 — 112 uds',partes:[{pr:'pr105',perfil:'L80*8',long:4400,plan:112,pu:42.0}]},{cj:'E-T-11',desc:'Ángulo L80×8 — 224 uds',partes:[{pr:'pr106',perfil:'L80*8',long:2050,plan:224,pu:19.57}]},{cj:'E-T-12',desc:'Placa PL12×200 — 111 uds',partes:[{pr:'pr104',perfil:'PL12*200',long:600,plan:111,pu:11.3}]},{cj:'E-T-13',desc:'Ángulo L75×8 — 110 uds',partes:[{pr:'pr102',perfil:'L75*8',long:4400,plan:110,pu:39.24}]},{cj:'E-T-21',desc:'Ángulo L75×8 — 444 uds',partes:[{pr:'pr100',perfil:'L75*8',long:1980,plan:444,pu:17.66}]},{cj:'E-T-23',desc:'Viga HI234 — 106 uds',partes:[{pr:'pr101',perfil:'HI234-8-12*180',long:2310,plan:106,pu:108.81},{pr:'pr112',perfil:'PL10*220',long:254,plan:212,pu:4.39}]},{cj:'E-T-40',desc:'Placas tablero — varias',partes:[{pr:'pr155',perfil:'PL15*135',long:506,plan:440,pu:8.04},{pr:'pr154',perfil:'PL15*300',long:506,plan:220,pu:17.87},{pr:'pr151',perfil:'PL12*160',long:456,plan:220,pu:6.87},{pr:'pr152',perfil:'PL15*300',long:504,plan:220,pu:17.81},{pr:'pr153',perfil:'PL15*135',long:504,plan:440,pu:8.01},{pr:'pr150',perfil:'PL12*160',long:454,plan:220,pu:6.84}]}];
+
+const FASES=[{id:'Corte',icon:'✂',cls:'fc',desc:'Cortar piezas'},{id:'Armado',icon:'🔧',cls:'fa',desc:'Armar piezas'},{id:'Soldadura',icon:'🔥',cls:'fsold',desc:'Soldar + metrado'},{id:'Perforaciones',icon:'🔩',cls:'fperf',desc:'Perforar piezas'},{id:'Limpieza Mecánica',icon:'🧹',cls:'flim',desc:'Limpiar piezas'},{id:'Pintura',icon:'🎨',cls:'fpin',desc:'Por conjunto'}];
+const POR_PARTE=['Corte','Armado','Soldadura','Perforaciones','Limpieza Mecánica'];
+const D=7.85e-6;
+
+// ======= STATE =======
+let W=null,selFase=null,selCj=null,selParte=null,calidad='ok';
+let draft={pl:{},ct:{}};
+let _cache=[]; // registros locales
+
+// ======= UTILS =======
+const todayISO=()=>new Date().toISOString().split('T')[0];
+const todayStr=()=>new Date().toLocaleDateString('es-EC',{weekday:'long',day:'numeric',month:'long'});
+const timeNow=()=>new Date().toLocaleTimeString('es-EC',{hour:'2-digit',minute:'2-digit'});
+const gv=id=>parseFloat(document.getElementById(id)?.value)||0;
+const sv=(id,v)=>{const el=document.getElementById(id);if(el)el.value=v;};
+
+function setSync(ok, mode) {
+  const el = document.getElementById('sync-dot');
+  if (!el) return;
+  const msgs = {
+    online:  { text:'🟢 Google conectado', color:'rgba(134,239,172,.9)' },
+    offline: { text:'🔴 sin red — guardado local', color:'rgba(252,165,165,.9)' },
+    local:   { text:'⚫ modo local — configura URL', color:'rgba(200,200,200,.7)' },
+    cargando:{ text:'⏳ cargando...', color:'rgba(200,200,200,.7)' },
+  };
+  const m = msgs[mode] || (ok ? msgs.online : msgs.offline);
+  el.textContent = m.text;
+  el.style.color = m.color;
+}
+
+// ======= NAV =======
+function go(id){
+  document.querySelectorAll('.sc').forEach(s=>s.classList.remove('on'));
+  document.getElementById(id).classList.add('on');
+  window.scrollTo(0,0);
+  const map={home:'home','sc-fase':'reg','sc-cj':'reg','sc-parte':'reg','sc-plancha':'reg','sc-cortes':'reg','sc-sob':'reg','sc-form':'reg','sc-pend':'pend'};
+  const a=map[id]||'home';
+  document.querySelectorAll('.nb').forEach(b=>b.classList.remove('active'));
+  document.getElementById('nb-'+a)?.classList.add('active');
+}
+function navTo(d){
+  if(!W){go('sc-login');return;}
+  if(d==='home')go('sc-home');
+  else if(d==='reg')go('sc-fase');
+  else if(d==='pend'){renderPend();go('sc-pend');}
+}
+
+// ======= STEPBAR =======
+function stepbar(cur,labels){
+  return `<div class="stepbar">${labels.map((l,i)=>`<div class="sb-s ${i+1<cur?'done':i+1===cur?'active':''}"><span class="sn">${i+1<cur?'✓':i+1}</span>${l}</div>`).join('')}</div>`;
+}
+
+// ======= INIT =======
+document.addEventListener('DOMContentLoaded',()=>{
+  const d=new Date();
+  document.getElementById('top-date').textContent=d.toLocaleDateString('es-EC',{day:'numeric',month:'short'});
+  document.getElementById('home-date').textContent=todayStr();
+  // Show default workers IMMEDIATELY so app never gets stuck loading
+  renderWorkers(DEFAULT_WORKERS);
+  setSync(false,'cargando');
+  // Then load from GAS in background
+  loadAndRenderWorkers();
+  // Sync pending records
+  setTimeout(syncPendingToGAS, 5000);
+  setInterval(syncPendingToGAS, 60000);
+  const opId=new URLSearchParams(location.search).get('op');
+  if(opId){const ws=JSON.parse((()=>{try{return sessionStorage.getItem('workers');}catch(e){return null;}})() ||'[]');const w=ws.find(x=>x.id==opId);if(w){selectWorker(w);return;}}
+});
+
+// ================================================
+// CONFIGURACIÓN — PEGA AQUÍ TU URL DE GOOGLE
+// ================================================
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbxgTFs6wtahK8JycnS276BBmqvGoIsOba_jEBvtWriPlGseZXqGwsgGPNwJE_68Uzei/exec';
+// Ejemplo: 'https://script.google.com/macros/s/AKfycb.../exec'
+// ================================================
+
+const WORKER_OPS_KEY='prod_worker_ops';
+const WORKER_RECS_LS='prod_worker_recs_ls';
+
+const DEFAULT_WORKERS=[
+  {id:1,nom:'Carlos', ape:'Mendoza', rol:'Cortador',     fase:'Corte',             icon:'✂'},
+  {id:2,nom:'Pedro',  ape:'Vargas',  rol:'Armador',      fase:'Armado',            icon:'🔧'},
+  {id:3,nom:'Luis',   ape:'Torres',  rol:'Soldador',     fase:'Soldadura',         icon:'🔥'},
+  {id:4,nom:'Marco',  ape:'Reyes',   rol:'Perforador',   fase:'Perforaciones',     icon:'🔩'},
+  {id:5,nom:'Jorge',  ape:'Castillo',rol:'Ayudante',     fase:'Limpieza Mecánica', icon:'🧹'},
+  {id:6,nom:'Andrés', ape:'Salazar', rol:'Pintor',       fase:'Pintura',           icon:'🎨'},
+  {id:7,nom:'Raúl',   ape:'Mora',    rol:'Operador Grúa',fase:'Soporte',           icon:'🏗'},
+];
+
+// == API Google Apps Script ======================
+const GAS = {
+  configured: () => GAS_URL && GAS_URL !== 'PEGA_AQUI_TU_URL_DE_GOOGLE_APPS_SCRIPT',
+
+  // GET via JSONP — funciona desde file://, blob://, WhatsApp en iOS y Android
+  get: (action, params={}) => new Promise((resolve, reject) => {
+    if (!GAS.configured()) { reject(new Error('no_url')); return; }
+    const cbName = '_cb_' + Date.now();
+    const timer = setTimeout(() => {
+      delete window[cbName];
+      if (el && el.parentNode) el.parentNode.removeChild(el);
+      reject(new Error('timeout'));
+    }, 10000);
+    window[cbName] = (data) => {
+      clearTimeout(timer);
+      delete window[cbName];
+      if (el && el.parentNode) el.parentNode.removeChild(el);
+      if (data && data.error) reject(new Error(data.error));
+      else resolve(data);
+    };
+    const q = new URLSearchParams({action, callback: cbName, ...params}).toString();
+    const el = document.createElement('script');
+    el.src = `${GAS_URL}?${q}`;
+    el.onerror = () => { clearTimeout(timer); delete window[cbName]; reject(new Error('script_error')); };
+    document.head.appendChild(el);
+  }),
+
+  // POST via fetch con fallback a GET para iOS
+  post: async (action, data) => {
+    if (!GAS.configured()) throw new Error('no_url');
+    // Try fetch POST first
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(()=>ctrl.abort(), 8000);
+      const r = await fetch(GAS_URL, {
+        method:'POST', redirect:'follow', signal:ctrl.signal,
+        body: JSON.stringify({action, data}),
+      });
+      clearTimeout(timer);
+      const text = await r.text();
+      return JSON.parse(text);
+    } catch(e) {
+      // Fallback: send as GET with data encoded (for iOS restriction)
+      try {
+        const encoded = encodeURIComponent(JSON.stringify(data));
+        const result = await GAS.get(action, {data: encoded});
+        return result;
+      } catch(e2) {
+        console.warn('GAS post failed:', e2.message);
+        return null;
+      }
+    }
+  },
+};
+
+// == Caché local para trabajar sin internet ======
+const LS = {
+  s:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}},
+  g:(k,d)=>{try{const r=localStorage.getItem(k);return r?JSON.parse(r):d;}catch(e){return d;}},
+};
+
+// == Pendientes de sync cuando vuelva internet ===
+let _pendingRecs = [];
+
+function saveRecLocal(rec) {
+  const all = LS.g(WORKER_RECS_LS, []);
+  all.push(rec);
+  LS.s(WORKER_RECS_LS, all);
+  _cache = all.filter(r => r.opId == (W?.id));
+}
+
+function syncPendingToGAS() {
+  const pending = LS.g('prod_pending_sync', []);
+  if (!pending.length || !GAS.configured()) return;
+  GAS.post('bulkRegistros', {registros: pending})
+    .then(r => {
+      if (r && r.ok) {
+        LS.s('prod_pending_sync', []);
+        console.log('Sync OK:', r.added, 'registros enviados');
+      }
+    }).catch(()=>{});
+}
+
+async function loadAndRenderWorkers() {
+  // Mostrar operarios por defecto inmediatamente (sin esperar)
+  let ws = LS.g(WORKER_OPS_KEY, null) || DEFAULT_WORKERS;
+  try{sessionStorage.setItem('workers', JSON.stringify(ws));}catch(e){}
+  renderWorkers(ws);
+  setSync(false, 'cargando');
+
+  // Intentar cargar desde Google
+  if (GAS.configured()) {
+    try {
+      const ops = await GAS.get('getOperarios');
+      if (ops && ops.length) {
+        ws = ops;
+        LS.s(WORKER_OPS_KEY, ws);
+        try{sessionStorage.setItem('workers', JSON.stringify(ws));}catch(e){}
+        renderWorkers(ws);
+        setSync(true, 'online');
+        // Check URL param again after loading
+        const opId = new URLSearchParams(location.search).get('op');
+        if (opId && !W) {
+          const w = ws.find(x => x.id == opId);
+          if (w) selectWorker(w);
+        }
+      }
+    } catch(e) {
+      setSync(false, 'offline');
+      console.warn('GAS no disponible:', e.message);
+      // Workers already shown from DEFAULT_WORKERS above - no action needed
+    }
+  } else {
+    setSync(false, 'local');
+  }
+}
+
+function renderWorkers(ws){
+  document.getElementById('worker-list').innerHTML=ws.length
+    ? ws.filter(w=>w.est!=='inactivo').map(w=>`
+      <div class="w-card" onclick='selectWorker(${JSON.stringify(w).replace(/'/g,"&#39;")})'>
+        <div class="w-av">${w.icon||w.nom[0]}</div>
+        <div style="flex:1"><div class="w-name">${w.nom} ${w.ape}</div>
+          <div class="w-sub">${w.rol}</div><span class="w-fase">${w.fase}</span>
+        </div><span style="font-size:22px;color:#ccc">›</span>
+      </div>`).join('')
+    : '<div class="loading">Sin operarios. El supervisor debe agregarlos.</div>';
+}
+
+function selectWorker(w){
+  if(typeof w==='string')w=JSON.parse(w);
+  W=w;
+  document.getElementById('top-name').textContent=`${w.nom} ${w.ape}`;
+  document.getElementById('top-role').textContent=`${w.rol} · ${w.fase}`;
+  document.getElementById('top-icon').textContent=w.icon||'👷';
+  document.getElementById('home-name').textContent=`${w.nom} ${w.ape}`;
+  document.getElementById('home-role').textContent=`${w.rol} · ${w.fase}`;
+  document.getElementById('home-icon').textContent=w.icon||'👷';
+  buildFaseGrid();
+  go('sc-home');
+  loadMyRecs().then(renderHomeHist);
+}
+
+async function loadMyRecs(){
+  // Always show local first
+  _cache = LS.g(WORKER_RECS_LS, []).filter(r => r.opId == W?.id);
+  // Then try GAS
+  if (GAS.configured()) {
+    try {
+      const recs = await GAS.get('getRegistros', {opId: W.id});
+      if (recs && recs.length) {
+        // Merge: server recs + any local not yet synced
+        const serverIds = new Set(recs.map(r => String(r.id)));
+        const localOnly = LS.g(WORKER_RECS_LS, []).filter(r => r.opId == W.id && !serverIds.has(String(r.id)));
+        _cache = [...recs, ...localOnly];
+      }
+    } catch(e) { /* offline, use local */ }
+  }
+  return _cache;
+}
+
+function saveRec(rec) {
+  // Always save locally first
+  saveRecLocal(rec);
+  _cache = LS.g(WORKER_RECS_LS, []).filter(r => r.opId == W?.id);
+  // Try to send to GAS
+  if (GAS.configured()) {
+    GAS.post('addRegistro', rec)
+      .then(r => {
+        if (r && r.ok) {
+          setSync(true, 'online');
+        } else {
+          // Queue for later
+          const pending = LS.g('prod_pending_sync', []);
+          if (!pending.find(p => p.id === rec.id)) {
+            pending.push(rec);
+            LS.s('prod_pending_sync', pending);
+          }
+        }
+      })
+      .catch(() => {
+        const pending = LS.g('prod_pending_sync', []);
+        if (!pending.find(p => p.id === rec.id)) {
+          pending.push(rec);
+          LS.s('prod_pending_sync', pending);
+        }
+        setSync(false, 'offline');
+      });
+  }
+}
+
+function myExec(cj,pr,fase){return _cache.filter(r=>r.cj===cj&&r.pr===pr&&r.fase===fase).reduce((s,r)=>s+r.qty,0);}
+function totalExec(cj,pr,fase){
+  const all = LS.g(WORKER_RECS_LS, []);
+  return all.filter(r=>r.cj===cj&&r.pr===pr&&r.fase===fase).reduce((s,r)=>s+r.qty,0);
+}
+
+// ======= FASE GRID =======
+function buildFaseGrid(){
+  document.getElementById('fase-grid').innerHTML=FASES.map(f=>`
+    <div class="fase-btn ${f.id===W?.fase?'sel':''}" onclick="selectFase('${f.id}')">
+      <span class="fi">${f.icon}</span><span class="fn">${f.id}</span>
+      <span class="fd">${f.desc}</span>
+      ${f.id===W?.fase?'<span class="my-fase">Mi fase</span>':''}
+    </div>`).join('');
+}
+
+function selectFase(f){selFase=f;calidad='ok';selCj=null;selParte=null;buildCjList();go('sc-cj');}
+
+// ======= CONJUNTO LIST =======
+function buildCjList(){
+  const isPP=POR_PARTE.includes(selFase);
+  document.getElementById('sb-cj').innerHTML=isPP?stepbar(1,['Conjunto','Pieza (pr)','Cantidad']):stepbar(1,['Conjunto','Cantidad']);
+  document.getElementById('cj-title').textContent=isPP?'Paso 1 — Selecciona el conjunto':'Selecciona el conjunto';
+  document.getElementById('cj-sub').textContent=isPP?'Luego elegirás la pieza específica':'Para Pintura se registra por conjunto';
+  document.getElementById('cj-list').innerHTML=TEKLA.map(c=>{
+    const done=c.partes.reduce((s,p)=>s+totalExec(c.cj,p.pr,selFase),0);
+    const plan=c.partes.reduce((s,p)=>s+p.plan,0);
+    const myD=c.partes.reduce((s,p)=>s+myExec(c.cj,p.pr,selFase),0);
+    const pct=plan>0?Math.min(100,done/plan*100):0;
+    return `<div class="cj-item" onclick="selectCj('${c.cj}')">
+      <div class="cj-av">${c.cj.replace('E-T-','T\n')}</div>
+      <div style="flex:1;min-width:0">
+        <div class="cj-name">${c.cj}</div><div class="cj-desc">${c.desc}</div>
+        <div class="cj-prog">Yo: ${myD} · Total: ${done}/${plan}</div>
+        <div class="bar-w"><div class="bar-f ${pct>=100?'full':''}" style="width:${pct.toFixed(0)}%"></div></div>
+      </div><span style="font-size:22px;color:#ccc">›</span>
+    </div>`;
+  }).join('');
+}
+
+function selectCj(cjId){
+  selCj=TEKLA.find(x=>x.cj===cjId);
+  if(!selCj)return;
+  if(POR_PARTE.includes(selFase)){buildParteList();go('sc-parte');}
+  else{selParte=null;buildForm();go('sc-form');}
+}
+
+// ======= PARTE LIST =======
+function buildParteList(){
+  document.getElementById('sb-parte').innerHTML=stepbar(2,['Conjunto','Pieza (pr)','Cantidad']);
+  document.getElementById('parte-sub').textContent=`${selCj.cj} — ¿Cuál pieza trabajaste?`;
+  document.getElementById('parte-list').innerHTML=selCj.partes.map(p=>{
+    const done=totalExec(selCj.cj,p.pr,selFase);
+    const myD=myExec(selCj.cj,p.pr,selFase);
+    const pend=Math.max(0,p.plan-done);
+    const pct=p.plan>0?Math.min(100,done/p.plan*100):0;
+    return `<div class="pt-item" onclick="selectParte('${p.pr}')">
+      <div style="flex:1">
+        <div style="display:flex;justify-content:space-between;margin-bottom:.25rem">
+          <span class="pr-code">${p.pr}</span><span class="pr-pend">${pend} pend.</span>
+        </div>
+        <div class="pr-perf">${p.perfil} · ${p.long} mm</div>
+        <div class="pr-info">
+          <span>Plan: <strong>${p.plan}</strong></span>
+          <span>Hecho: <strong>${done}</strong></span>
+          <span style="color:var(--g)">Yo: <strong>${myD}</strong></span>
+          <span>${p.pu} kg/ud</span>
+        </div>
+        <div class="bar-w"><div class="bar-f ${pct>=100?'full':''}" style="width:${pct.toFixed(0)}%"></div></div>
+      </div><span style="font-size:22px;color:#ccc;flex-shrink:0">›</span>
+    </div>`;
+  }).join('');
+}
+
+function selectParte(prId){
+  selParte=selCj.partes.find(x=>x.pr===prId);
+  if(!selParte)return;
+  if(selFase==='Corte'){
+    draft={pl:{},ct:{}};
+    document.getElementById('sb-plancha').innerHTML=stepbar(1,['Plancha','Cortes','Sobrante']);
+    document.getElementById('pl-mat').value='A588-50';
+    ['pl-esp','pl-ancho','pl-largo','pl-peso','pl-qty'].forEach(id=>sv(id,id==='pl-qty'?1:''));
+    document.getElementById('pl-resumen').style.display='none';
+    go('sc-plancha');
+  } else {
+    buildForm();go('sc-form');
+  }
+}
+
+// ======= PLANCHA =======
+function calcPlancha(){
+  const e=gv('pl-esp'),a=gv('pl-ancho'),l=gv('pl-largo'),q=gv('pl-qty')||1;
+  if(e&&a&&l){
+    const peso=e*a*l*D*q;
+    sv('pl-peso',peso.toFixed(1));
+    const r=document.getElementById('pl-resumen');
+    r.style.display='';r.textContent=`${q>1?q+'× ':''} ${e}×${a}×${l} mm → ${peso.toFixed(1)} kg total`;
+  }
+}
+function irACortes(){
+  const num=document.getElementById('pl-num').value.trim();
+  if(!num){alert('Ingresa el número de plancha o colada');return;}
+  const e=gv('pl-esp'),a=gv('pl-ancho'),l=gv('pl-largo');
+  if(!e||!a||!l){alert('Ingresa las dimensiones: espesor, ancho y largo');return;}
+  draft.pl={num,mat:document.getElementById('pl-mat').value,esp:e,ancho:a,largo:l,qty:gv('pl-qty')||1,peso:gv('pl-peso')};
+  document.getElementById('sb-cortes').innerHTML=stepbar(2,['Plancha','Cortes','Sobrante']);
+  document.getElementById('plancha-txt').textContent=`📋 ${draft.pl.num} · ${draft.pl.mat} · ${e}×${a}×${l} mm · ${draft.pl.peso.toFixed(1)} kg`;
+  document.getElementById('corte-pr-lbl').textContent=`${selParte.pr} (${selParte.perfil})`;
+  document.getElementById('ct-peso-row').style.display='';
+  sv('ct-qty','');sv('ct-peso-pzas','');
+  go('sc-cortes');
+}
+
+function calcCtPeso(){
+  const q=parseInt(document.getElementById('ct-qty').value)||0;
+  sv('ct-peso-pzas',q>0?(q*selParte.pu).toFixed(1):'');
+}
+
+function irASobrante(){
+  const qty=parseInt(document.getElementById('ct-qty').value)||0;
+  if(qty<=0){alert('Ingresa cuántas piezas cortaste');return;}
+  draft.ct={qty,cal:calidad,obs:document.getElementById('ct-obs').value.trim(),pesoPzas:qty*selParte.pu};
+  document.getElementById('sb-sob').innerHTML=stepbar(3,['Plancha','Cortes','Sobrante']);
+  document.getElementById('sob-plancha-txt').textContent=`📋 ${draft.pl.num} · ${draft.pl.mat} · ${draft.pl.esp}×${draft.pl.ancho}×${draft.pl.largo} mm`;
+  document.getElementById('sob-colada-lbl').textContent=draft.pl.num;
+  sv('sob-esp',draft.pl.esp);sv('sob-ancho',draft.pl.ancho);sv('sob-largo','');sv('sob-qty',1);sv('sob-peso','');
+  toggleSob();go('sc-sob');
+}
+
+function toggleSob(){
+  const hay=document.getElementById('sob-hay').value;
+  document.getElementById('sob-fields').style.display=hay==='si'?'block':'none';
+  calcSob();
+}
+
+function calcSob(){
+  const e=gv('sob-esp')||draft.pl.esp,a=gv('sob-ancho')||draft.pl.ancho,l=gv('sob-largo'),q=gv('sob-qty')||1;
+  if(e&&a&&l){sv('sob-peso',(e*a*l*D*q).toFixed(2));}
+  const pl=draft.pl.peso||0,pzas=draft.ct.pesoPzas||0,sob=gv('sob-peso'),hay=document.getElementById('sob-hay').value;
+  const desp=pl>0?Math.max(0,pl-pzas-(hay==='si'?sob:0)):0;
+  const db=document.getElementById('sob-desp-box');
+  if(pl>0){db.style.display='';document.getElementById('sob-desp-txt').textContent=`Desperdicio estimado: ${desp.toFixed(1)} kg`;}
+}
+
+function guardarCorte(){
+  const btn=document.getElementById('btn-guardar-corte');
+  btn.disabled=true;btn.textContent='Guardando...';
+  const hay=document.getElementById('sob-hay').value;
+  const sobPeso=hay==='si'?gv('sob-peso'):0;
+  const desp=Math.max(0,(draft.pl.peso||0)-draft.ct.pesoPzas-(hay==='si'?sobPeso:0));
+  const rec={
+    id:Date.now(),tipo:'corte',fecha:todayISO(),hora:timeNow(),
+    opId:W.id,opNom:`${W.nom} ${W.ape}`,opRol:W.rol,
+    fase:'Corte',cj:selCj.cj,pr:selParte.pr,perfil:selParte.perfil,
+    qty:draft.ct.qty,pesoPzas:draft.ct.pesoPzas,calidad:draft.ct.cal,obs:draft.ct.obs,
+    pl_num:draft.pl.num,pl_mat:draft.pl.mat,pl_esp:draft.pl.esp,
+    pl_ancho:draft.pl.ancho,pl_largo:draft.pl.largo,pl_qty:draft.pl.qty,pl_peso:draft.pl.peso,
+    sob_hay:hay,sob_peso:sobPeso,
+    sob_esp:gv('sob-esp')||draft.pl.esp,sob_ancho:gv('sob-ancho')||draft.pl.ancho,
+    sob_largo:gv('sob-largo'),sob_qty:gv('sob-qty')||1,
+    sob_colada:draft.pl.num,sob_mat:draft.pl.mat,
+    sob_dest:document.getElementById('sob-dest').value,
+    sob_ref:document.getElementById('sob-ref').value.trim(),
+    desperdicio:parseFloat(desp.toFixed(2)),
+  };
+  saveRec(rec);
+  setSync(true,'ok');
+  btn.disabled=false;btn.textContent='✔  Guardar registro de corte';
+  document.getElementById('ok-detail').innerHTML=`✂ <strong>Corte</strong> · ${selCj.cj}/${selParte.pr} · <strong>${rec.qty} piezas</strong><br>📋 ${rec.pl_num} · Sobrante: ${hay==='si'?sobPeso.toFixed(1)+' kg':'ninguno'} · Desp: ${desp.toFixed(1)} kg`;
+  loadMyRecs().then(()=>{ document.getElementById('ok-hist').innerHTML=renderHistItems(_cache.filter(r=>r.fecha===todayISO())); });
+  renderHomeHist();go('sc-ok');
+}
+
+// ======= OTRAS FASES FORM =======
+function buildForm(){
+  const f=FASES.find(x=>x.id===selFase);
+  const isPP=POR_PARTE.includes(selFase);
+  const label=isPP&&selParte?selParte.pr:selCj.cj;
+  const desc=isPP&&selParte?`${selParte.perfil} · ${selParte.long} mm`:selCj.desc;
+  const plan=isPP&&selParte?selParte.plan:selCj.partes.reduce((s,p)=>s+p.plan,0);
+  const done=isPP&&selParte?totalExec(selCj.cj,selParte.pr,selFase):totalExec(selCj.cj,'—',selFase);
+  const pend=Math.max(0,plan-done);
+  document.getElementById('sb-form').innerHTML=isPP?stepbar(3,['Conjunto','Pieza (pr)','Cantidad']):stepbar(2,['Conjunto','Cantidad']);
+  document.getElementById('form-back-btn').onclick=()=>go(isPP?'sc-parte':'sc-cj');
+  let html=`<div class="card">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:.875rem">
+      <span style="font-size:26px">${f.icon}</span>
+      <div><div style="font-size:15px;font-weight:700;color:var(--b)">${label} <span style="font-size:12px;color:var(--gr)">· ${selCj.cj}</span></div>
+      <div style="font-size:12px;color:var(--gr);font-family:monospace">${desc}</div></div>
+    </div>
+    ${pend>0
+      ?`<div class="info-box" style="margin-bottom:.875rem"><span>⚠</span><span>Faltan <strong>${pend}</strong> de ${plan}</span></div>`
+      :`<div class="info-box info-ok" style="margin-bottom:.875rem"><span>✅</span><span>¡Completo! ${plan} ejecutadas.</span></div>`}
+    <div class="field"><label>¿Cuántas piezas hiciste?</label>
+      <input type="number" class="num-big" id="f-qty" inputmode="numeric" min="1" placeholder="0">
+      <div class="num-ctrl">
+        <button class="nbtn" onclick="adj('f-qty',-10)">−10</button>
+        <button class="nbtn" onclick="adj('f-qty',-1)">−1</button>
+        <button class="nbtn" onclick="adj('f-qty',1)">+1</button>
+        <button class="nbtn" onclick="adj('f-qty',10)">+10</button>
+      </div>
+    </div>`;
+  if(selFase==='Soldadura'){
+    html+=`<div class="ebox eb-blue"><div class="eb-t">🔥 Metrado de soldadura</div>
+      <div class="field"><label>Tipo de proceso</label>
+        <select id="f-sold-tipo" style="font-size:15px">
+          <option value="SMAW">SMAW — Electrodo revestido</option>
+          <option value="MIG">MIG / MAG</option><option value="TIG">TIG</option>
+          <option value="SAW">SAW — Arco sumergido</option><option value="otro">Otro</option>
+        </select>
+      </div>
+      <div class="frow">
+        <div class="field"><label>Metros soldados (ml)</label><input type="number" id="f-ml" inputmode="decimal" placeholder="0.0" step="0.1" style="font-size:20px;text-align:center"></div>
+        <div class="field"><label>Electrodo / alambre (kg)</label><input type="number" id="f-elec" inputmode="decimal" placeholder="0.0" step="0.1" style="font-size:20px;text-align:center"></div>
+      </div>
+      <div class="field"><label>Posición</label>
+        <select id="f-sold-pos" style="font-size:15px">
+          <option value="1G/1F">1G/1F — Plana</option><option value="2G/2F">2G/2F — Horizontal</option>
+          <option value="3G/3F">3G/3F — Vertical</option><option value="4G/4F">4G/4F — Sobre cabeza</option>
+          <option value="varias">Varias posiciones</option>
+        </select>
+      </div>
+    </div>`;
+  }
+  html+=`<div class="field"><label>¿Cómo salió el trabajo?</label>
+    <div class="cal-row">
+      <div class="cal-btn ok-sel" id="cal-ok" onclick="setCal('ok')"><span class="ci">✅</span>Bueno</div>
+      <div class="cal-btn" id="cal-rep" onclick="setCal('rep')"><span class="ci">⚠️</span>Reproceso</div>
+      <div class="cal-btn" id="cal-rec" onclick="setCal('rec')"><span class="ci">❌</span>Rechazo</div>
+    </div>
+  </div>
+  <div class="field"><label>Notas (opcional)</label>
+    <textarea id="f-obs" placeholder="Dificultad, material defectuoso..."></textarea>
+  </div>
+  <button class="btn-main" onclick="guardarOtras()">✔  Guardar mi trabajo</button></div>`;
+  document.getElementById('form-content').innerHTML=html;
+}
+
+function guardarOtras(){
+  const qty=parseInt(document.getElementById('f-qty')?.value||'0');
+  if(qty<=0){alert('Ingresa cuántas piezas hiciste');return;}
+  const isPP=POR_PARTE.includes(selFase);
+  const pr=isPP&&selParte?selParte.pr:'—';
+  const pu=isPP&&selParte?selParte.pu:0;
+  const rec={
+    id:Date.now(),tipo:'produccion',fecha:todayISO(),hora:timeNow(),
+    opId:W.id,opNom:`${W.nom} ${W.ape}`,opRol:W.rol,
+    fase:selFase,cj:selCj.cj,pr,perfil:selParte?.perfil||'',
+    qty,pesoPzas:parseFloat((qty*pu).toFixed(2)),calidad,
+    obs:document.getElementById('f-obs')?.value.trim()||'',
+    sold_tipo:document.getElementById('f-sold-tipo')?.value||'',
+    sold_ml:document.getElementById('f-ml')?.value||'',
+    sold_elec:document.getElementById('f-elec')?.value||'',
+    sold_pos:document.getElementById('f-sold-pos')?.value||'',
+  };
+  saveRec(rec);
+  setSync(true,'ok');
+  const f=FASES.find(x=>x.id===selFase);
+  let det=`${f.icon} <strong>${selFase}</strong> · <strong>${qty} uds</strong> · ${selCj.cj}/${pr}`;
+  if(rec.sold_ml)det+=` · 🔥 ${rec.sold_ml} ml`;
+  document.getElementById('ok-detail').innerHTML=det;
+  loadMyRecs().then(()=>{ document.getElementById('ok-hist').innerHTML=renderHistItems(_cache.filter(r=>r.fecha===todayISO())); });
+  renderHomeHist();go('sc-ok');
+}
+
+// ======= HELPERS =======
+function adj(id,n){const el=document.getElementById(id);el.value=Math.max(0,(parseInt(el.value||'0')+n));}
+function setCal(v){
+  calidad=v;
+  ['ok','rep','rec'].forEach(c=>document.getElementById('cal-'+c)?.classList.remove('ok-sel','rep-sel','rec-sel'));
+  document.getElementById('cal-'+v)?.classList.add(v+'-sel');
+}
+
+// ======= HISTORY =======
+const FCLS={Corte:'fc',Armado:'fa',Soldadura:'fsold',Perforaciones:'fperf','Limpieza Mecánica':'flim',Pintura:'fpin'};
+const FICON={Corte:'✂',Armado:'🔧',Soldadura:'🔥',Perforaciones:'🔩','Limpieza Mecánica':'🧹',Pintura:'🎨'};
+
+function renderHistItems(recs){
+  if(!recs.length)return'<div style="text-align:center;color:var(--gr);font-size:13px;padding:.75rem">Nada registrado aún.</div>';
+  return[...recs].reverse().map(r=>{
+    const calIcon=r.calidad==='ok'?'✅':r.calidad==='rep'?'⚠️':'❌';
+    let extra='';
+    if(r.tipo==='corte'){
+      extra+=`<div style="font-size:11px;color:#92400e;margin-top:3px">📋 ${r.pl_num||'—'} · ${r.pl_esp||'?'}×${r.pl_ancho||'?'}×${r.pl_largo||'?'} mm</div>`;
+      if(r.sob_hay==='si'&&r.sob_peso)extra+=`<div style="font-size:11px;color:var(--g);margin-top:1px">📦 Sob: ${r.sob_peso} kg</div>`;
+      if(r.desperdicio)extra+=`<div style="font-size:11px;color:var(--r);margin-top:1px">🗑 Desp: ${r.desperdicio} kg</div>`;
+    }
+    if(r.sold_ml)extra+=`<div style="font-size:11px;color:#1e40af;margin-top:2px">🔥 ${r.sold_ml} ml · ${r.sold_tipo||''}</div>`;
+    if(r.obs)extra+=`<div style="font-size:11px;color:var(--b);margin-top:2px">📝 ${r.obs}</div>`;
+    return`<div class="hist-item">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.375rem">
+        <span class="hi-badge ${FCLS[r.fase]||'fc'}">${FICON[r.fase]||''} ${r.fase}</span>
+        <span style="font-size:11px;color:var(--gr)">${r.hora||''}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:700;color:var(--b)">${r.cj||'—'}${r.pr&&r.pr!=='—'?' · '+r.pr:''}</div>
+          <div style="font-size:12px;color:var(--gr);margin-top:1px">${calIcon} ${r.calidad==='ok'?'Aprobado':r.calidad==='rep'?'Reproceso':'Rechazo'}</div>
+          ${extra}
+        </div>
+        <div style="font-size:22px;font-weight:700;color:var(--o);flex-shrink:0;margin-left:8px">${r.qty}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderHomeHist(){
+  if(!W)return;
+  document.getElementById('home-hist').innerHTML=renderHistItems(_cache.filter(r=>r.fecha===todayISO()));
+}
+
+// ======= PENDIENTES =======
+function renderPend(){
+  document.getElementById('pend-content').innerHTML='<div class="loading">Cargando...</div>';
+  loadMyRecs();
+  const isPP=POR_PARTE.includes(W.fase);
+  let html='';
+  TEKLA.forEach(c=>{
+    c.partes.forEach(p=>{
+      if(!isPP)return;
+      const done=totalExec(c.cj,p.pr,W.fase);
+      const pend=Math.max(0,p.plan-done);
+      if(pend<=0)return;
+      const myD=myExec(c.cj,p.pr,W.fase);
+      html+=`<div class="hist-item" style="display:flex;align-items:center;gap:12px">
+        <div style="flex:1">
+          <div style="font-size:14px;font-weight:700;color:var(--b)">${c.cj} · <span style="color:var(--o)">${p.pr}</span></div>
+          <div style="font-size:12px;color:var(--gr);font-family:monospace">${p.perfil} · ${p.long} mm</div>
+          <div style="font-size:12px;margin-top:2px">Total: ${done}/${p.plan} · <span style="color:var(--g)">Yo: ${myD}</span></div>
+          <div class="bar-w" style="margin-top:5px"><div class="bar-f" style="width:${p.plan>0?(done/p.plan*100).toFixed(0):0}%"></div></div>
+        </div>
+        <button onclick="quickReg('${c.cj}','${p.pr}')" style="background:var(--o);color:#fff;border:none;border-radius:10px;padding:10px 14px;font-size:13px;font-weight:700;cursor:pointer;flex-shrink:0">+ Reg</button>
+      </div>`;
+    });
+  });
+  document.getElementById('pend-content').innerHTML=html||'<div class="info-ok" style="background:var(--gl);border:1px solid #86efac;border-radius:10px;padding:1rem;color:var(--g);font-weight:700">✅ ¡Sin pendientes para tu fase!</div>';
+}
+
+function quickReg(cjId,prId){
+  selFase=W.fase||'Armado';calidad='ok';
+  selCj=TEKLA.find(x=>x.cj===cjId);
+  selParte=prId?selCj?.partes.find(x=>x.pr===prId):null;
+  if(selFase==='Corte'){draft={pl:{},ct:{}};document.getElementById('sb-plancha').innerHTML=stepbar(1,['Plancha','Cortes','Sobrante']);go('sc-plancha');}
+  else{buildForm();document.getElementById('form-back-btn').onclick=()=>go('sc-pend');document.getElementById('sb-form').innerHTML='';go('sc-form');}
+}
+
+function exportarMisDatos() {
+  if(!W){ alert('Selecciona tu nombre primero'); return; }
+  try {
+    const all = LS.g(WORKER_RECS_LS, []);
+    const mis = all.filter(r => r.opId == W.id);
+    if(!mis.length){ alert('No tienes registros aún. Registra tu trabajo primero.'); return; }
+    const data = {
+      version: 2,
+      exportado: new Date().toISOString(),
+      operario: `${W.nom} ${W.ape}`,
+      opId: W.id,
+      cortes: mis.filter(r=>r.fase==='Corte' || r.tipo==='corte'),
+      prods:  mis.filter(r=>r.fase!=='Corte' && r.tipo!=='corte'),
+    };
+    const blob = new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    const fecha = new Date().toISOString().slice(0,10);
+    a.download = `datos_${W.nom}_${fecha}.json`;
+    a.click();
+    alert(`✅ Archivo descargado: datos_${W.nom}_${fecha}.json
+
+Envíalo al supervisor por WhatsApp o correo.`);
+  } catch(e) { alert('Error: ' + e.message); }
+}
+</script>
+</body>
+</html>
