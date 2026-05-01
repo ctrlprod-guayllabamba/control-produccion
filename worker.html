@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0">
-<title>Mi Trabajo — Producción</title> 
+<title>Mi Trabajo — Producción</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{--b:#1a2b4a;--o:#e8631a;--g:#166534;--gl:#d4edda;--r:#721c24;--rl:#f8d7da;--y:#856404;--yl:#fff3cd;--gr:#6c757d;--bg:#f4f6f9;--w:#fff;--bd:#dee2e6}
@@ -437,53 +437,48 @@ const DEFAULT_WORKERS=[
 const GAS = {
   configured: () => GAS_URL && GAS_URL !== 'PEGA_AQUI_TU_URL_DE_GOOGLE_APPS_SCRIPT',
 
-  // GET via JSONP — funciona desde file://, blob://, WhatsApp en iOS y Android
-  get: (action, params={}) => new Promise((resolve, reject) => {
-    if (!GAS.configured()) { reject(new Error('no_url')); return; }
-    const cbName = '_cb_' + Date.now();
-    const timer = setTimeout(() => {
-      delete window[cbName];
-      if (el && el.parentNode) el.parentNode.removeChild(el);
-      reject(new Error('timeout'));
-    }, 10000);
-    window[cbName] = (data) => {
+  // GET via fetch — funciona desde GitHub Pages (https://)
+  get: async (action, params={}) => {
+    if (!GAS.configured()) throw new Error('no_url');
+    const q = new URLSearchParams({action, ...params}).toString();
+    const ctrl = new AbortController();
+    const timer = setTimeout(()=>ctrl.abort(), 10000);
+    try {
+      const r = await fetch(`${GAS_URL}?${q}`, {
+        method: 'GET',
+        redirect: 'follow',
+        signal: ctrl.signal,
+      });
       clearTimeout(timer);
-      delete window[cbName];
-      if (el && el.parentNode) el.parentNode.removeChild(el);
-      if (data && data.error) reject(new Error(data.error));
-      else resolve(data);
-    };
-    const q = new URLSearchParams({action, callback: cbName, ...params}).toString();
-    const el = document.createElement('script');
-    el.src = `${GAS_URL}?${q}`;
-    el.onerror = () => { clearTimeout(timer); delete window[cbName]; reject(new Error('script_error')); };
-    document.head.appendChild(el);
-  }),
+      const text = await r.text();
+      const d = JSON.parse(text);
+      if (d && d.error) throw new Error(d.error);
+      return d;
+    } catch(e) {
+      clearTimeout(timer);
+      throw e;
+    }
+  },
 
-  // POST via fetch con fallback a GET para iOS
+  // POST via fetch
   post: async (action, data) => {
     if (!GAS.configured()) throw new Error('no_url');
-    // Try fetch POST first
+    const ctrl = new AbortController();
+    const timer = setTimeout(()=>ctrl.abort(), 10000);
     try {
-      const ctrl = new AbortController();
-      const timer = setTimeout(()=>ctrl.abort(), 8000);
       const r = await fetch(GAS_URL, {
-        method:'POST', redirect:'follow', signal:ctrl.signal,
+        method: 'POST',
+        redirect: 'follow',
+        signal: ctrl.signal,
         body: JSON.stringify({action, data}),
       });
       clearTimeout(timer);
       const text = await r.text();
       return JSON.parse(text);
     } catch(e) {
-      // Fallback: send as GET with data encoded (for iOS restriction)
-      try {
-        const encoded = encodeURIComponent(JSON.stringify(data));
-        const result = await GAS.get(action, {data: encoded});
-        return result;
-      } catch(e2) {
-        console.warn('GAS post failed:', e2.message);
-        return null;
-      }
+      clearTimeout(timer);
+      console.warn('GAS post failed:', e.message);
+      return null;
     }
   },
 };
