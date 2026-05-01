@@ -416,7 +416,7 @@ document.addEventListener('DOMContentLoaded',()=>{
 // ================================================
 // CONFIGURACIÓN — PEGA AQUÍ TU URL DE GOOGLE
 // ================================================
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbxgTFs6wtahK8JycnS276BBmqvGoIsOba_jEBvtWriPlGseZXqGwsgGPNwJE_68Uzei/exec';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbw8hQ_qg6VO-MRKTo-7vVMVcULAZ9zCr5GXl5G7GSQW2THG5ZyHbOsiYe5SoXy3SadO/exec';
 // Ejemplo: 'https://script.google.com/macros/s/AKfycb.../exec'
 // ================================================
 
@@ -437,49 +437,84 @@ const DEFAULT_WORKERS=[
 const GAS = {
   configured: () => GAS_URL && GAS_URL !== 'PEGA_AQUI_TU_URL_DE_GOOGLE_APPS_SCRIPT',
 
-  // GET via fetch — funciona desde GitHub Pages (https://)
+  // GET via fetch con múltiples intentos
   get: async (action, params={}) => {
     if (!GAS.configured()) throw new Error('no_url');
     const q = new URLSearchParams({action, ...params}).toString();
-    const ctrl = new AbortController();
-    const timer = setTimeout(()=>ctrl.abort(), 10000);
+    const url = `${GAS_URL}?${q}`;
+    
+    // Intento 1: fetch normal con redirect follow
     try {
-      const r = await fetch(`${GAS_URL}?${q}`, {
+      const ctrl = new AbortController();
+      setTimeout(()=>ctrl.abort(), 8000);
+      const r = await fetch(url, {
         method: 'GET',
         redirect: 'follow',
         signal: ctrl.signal,
+        credentials: 'omit',
+        mode: 'cors',
       });
-      clearTimeout(timer);
       const text = await r.text();
-      const d = JSON.parse(text);
-      if (d && d.error) throw new Error(d.error);
-      return d;
-    } catch(e) {
-      clearTimeout(timer);
-      throw e;
+      if (text && text.startsWith('{')) {
+        const d = JSON.parse(text);
+        if (d && d.error) throw new Error(d.error);
+        return d;
+      }
+    } catch(e1) {
+      console.warn('Fetch intento 1 falló:', e1.message);
     }
+
+    // Intento 2: XMLHttpRequest (mejor soporte en iOS)
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('GET', url, true);
+      xhr.timeout = 8000;
+      xhr.onload = () => {
+        try {
+          const d = JSON.parse(xhr.responseText);
+          if (d && d.error) reject(new Error(d.error));
+          else resolve(d);
+        } catch(e) { reject(e); }
+      };
+      xhr.onerror = () => reject(new Error('XHR error'));
+      xhr.ontimeout = () => reject(new Error('XHR timeout'));
+      xhr.send();
+    });
   },
 
-  // POST via fetch
+  // POST via fetch con XHR fallback
   post: async (action, data) => {
-    if (!GAS.configured()) throw new Error('no_url');
-    const ctrl = new AbortController();
-    const timer = setTimeout(()=>ctrl.abort(), 10000);
+    if (!GAS.configured()) return null;
+    const body = JSON.stringify({action, data});
+    
+    // Intento 1: fetch POST
     try {
+      const ctrl = new AbortController();
+      setTimeout(()=>ctrl.abort(), 8000);
       const r = await fetch(GAS_URL, {
-        method: 'POST',
-        redirect: 'follow',
-        signal: ctrl.signal,
-        body: JSON.stringify({action, data}),
+        method: 'POST', redirect: 'follow',
+        signal: ctrl.signal, credentials: 'omit',
+        body,
       });
-      clearTimeout(timer);
       const text = await r.text();
-      return JSON.parse(text);
-    } catch(e) {
-      clearTimeout(timer);
-      console.warn('GAS post failed:', e.message);
-      return null;
+      if (text && text.startsWith('{')) return JSON.parse(text);
+    } catch(e1) {
+      console.warn('POST fetch falló:', e1.message);
     }
+    
+    // Intento 2: XHR POST
+    return new Promise((resolve) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', GAS_URL, true);
+      xhr.timeout = 8000;
+      xhr.onload = () => {
+        try { resolve(JSON.parse(xhr.responseText)); }
+        catch(e) { resolve(null); }
+      };
+      xhr.onerror = () => resolve(null);
+      xhr.ontimeout = () => resolve(null);
+      xhr.send(body);
+    });
   },
 };
 
