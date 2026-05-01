@@ -416,7 +416,7 @@ document.addEventListener('DOMContentLoaded',()=>{
 // ================================================
 // CONFIGURACIÓN — PEGA AQUÍ TU URL DE GOOGLE
 // ================================================
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbw8hQ_qg6VO-MRKTo-7vVMVcULAZ9zCr5GXl5G7GSQW2THG5ZyHbOsiYe5SoXy3SadO/exec';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbwSZ2-SnX9jvX9GX__4SY3wz4H78rg_TT3BX-8lOfv5Q56polOd6w1faqS06a2QDaA/exec';
 // Ejemplo: 'https://script.google.com/macros/s/AKfycb.../exec'
 // ================================================
 
@@ -435,90 +435,26 @@ const DEFAULT_WORKERS=[
 
 // == API Google Apps Script ======================
 const GAS = {
-  configured: () => GAS_URL && GAS_URL !== 'PEGA_AQUI_TU_URL_DE_GOOGLE_APPS_SCRIPT',
-
-  // GET via fetch con múltiples intentos
+  configured: () => GAS_URL && !GAS_URL.includes('PEGA_AQUI'),
   get: async (action, params={}) => {
     if (!GAS.configured()) throw new Error('no_url');
-    const q = new URLSearchParams({action, ...params}).toString();
-    const url = `${GAS_URL}?${q}`;
-    
-    // Intento 1: fetch normal con redirect follow
-    try {
-      const ctrl = new AbortController();
-      setTimeout(()=>ctrl.abort(), 8000);
-      const r = await fetch(url, {
-        method: 'GET',
-        redirect: 'follow',
-        signal: ctrl.signal,
-        credentials: 'omit',
-        mode: 'cors',
-      });
-      const text = await r.text();
-      if (text && text.startsWith('{')) {
-        const d = JSON.parse(text);
-        if (d && d.error) throw new Error(d.error);
-        return d;
-      }
-    } catch(e1) {
-      console.warn('Fetch intento 1 falló:', e1.message);
-    }
-
-    // Intento 2: XMLHttpRequest (mejor soporte en iOS)
-    return new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhr.open('GET', url, true);
-      xhr.timeout = 8000;
-      xhr.onload = () => {
-        try {
-          const d = JSON.parse(xhr.responseText);
-          if (d && d.error) reject(new Error(d.error));
-          else resolve(d);
-        } catch(e) { reject(e); }
-      };
-      xhr.onerror = () => reject(new Error('XHR error'));
-      xhr.ontimeout = () => reject(new Error('XHR timeout'));
-      xhr.send();
-    });
+    const url = GAS_URL + '?' + new URLSearchParams({action, ...params});
+    const r = await fetch(url, {redirect:'follow', cache:'no-cache'});
+    const d = JSON.parse(await r.text());
+    if (d && d.error) throw new Error(d.error);
+    return d;
   },
-
-  // POST via fetch con XHR fallback
   post: async (action, data) => {
     if (!GAS.configured()) return null;
-    const body = JSON.stringify({action, data});
-    
-    // Intento 1: fetch POST
     try {
-      const ctrl = new AbortController();
-      setTimeout(()=>ctrl.abort(), 8000);
       const r = await fetch(GAS_URL, {
-        method: 'POST', redirect: 'follow',
-        signal: ctrl.signal, credentials: 'omit',
-        body,
+        method:'POST', redirect:'follow',
+        body: JSON.stringify({action, data}),
       });
-      const text = await r.text();
-      if (text && text.startsWith('{')) return JSON.parse(text);
-    } catch(e1) {
-      console.warn('POST fetch falló:', e1.message);
-    }
-    
-    // Intento 2: XHR POST
-    return new Promise((resolve) => {
-      const xhr = new XMLHttpRequest();
-      xhr.open('POST', GAS_URL, true);
-      xhr.timeout = 8000;
-      xhr.onload = () => {
-        try { resolve(JSON.parse(xhr.responseText)); }
-        catch(e) { resolve(null); }
-      };
-      xhr.onerror = () => resolve(null);
-      xhr.ontimeout = () => resolve(null);
-      xhr.send(body);
-    });
+      return JSON.parse(await r.text());
+    } catch(e) { console.warn('GAS post:', e.message); return null; }
   },
 };
-
-// == Caché local para trabajar sin internet ======
 const LS = {
   s:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}},
   g:(k,d)=>{try{const r=localStorage.getItem(k);return r?JSON.parse(r):d;}catch(e){return d;}},
