@@ -1,0 +1,2639 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Supervisor — Control Producción Guayllabamba</title>
+<style>
+:root{
+  --sd:#1a2b4a;--sm:#2e4a7a;--sl:#4a7ab5;--sp:#d6e4f7;--su:#eef4fc;
+  --oa:#e8631a;--ol:#fad5be;--yh:#fffde7;
+  --gk:#d4edda;--gt:#155724;--rd:#f8d7da;--rt:#721c24;
+  --wh:#fff;--bg:#f0f2f6;--gl:#dee2e6;--gm:#6c757d;--tx:#1a1a2e;
+  --warn:#fff3cd;--warnt:#856404;
+  --pend:#f3f4f6;--pendt:#374151;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--tx);font-size:13px;}
+/* ─── TOPBAR ─── */
+.topbar{background:var(--sd);color:#fff;padding:0 1.25rem;display:flex;align-items:center;height:52px;gap:.75rem;position:sticky;top:0;z-index:200;box-shadow:0 2px 10px rgba(0,0,0,.35);}
+.topbar-logo{font-size:10px;font-weight:800;letter-spacing:.1em;color:var(--oa);text-transform:uppercase;white-space:nowrap;}
+.topbar-title{font-size:12px;font-weight:600;color:#fff;flex:1;}
+.topbar-badge{background:var(--oa);color:#fff;font-size:9px;font-weight:800;padding:3px 8px;border-radius:20px;white-space:nowrap;letter-spacing:.05em;}
+/* ─── TABS ─── */
+.tabs-nav{background:var(--sm);display:flex;padding:0 1.25rem;overflow-x:auto;gap:2px;}
+.tab-btn{padding:9px 16px;font-size:11px;font-weight:700;color:rgba(255,255,255,.55);background:none;border:none;border-bottom:3px solid transparent;cursor:pointer;white-space:nowrap;transition:all .15s;letter-spacing:.05em;text-transform:uppercase;}
+.tab-btn.active,.tab-btn:hover{color:#fff;border-bottom-color:var(--oa);}
+/* ─── LAYOUT ─── */
+.container{max-width:1440px;margin:0 auto;padding:1rem 1.25rem;}
+.panel{display:none;}.panel.active{display:block;}
+/* ─── CARDS ─── */
+.card{background:var(--wh);border:1px solid var(--gl);border-radius:10px;padding:1rem 1.25rem;margin-bottom:.875rem;}
+.card-hdr{font-size:11px;font-weight:800;color:var(--sd);margin-bottom:.75rem;text-transform:uppercase;letter-spacing:.06em;display:flex;align-items:center;gap:8px;}
+.card-hdr::before{content:'';display:block;width:4px;height:14px;background:var(--oa);border-radius:2px;flex-shrink:0;}
+/* ─── KPI ─── */
+.kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-bottom:.875rem;}
+.kpi{background:var(--wh);border:1px solid var(--gl);border-radius:9px;padding:12px 14px;}
+.kpi-lbl{font-size:9px;font-weight:800;color:var(--gm);text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px;}
+.kpi-val{font-size:24px;font-weight:800;color:var(--sd);line-height:1;}
+.kpi-sub{font-size:10px;color:var(--gm);margin-top:3px;}
+.kpi.k-orange{background:var(--oa);border-color:var(--oa);}.kpi.k-orange .kpi-lbl,.kpi.k-orange .kpi-val,.kpi.k-orange .kpi-sub{color:#fff;}
+.kpi.k-blue{background:var(--sd);border-color:var(--sd);}.kpi.k-blue .kpi-lbl,.kpi.k-blue .kpi-val,.kpi.k-blue .kpi-sub{color:#fff;}
+.kpi.k-green{background:#166534;border-color:#166534;}.kpi.k-green .kpi-lbl,.kpi.k-green .kpi-val,.kpi.k-green .kpi-sub{color:#fff;}
+.kpi.k-warn{background:var(--warn);border-color:#fbbf24;}.kpi.k-warn .kpi-lbl,.kpi.k-warn .kpi-val,.kpi.k-warn .kpi-sub{color:var(--warnt);}
+/* ─── TABLES ─── */
+.tw{overflow-x:auto;border-radius:8px;border:1px solid var(--gl);}
+table{width:100%;border-collapse:collapse;font-size:12px;}
+thead tr{background:var(--sd);}
+thead th{color:#fff;font-weight:700;padding:8px 10px;text-align:left;white-space:nowrap;font-size:10px;letter-spacing:.04em;}
+th.r,td.r{text-align:right;}
+th.c,td.c{text-align:center;}
+tbody tr{border-bottom:1px solid var(--gl);}
+tbody tr:hover{background:var(--su);}
+td{padding:6px 10px;vertical-align:middle;}
+td.mono{font-family:monospace;font-size:11px;}
+/* ─── ROW COLORS ─── */
+tr.row-cj{background:var(--sp);font-weight:700;}
+tr.row-parte{background:var(--wh);}
+tr.row-parte td:first-child{padding-left:24px;color:var(--gm);}
+tr.pend-row{background:#fffbeb;}
+tr.done-row{background:#f0fdf4;}
+/* ─── BADGES ─── */
+.badge{display:inline-block;padding:2px 7px;border-radius:20px;font-size:9px;font-weight:800;letter-spacing:.03em;white-space:nowrap;}
+.b-viga{background:#dbeafe;color:#1e40af;}
+.b-placa{background:#d1fae5;color:#065f46;}
+.b-angulo{background:#fef3c7;color:#92400e;}
+.b-pend{background:var(--pend);color:var(--pendt);}
+.b-prog{background:#fef3c7;color:#92400e;}
+.b-done{background:var(--gk);color:var(--gt);}
+.b-rej{background:var(--rd);color:var(--rt);}
+.b-stock{background:#e0e7ff;color:#3730a3;}
+.b-waste{background:#fce7f3;color:#9d174d;}
+/* ─── PROGRESS ─── */
+.pgw{background:var(--gl);border-radius:3px;height:7px;overflow:hidden;min-width:60px;}
+.pgb{height:100%;border-radius:3px;transition:width .3s;}
+/* ─── PENDING INDICATOR ─── */
+.pend-cnt{display:inline-flex;align-items:center;gap:4px;background:var(--warn);color:var(--warnt);border-radius:6px;padding:2px 8px;font-size:10px;font-weight:800;}
+.pend-cnt.zero{background:var(--gk);color:var(--gt);}
+/* ─── FORMS ─── */
+.frow{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:.625rem;}
+.fg{display:flex;flex-direction:column;gap:4px;flex:1;min-width:120px;}
+.fg.wide{min-width:200px;}
+.fg.fix{flex:none;}
+lbl{font-size:10px;font-weight:700;color:var(--gm);text-transform:uppercase;letter-spacing:.05em;}
+label{font-size:10px;font-weight:700;color:var(--gm);text-transform:uppercase;letter-spacing:.05em;}
+input,select,textarea{padding:6px 9px;border:1px solid var(--gl);border-radius:6px;font-size:12px;font-family:inherit;color:var(--tx);background:var(--wh);}
+input:focus,select:focus{outline:none;border-color:var(--sl);box-shadow:0 0 0 3px rgba(74,122,181,.12);}
+input[readonly]{background:var(--su);color:var(--gm);}
+.btn{padding:7px 16px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;border:1px solid transparent;transition:all .12s;letter-spacing:.04em;text-transform:uppercase;}
+.btn-p{background:var(--oa);color:#fff;border-color:var(--oa);}.btn-p:hover{background:#c4521a;}
+.btn-s{background:var(--sd);color:#fff;border-color:var(--sd);}.btn-s:hover{background:var(--sm);}
+.btn-g{background:transparent;color:var(--sd);border-color:var(--gl);}.btn-g:hover{background:var(--su);}
+.btn-d{background:var(--rd);color:var(--rt);border-color:#f5c6cb;}.btn-d:hover{background:#f5c6cb;}
+.btn-sm{padding:3px 8px;font-size:10px;}
+.act-row{display:flex;gap:6px;justify-content:flex-end;margin-top:.625rem;padding-top:.625rem;border-top:1px solid var(--gl);}
+/* ─── SECTION DIVIDER ─── */
+.sec-div{height:1px;background:var(--gl);margin:.875rem 0;}
+/* ─── ALERT BOX ─── */
+.alert{padding:10px 14px;border-radius:7px;font-size:12px;font-weight:600;margin-bottom:.75rem;display:flex;align-items:center;gap:8px;}
+.alert-warn{background:var(--warn);color:var(--warnt);border:1px solid #fbbf24;}
+.alert-info{background:var(--su);color:var(--sm);border:1px solid var(--sl);}
+/* ─── PLANCHA FORM ─── */
+.plancha-box{background:var(--yh);border:1px solid #fbbf24;border-radius:9px;padding:.875rem 1rem;margin-top:.625rem;}
+.plancha-hdr{font-size:10px;font-weight:800;color:var(--warnt);text-transform:uppercase;letter-spacing:.06em;margin-bottom:.5rem;display:flex;align-items:center;gap:6px;}
+.plancha-calc{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:.625rem;}
+.pc-item{background:var(--wh);border:1px solid var(--gl);border-radius:7px;padding:8px 10px;text-align:center;}
+.pc-lbl{font-size:9px;font-weight:700;color:var(--gm);text-transform:uppercase;margin-bottom:4px;}
+.pc-val{font-size:16px;font-weight:800;}
+/* ─── STOCK TABLE ─── */
+.stock-tag{display:inline-flex;align-items:center;gap:4px;background:#e0e7ff;color:#3730a3;padding:2px 8px;border-radius:5px;font-size:10px;font-weight:700;}
+/* ─── MODAL ─── */
+.mbg{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500;display:none;align-items:center;justify-content:center;}
+.mbg.open{display:flex;}
+.modal{background:var(--wh);border-radius:12px;padding:1.25rem;width:92%;max-width:720px;max-height:88vh;overflow-y:auto;box-shadow:0 24px 64px rgba(0,0,0,.3);}
+.mhdr{font-size:14px;font-weight:800;color:var(--sd);margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center;}
+.mclose{background:none;border:none;font-size:18px;cursor:pointer;color:var(--gm);line-height:1;padding:2px 6px;}
+/* ─── TOAST ─── */
+#toast{position:fixed;bottom:18px;right:18px;background:var(--sd);color:#fff;padding:10px 16px;border-radius:8px;font-size:12px;font-weight:700;z-index:999;transition:opacity .25s;opacity:0;pointer-events:none;}
+/* ─── GRID 2 ─── */
+.g2{display:grid;grid-template-columns:1fr 1.6fr;gap:.875rem;}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:.875rem;}
+/* ─── FILTER BAR ─── */
+.fbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:.75rem;}
+.fbar input,.fbar select{flex:1;min-width:140px;max-width:260px;}
+.fbar-cnt{font-size:11px;color:var(--gm);margin-left:auto;white-space:nowrap;}
+@media(max-width:1100px){#kanban-grid{grid-template-columns:repeat(3,1fr)!important;}}
+@media(max-width:860px){.g2{grid-template-columns:1fr;}.g3{grid-template-columns:1fr 1fr;}#kanban-grid{grid-template-columns:repeat(2,1fr)!important;}}
+@media(max-width:600px){#kanban-grid{grid-template-columns:1fr!important;}}
+@media print{.topbar,.tabs-nav,.no-print,.btn,.mbg{display:none!important;}body{background:#fff;}.panel{display:block!important;}.card{box-shadow:none;}}
+</style>
+<script>
+/* MiniChart — pure Canvas, no dependencies, bar/line/doughnut */
+(function(global){
+'use strict';
+const instances = {};
+
+function px(v){return Math.round(v);}
+function lerp(a,b,t){return a+(b-a)*t;}
+
+class MiniChart {
+  constructor(canvas, config){
+    this.canvas = canvas;
+    this.ctx = canvas.getContext('2d');
+    this.config = config;
+    this._draw();
+  }
+  destroy(){ delete instances[this.canvas.id]; }
+
+  _draw(){
+    const {type, data, options={}} = this.config;
+    const canvas = this.canvas;
+    // High-DPI
+    const dpr = window.devicePixelRatio||1;
+    const cssW = canvas.offsetWidth||canvas.width;
+    const cssH = canvas.height;
+    canvas.width  = cssW * dpr;
+    canvas.height = cssH * dpr;
+    canvas.style.width  = cssW+'px';
+    canvas.style.height = cssH+'px';
+    const ctx = this.ctx;
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0,0,cssW,cssH);
+    const W=cssW, H=cssH;
+
+    if(type==='bar')      this._bar(ctx,W,H,data,options);
+    if(type==='line')     this._line(ctx,W,H,data,options);
+    if(type==='doughnut') this._doughnut(ctx,W,H,data,options);
+  }
+
+  // == BAR ======================================================
+  _bar(ctx,W,H,data,opts){
+    const horizontal = opts.indexAxis==='y';
+    const labels = data.labels||[];
+    const datasets = data.datasets||[];
+    const isDark = window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches;
+    const textColor = isDark?'#ccc':'#555';
+    const gridColor = isDark?'rgba(255,255,255,.08)':'rgba(0,0,0,.07)';
+
+    // Legend
+    const legH = 22;
+    const plotY = legH+4, plotH = H-legH-4-24, plotW = W-52;
+    const plotX = horizontal?52:44;
+
+    // Draw legend
+    let lx=8;
+    datasets.forEach((ds,i)=>{
+      if(ds.type==='line'){
+        ctx.strokeStyle=ds.borderColor||'#e8631a'; ctx.lineWidth=2;
+        ctx.beginPath(); ctx.moveTo(lx+4,10); ctx.lineTo(lx+18,10); ctx.stroke();
+        ctx.fillStyle=ds.borderColor||'#e8631a';
+      } else {
+        ctx.fillStyle=Array.isArray(ds.backgroundColor)?ds.backgroundColor[0]:ds.backgroundColor||'#4a7ab5';
+        ctx.fillRect(lx,4,14,10);
+      }
+      ctx.fillStyle=textColor; ctx.font='11px system-ui'; ctx.fillText(ds.label||'',lx+18,13);
+      lx+=ctx.measureText(ds.label||'').width+32;
+    });
+
+    // Compute value range
+    let allVals=[];
+    datasets.forEach(ds=>{ if(ds.type!=='line') allVals.push(...(ds.data||[])); });
+    let maxV = Math.max(1,...allVals.map(v=>v||0));
+    maxV = Math.ceil(maxV * 1.15);
+
+    const nGroups=labels.length;
+    const nDS=datasets.filter(d=>d.type!=='line').length;
+    const groupW=horizontal?plotH/nGroups:plotW/nGroups;
+    const barW=Math.max(4,(groupW*.75)/Math.max(1,nDS));
+    const gap=(groupW-barW*nDS)/2;
+
+    // Grid lines
+    const nGrid=4;
+    ctx.setLineDash([3,3]);
+    for(let i=0;i<=nGrid;i++){
+      const v=maxV*i/nGrid;
+      if(horizontal){
+        const x=plotX+plotW*i/nGrid;
+        ctx.strokeStyle=gridColor; ctx.lineWidth=1;
+        ctx.beginPath(); ctx.moveTo(x,plotY); ctx.lineTo(x,plotY+plotH); ctx.stroke();
+        ctx.fillStyle=textColor; ctx.font='9px system-ui'; ctx.textAlign='center';
+        ctx.fillText(v>=1000?(v/1000).toFixed(0)+'k':Math.round(v),x,plotY+plotH+14);
+      } else {
+        const y=plotY+plotH-plotH*i/nGrid;
+        ctx.strokeStyle=gridColor; ctx.lineWidth=1;
+        ctx.beginPath(); ctx.moveTo(plotX,y); ctx.lineTo(plotX+plotW,y); ctx.stroke();
+        ctx.fillStyle=textColor; ctx.font='9px system-ui'; ctx.textAlign='right';
+        ctx.fillText(v>=1000?(v/1000).toFixed(0)+'k':Math.round(v),plotX-4,y+3);
+      }
+    }
+    ctx.setLineDash([]);
+
+    // Bars
+    let dsBarIdx=0;
+    datasets.forEach((ds,dsI)=>{
+      if(ds.type==='line') return;
+      const bgs=Array.isArray(ds.backgroundColor)?ds.backgroundColor:[ds.backgroundColor||'#4a7ab5'];
+      (ds.data||[]).forEach((v,i)=>{
+        const bg=bgs[i%bgs.length]||'#4a7ab5';
+        ctx.fillStyle=bg;
+        const ratio=(v||0)/maxV;
+        if(horizontal){
+          const y=plotY+i*groupW+gap+dsBarIdx*barW;
+          const w=plotW*ratio;
+          ctx.beginPath();
+          const r=Math.min(4,barW/2);
+          ctx.roundRect(plotX,y,w,barW,r);
+          ctx.fill();
+        } else {
+          const x=plotX+i*groupW+gap+dsBarIdx*barW;
+          const bh=plotH*ratio;
+          ctx.beginPath();
+          const r=Math.min(4,barW/2);
+          ctx.roundRect(x,plotY+plotH-bh,barW,bh,r);
+          ctx.fill();
+        }
+      });
+      dsBarIdx++;
+    });
+
+    // Labels
+    labels.forEach((lbl,i)=>{
+      const short=lbl.length>10?lbl.slice(0,10)+'…':lbl;
+      ctx.fillStyle=textColor; ctx.textAlign='center';
+      if(horizontal){
+        ctx.font='9px system-ui'; ctx.textAlign='right';
+        const y=plotY+i*groupW+groupW/2+4;
+        ctx.fillText(short,plotX-4,y);
+      } else {
+        ctx.font='9px system-ui';
+        const x=plotX+i*groupW+groupW/2;
+        ctx.fillText(short,x,plotY+plotH+14);
+      }
+    });
+
+    // Line datasets (secondary axis overlay)
+    datasets.forEach((ds)=>{
+      if(ds.type!=='line') return;
+      const pts=ds.data||[];
+      const yMax=Math.max(1,...pts)*1.15;
+      ctx.strokeStyle=ds.borderColor||'#e8631a';
+      ctx.lineWidth=2; ctx.setLineDash([]);
+      ctx.beginPath();
+      pts.forEach((v,i)=>{
+        const x=plotX+(i+.5)*(plotW/pts.length);
+        const y=plotY+plotH-plotH*(v/yMax);
+        i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+      });
+      ctx.stroke();
+      ctx.fillStyle=ds.pointBackgroundColor||ds.borderColor||'#e8631a';
+      pts.forEach((v,i)=>{
+        const x=plotX+(i+.5)*(plotW/pts.length);
+        const y=plotY+plotH-plotH*(v/yMax);
+        ctx.beginPath(); ctx.arc(x,y,4,0,Math.PI*2); ctx.fill();
+      });
+    });
+  }
+
+  // == LINE =====================================================
+  _line(ctx,W,H,data,opts){
+    const labels=data.labels||[];
+    const datasets=data.datasets||[];
+    const isDark=window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches;
+    const textColor=isDark?'#ccc':'#555';
+    const gridColor=isDark?'rgba(255,255,255,.08)':'rgba(0,0,0,.07)';
+    const legH=22, plotY=legH+4, plotH=H-legH-28, plotX=40, plotW=W-50;
+
+    // Legend
+    let lx=8;
+    datasets.forEach(ds=>{
+      ctx.strokeStyle=ds.borderColor||'#1a2b4a'; ctx.lineWidth=2;
+      if(ds.borderDash) ctx.setLineDash(ds.borderDash); else ctx.setLineDash([]);
+      ctx.beginPath(); ctx.moveTo(lx+2,10); ctx.lineTo(lx+18,10); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle=textColor; ctx.font='11px system-ui';
+      ctx.fillText(ds.label||'',lx+22,13);
+      lx+=ctx.measureText(ds.label||'').width+36;
+    });
+
+    // Range
+    let maxV=0;
+    datasets.forEach(ds=>ds.data.forEach(v=>{ if((v||0)>maxV) maxV=v||0; }));
+    maxV=Math.ceil((maxV||1)*1.15);
+
+    // Grid
+    const nGrid=4;
+    for(let i=0;i<=nGrid;i++){
+      const y=plotY+plotH-plotH*i/nGrid;
+      ctx.strokeStyle=gridColor; ctx.lineWidth=1; ctx.setLineDash([3,3]);
+      ctx.beginPath(); ctx.moveTo(plotX,y); ctx.lineTo(plotX+plotW,y); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle=textColor; ctx.font='9px system-ui'; ctx.textAlign='right';
+      const v=maxV*i/nGrid;
+      ctx.fillText(Math.round(v),plotX-4,y+3);
+    }
+
+    // Lines
+    datasets.forEach(ds=>{
+      const pts=ds.data||[];
+      if(!pts.length) return;
+      const color=ds.borderColor||'#1a2b4a';
+      ctx.strokeStyle=color; ctx.lineWidth=2;
+      if(ds.borderDash) ctx.setLineDash(ds.borderDash); else ctx.setLineDash([]);
+      if(ds.fill&&ds.backgroundColor){
+        ctx.beginPath();
+        pts.forEach((v,i)=>{
+          const x=plotX+(i/(pts.length-1||1))*plotW;
+          const y=plotY+plotH-plotH*((v||0)/maxV);
+          i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+        });
+        ctx.lineTo(plotX+plotW,plotY+plotH); ctx.lineTo(plotX,plotY+plotH); ctx.closePath();
+        ctx.fillStyle=ds.backgroundColor; ctx.fill();
+      }
+      ctx.setLineDash(ds.borderDash||[]);
+      ctx.beginPath();
+      pts.forEach((v,i)=>{
+        const x=plotX+(i/(pts.length-1||1))*plotW;
+        const y=plotY+plotH-plotH*((v||0)/maxV);
+        i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+      });
+      ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle=ds.pointBackgroundColor||color;
+      pts.forEach((v,i)=>{
+        const x=plotX+(i/(pts.length-1||1))*plotW;
+        const y=plotY+plotH-plotH*((v||0)/maxV);
+        ctx.beginPath(); ctx.arc(x,y,3,0,Math.PI*2); ctx.fill();
+      });
+    });
+
+    // X labels
+    labels.forEach((lbl,i)=>{
+      const x=plotX+(i/(labels.length-1||1))*plotW;
+      ctx.fillStyle=textColor; ctx.font='9px system-ui'; ctx.textAlign='center';
+      ctx.fillText(lbl,x,plotY+plotH+14);
+    });
+  }
+
+  // == DOUGHNUT =================================================
+  _doughnut(ctx,W,H,data,opts){
+    const labels=data.labels||[];
+    const ds=data.datasets[0]||{};
+    const vals=ds.data||[];
+    const colors=ds.backgroundColor||['#1e40af','#166534','#721c24','#d1d5db'];
+    const total=vals.reduce((a,b)=>a+(b||0),0);
+    if(total===0) return;
+    const cutout=parseFloat(opts.cutout)||55;
+    const cx=W*0.38, cy=H/2, r=Math.min(cx,H/2)*0.82;
+    const inner=r*(cutout/100);
+    let angle=-Math.PI/2;
+    vals.forEach((v,i)=>{
+      const sweep=(v/total)*Math.PI*2;
+      ctx.beginPath();
+      ctx.arc(cx,cy,r,angle,angle+sweep);
+      ctx.arc(cx,cy,inner,angle+sweep,angle,true);
+      ctx.closePath();
+      ctx.fillStyle=colors[i%colors.length]||'#888';
+      ctx.fill();
+      if(ds.borderWidth){ ctx.strokeStyle='#fff'; ctx.lineWidth=ds.borderWidth; ctx.stroke(); }
+      angle+=sweep;
+    });
+    // Legend right side
+    const legX=W*0.68, legY=H/2-(labels.length*16)/2;
+    labels.forEach((lbl,i)=>{
+      const y=legY+i*18;
+      ctx.fillStyle=colors[i%colors.length]||'#888';
+      ctx.fillRect(legX,y,12,12);
+      const isDark=window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches;
+      ctx.fillStyle=isDark?'#ccc':'#444';
+      ctx.font='10px system-ui'; ctx.textAlign='left';
+      const pct=total>0?((vals[i]||0)/total*100).toFixed(0)+'%':'0%';
+      const short=lbl.length>14?lbl.slice(0,14)+'…':lbl;
+      ctx.fillText(`${short} ${pct}`,legX+16,y+10);
+    });
+    // Center label
+    ctx.fillStyle=window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches?'#eee':'#333';
+    ctx.font='bold 13px system-ui'; ctx.textAlign='center';
+    const tot=total>=1000?(total/1000).toFixed(1)+'t':Math.round(total).toString();
+    ctx.fillText(tot,cx,cy+4);
+  }
+}
+
+// Public API — mirrors Chart.js constructor usage
+global.Chart = class {
+  constructor(ctx, config){
+    const canvas = ctx.canvas||ctx;
+    if(instances[canvas.id]) instances[canvas.id].destroy();
+    const inst = new MiniChart(canvas, config);
+    if(canvas.id) instances[canvas.id]=inst;
+    this._inst=inst;
+  }
+  destroy(){ this._inst&&this._inst.destroy(); }
+  update(){ this._inst&&this._inst._draw(); }
+};
+})(window);
+
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-logo">⚙ CtrlProd</div>
+  <div class="topbar-title">CRUCE GUAYLLABAMBA V3 &nbsp;·&nbsp; CPC-DIS-PEG &nbsp;·&nbsp; Tablero 56 Módulos</div>
+  <div class="topbar-badge">TEKLA STRUCTURES</div>
+</div>
+
+<div class="tabs-nav">
+  <button class="tab-btn active" id="tab-dashboard" onclick="goTab('dashboard',this)">Dashboard</button>
+  <button class="tab-btn" id="tab-pendientes" onclick="goTab('pendientes',this)">⚠ Pendientes</button>
+  <button class="tab-btn" id="tab-partes" onclick="goTab('partes',this)">Listado Partes</button>
+  <button class="tab-btn" id="tab-corte" onclick="goTab('corte',this)">✂ Corte / Plancha</button>
+  <button class="tab-btn" id="tab-produccion" onclick="goTab('produccion',this)">Producción</button>
+  <button class="tab-btn" id="tab-fases" onclick="goTab('fases',this)">Fases Kanban</button>
+  <button class="tab-btn" id="tab-stock" onclick="goTab('stock',this)">📦 Stock</button>
+  <button class="tab-btn" id="tab-operarios" onclick="goTab('operarios',this)">Operarios</button>
+  <button class="tab-btn" id="tab-informes" onclick="goTab('informes',this)">Informes</button>
+  <button class="tab-btn" id="tab-links" onclick="goTab('links',this)">🔗 Links Operarios</button>
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     DASHBOARD
+════════════════════════════════════════════════════ -->
+<div id="panel-dashboard" class="panel active">
+<div class="container">
+
+  <!-- KPIs -->
+  <div class="kpi-row" id="kpi-main"></div>
+
+  <!-- CHARTS ROW 1: Avance general + Fases barras -->
+  <div style="display:grid;grid-template-columns:1.1fr 1fr;gap:.875rem;margin-bottom:.875rem;">
+    <div class="card">
+      <div class="card-hdr" style="justify-content:space-between;display:flex;align-items:center;">
+        <span>Avance por Conjunto</span>
+        <span id="dash-pct-global" style="font-size:13px;color:var(--oa);font-weight:800;"></span>
+      </div>
+      <canvas id="chart-conjuntos" height="220"></canvas>
+    </div>
+    <div class="card">
+      <div class="card-hdr">Producción por Fase — Unidades ejecutadas</div>
+      <canvas id="chart-fases" height="220"></canvas>
+    </div>
+  </div>
+
+  <!-- CHARTS ROW 2: Material (peso) + Tendencia diaria -->
+  <div style="display:grid;grid-template-columns:1fr 1.4fr;gap:.875rem;margin-bottom:.875rem;">
+    <div class="card">
+      <div class="card-hdr">Balance de Material (kg)</div>
+      <canvas id="chart-material" height="200"></canvas>
+    </div>
+    <div class="card">
+      <div class="card-hdr">Tendencia de producción — últimos 14 días</div>
+      <canvas id="chart-tendencia" height="200"></canvas>
+    </div>
+  </div>
+
+  <!-- ROW 3: Tabla conjuntos + Panel derecho -->
+  <div class="g2">
+    <div class="card">
+      <div class="card-hdr">Detalle de avance por conjunto</div>
+      <div class="tw" style="max-height:360px;overflow-y:auto;">
+        <table><thead><tr>
+          <th>Conjunto</th><th>Tipo</th><th class="r">Plan</th>
+          <th class="r">Ejec.</th><th class="r">Pend.</th><th>Avance</th>
+        </tr></thead><tbody id="dash-cj"></tbody></table>
+      </div>
+    </div>
+    <div>
+      <div class="card">
+        <div class="card-hdr">Actividad reciente</div>
+        <div id="dash-recent" style="font-size:12px;color:var(--gm);">Sin registros.</div>
+      </div>
+      <div class="card" style="margin-top:.875rem;">
+        <div class="card-hdr">Stock Sobrantes</div>
+        <div id="dash-stock-mini" style="font-size:12px;color:var(--gm);">Sin sobrantes.</div>
+      </div>
+      <div class="card" style="margin-top:.875rem;background:var(--su);border-color:var(--sl);">
+        <div class="card-hdr" style="color:var(--sm);">📲 Datos de operarios</div>
+        <div id="sync-indicator" style="font-size:11px;color:var(--gm);margin-bottom:.5rem;">Los datos se guardan en este navegador.</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:.5rem;">
+          <button class="btn btn-s btn-sm" onclick="loadFromServer().then(()=>{renderDashboard();renderPendientes();toast('✓ Datos actualizados de Google');})">⟳ Recargar</button>
+          <button class="btn btn-p btn-sm" onclick="importarDatosOperario()">📥 Importar datos operario</button>
+          <button class="btn btn-g btn-sm" onclick="exportarTodosDatos()">📤 Exportar copia</button>
+        </div>
+        <div style="font-size:11px;color:var(--gm);">
+          El operario usa <strong>worker.html</strong> en su celular.
+          Al terminar el día exporta sus datos y te los envía.
+          Tú los importas aquí con el botón <em>Importar datos operario</em>.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     PENDIENTES
+════════════════════════════════════════════════════ -->
+<div id="panel-pendientes" class="panel">
+<div class="container">
+  <div class="kpi-row" id="kpi-pend"></div>
+  <div class="card">
+    <div class="card-hdr">Partes Pendientes de Fabricación</div>
+    <div class="fbar no-print">
+      <input type="text" id="pend-search" placeholder="Buscar parte, perfil, conjunto..." oninput="renderPendientes()">
+      <select id="pend-tipo" onchange="renderPendientes()">
+        <option value="">Todos los tipos</option>
+        <option>VIGA</option><option>PLACA</option><option>ANGULO</option>
+      </select>
+      <button class="btn btn-s btn-sm no-print" onclick="window.print()">🖨 Imprimir</button>
+      <span class="fbar-cnt" id="pend-cnt"></span>
+    </div>
+    <div class="tw">
+      <table>
+        <thead><tr>
+          <th>Conjunto</th><th>Parte</th><th>Perfil</th><th>Tipo</th>
+          <th class="r">Plan</th><th class="r">Ejecutado</th>
+          <th class="r" style="background:#92400e;">⚠ PENDIENTE</th>
+          <th class="r">Peso pend (kg)</th>
+          <th class="r" style="font-size:9px;">Avance por Fase (✂A·S·P·🎨)</th>
+          <th class="r">Long (mm)</th>
+          <th class="c no-print">Acción</th>
+        </tr></thead>
+        <tbody id="pend-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     LISTADO PARTES (TEKLA)
+════════════════════════════════════════════════════ -->
+<div id="panel-partes" class="panel">
+<div class="container">
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:.75rem;">
+      <div class="card-hdr" style="margin:0;">Listado de Materiales Tekla – 39 Conjuntos / 12,383 Unidades</div>
+      <div class="no-print" style="display:flex;gap:6px;align-items:center;">
+        <label class="btn btn-g btn-sm" style="cursor:pointer;">📂 Cargar Tekla
+          <input type="file" accept=".xlsx,.xls" onchange="toast('Archivo recibido. En producción se procesa vía API.')" style="display:none;">
+        </label>
+        <button class="btn btn-s btn-sm" onclick="window.print()">🖨 Imprimir</button>
+      </div>
+    </div>
+    <div class="fbar no-print">
+      <input type="text" id="tek-q" placeholder="Buscar conjunto, parte o perfil..." oninput="renderTekla()">
+      <select id="tek-tp" onchange="renderTekla()">
+        <option value="">Todos tipos</option><option>VIGA</option><option>PLACA</option><option>ANGULO</option>
+      </select>
+      <select id="tek-mat" onchange="renderTekla()">
+        <option value="">Todos materiales</option><option>A588-50</option><option>A572-50</option>
+      </select>
+      <span class="fbar-cnt" id="tek-cnt"></span>
+    </div>
+    <div class="tw">
+      <table>
+        <thead><tr>
+          <th>Conjunto</th><th>Parte</th><th>Perfil</th><th>Tipo</th>
+          <th class="r">Long (mm)</th><th class="r">Cant.</th><th class="r">Área (m²)</th>
+          <th>Material</th><th class="r">Peso unit (kg)</th><th class="r">Peso tot (kg)</th>
+          <th class="r">Ejecutado</th><th class="r">Pendiente</th>
+          <th class="c no-print">Acción</th>
+        </tr></thead>
+        <tbody id="tek-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     CORTE / PLANCHA
+════════════════════════════════════════════════════ -->
+<div id="panel-corte" class="panel">
+<div class="container">
+<div class="g2">
+  <!-- FORM -->
+  <div class="card">
+    <div class="card-hdr">✂ Registro de Corte con Plancha</div>
+
+    <div class="frow">
+      <div class="fg"><label>Fecha</label><input type="date" id="c-fecha"></div>
+      <div class="fg"><label>Turno</label><select id="c-turno"><option>Diurno</option><option>Nocturno</option></select></div>
+      <div class="fg"><label>Operario (Cortador)</label><select id="c-op"><option value="">Seleccionar...</option></select></div>
+    </div>
+
+    <div class="sec-div"></div>
+    <div style="font-size:10px;font-weight:800;color:var(--sm);text-transform:uppercase;letter-spacing:.06em;margin-bottom:.5rem;">➤ Parte a cortar (Tekla)</div>
+
+    <div class="frow">
+      <div class="fg wide"><label>Conjunto</label>
+        <select id="c-cj" onchange="onConjuntoChange()"><option value="">Seleccionar conjunto...</option></select>
+      </div>
+    </div>
+    <div class="frow">
+      <div class="fg wide"><label>Parte / Perfil</label>
+        <select id="c-parte" onchange="onParteChange()"><option value="">Seleccionar parte...</option></select>
+      </div>
+      <div class="fg fix" style="min-width:100px;"><label>Cant. a cortar</label>
+        <input type="number" id="c-qty" min="1" placeholder="0" oninput="calcCorte()">
+      </div>
+    </div>
+
+    <div id="c-parte-info" style="display:none;background:var(--su);border-radius:7px;padding:8px 12px;margin-bottom:.625rem;font-size:11px;">
+      <span id="c-info-txt"></span>
+      <span class="pend-cnt" id="c-pend-badge" style="margin-left:8px;"></span>
+    </div>
+
+    <!-- PLANCHA / MATERIAL DATA -->
+    <div class="plancha-box">
+      <div class="plancha-hdr">📋 Datos del Material a Utilizar</div>
+
+      <!-- TIPO + COLADA + GRADO -->
+      <div class="frow">
+        <div class="fg"><label>Tipo de material</label>
+          <select id="c-mat-tipo" onchange="onTipoMaterialChange()" style="font-weight:600;">
+            <option value="plancha">Plancha / Placa</option>
+            <option value="angulo">Ángulo (L)</option>
+            <option value="ipe">Perfil IPE</option>
+            <option value="upn">Perfil UPN / UPE</option>
+            <option value="heb">Perfil HEB / HEA / HI</option>
+            <option value="tubo_rect">Tubo rectangular</option>
+            <option value="tubo_cuad">Tubo cuadrado</option>
+            <option value="tubo_circ">Tubo circular / CHS</option>
+            <option value="barra_red">Barra redonda</option>
+            <option value="barra_cuad">Barra cuadrada</option>
+            <option value="otro">Otro (peso manual)</option>
+          </select>
+        </div>
+        <div class="fg"><label>N° Colada / Serie</label>
+          <input type="text" id="c-colada" placeholder="PL-2024-001" oninput="autoFillSobColada()">
+        </div>
+        <div class="fg"><label>Grado de acero</label>
+          <input type="text" id="c-mat-grado" placeholder="A588-50" oninput="autoFillSobGrado()">
+        </div>
+        <div class="fg fix" style="min-width:70px;"><label>Cantidad</label>
+          <input type="number" id="c-mat-qty" value="1" min="1" placeholder="1" oninput="calcCorte()">
+        </div>
+      </div>
+
+      <!-- DIMENSIONES DINÁMICAS según tipo -->
+      <div id="dims-plancha" class="frow">
+        <div class="fg"><label>Espesor (mm)</label><input type="number" id="c-esp" placeholder="12" oninput="calcCorte()"></div>
+        <div class="fg"><label>Ancho (mm)</label><input type="number" id="c-ancho" placeholder="1500" oninput="calcCorte()"></div>
+        <div class="fg"><label>Largo (mm)</label><input type="number" id="c-largo" placeholder="6000" oninput="calcCorte()"></div>
+      </div>
+      <div id="dims-angulo" class="frow" style="display:none;">
+        <div class="fg"><label>Ala (mm)</label><input type="number" id="c-ang-ala" placeholder="100" oninput="calcCorte()"></div>
+        <div class="fg"><label>Espesor ala (mm)</label><input type="number" id="c-ang-esp" placeholder="10" oninput="calcCorte()"></div>
+        <div class="fg"><label>Largo barra (mm)</label><input type="number" id="c-ang-largo" placeholder="6000" oninput="calcCorte()"></div>
+        <div class="fg fix" style="min-width:80px;"><label>Alas iguales</label>
+          <select id="c-ang-tipo" onchange="calcCorte()">
+            <option value="L">L (igual)</option>
+            <option value="LD">LD (desigual)</option>
+          </select>
+        </div>
+        <div class="fg" id="c-ang-ala2-wrap" style="display:none;"><label>Ala 2 (mm)</label><input type="number" id="c-ang-ala2" placeholder="80" oninput="calcCorte()"></div>
+      </div>
+      <div id="dims-ipe" class="frow" style="display:none;">
+        <div class="fg"><label>Altura h (mm)</label><input type="number" id="c-ipe-h" placeholder="200" oninput="calcCorte()"></div>
+        <div class="fg"><label>Ala b (mm)</label><input type="number" id="c-ipe-b" placeholder="100" oninput="calcCorte()"></div>
+        <div class="fg"><label>Alma tw (mm)</label><input type="number" id="c-ipe-tw" placeholder="5.6" step="0.1" oninput="calcCorte()"></div>
+        <div class="fg"><label>Ala tf (mm)</label><input type="number" id="c-ipe-tf" placeholder="8.5" step="0.1" oninput="calcCorte()"></div>
+        <div class="fg"><label>Largo (mm)</label><input type="number" id="c-ipe-largo" placeholder="6000" oninput="calcCorte()"></div>
+      </div>
+      <div id="dims-heb" class="frow" style="display:none;">
+        <div class="fg"><label>Altura h (mm)</label><input type="number" id="c-heb-h" placeholder="300" oninput="calcCorte()"></div>
+        <div class="fg"><label>Ala b (mm)</label><input type="number" id="c-heb-b" placeholder="300" oninput="calcCorte()"></div>
+        <div class="fg"><label>Alma tw (mm)</label><input type="number" id="c-heb-tw" placeholder="11" step="0.1" oninput="calcCorte()"></div>
+        <div class="fg"><label>Ala tf (mm)</label><input type="number" id="c-heb-tf" placeholder="19" step="0.1" oninput="calcCorte()"></div>
+        <div class="fg"><label>Largo (mm)</label><input type="number" id="c-heb-largo" placeholder="6000" oninput="calcCorte()"></div>
+      </div>
+      <div id="dims-tubo-rect" class="frow" style="display:none;">
+        <div class="fg"><label>Ancho ext. (mm)</label><input type="number" id="c-tr-ancho" placeholder="100" oninput="calcCorte()"></div>
+        <div class="fg"><label>Alto ext. (mm)</label><input type="number" id="c-tr-alto" placeholder="60" oninput="calcCorte()"></div>
+        <div class="fg"><label>Espesor pared (mm)</label><input type="number" id="c-tr-esp" placeholder="4" step="0.5" oninput="calcCorte()"></div>
+        <div class="fg"><label>Largo (mm)</label><input type="number" id="c-tr-largo" placeholder="6000" oninput="calcCorte()"></div>
+      </div>
+      <div id="dims-tubo-cuad" class="frow" style="display:none;">
+        <div class="fg"><label>Lado ext. (mm)</label><input type="number" id="c-tc-lado" placeholder="80" oninput="calcCorte()"></div>
+        <div class="fg"><label>Espesor pared (mm)</label><input type="number" id="c-tc-esp" placeholder="4" step="0.5" oninput="calcCorte()"></div>
+        <div class="fg"><label>Largo (mm)</label><input type="number" id="c-tc-largo" placeholder="6000" oninput="calcCorte()"></div>
+      </div>
+      <div id="dims-tubo-circ" class="frow" style="display:none;">
+        <div class="fg"><label>Diám. ext. (mm)</label><input type="number" id="c-tcirc-d" placeholder="114.3" step="0.1" oninput="calcCorte()"></div>
+        <div class="fg"><label>Espesor pared (mm)</label><input type="number" id="c-tcirc-esp" placeholder="6" step="0.1" oninput="calcCorte()"></div>
+        <div class="fg"><label>Largo (mm)</label><input type="number" id="c-tcirc-largo" placeholder="6000" oninput="calcCorte()"></div>
+      </div>
+      <div id="dims-barra-red" class="frow" style="display:none;">
+        <div class="fg"><label>Diámetro (mm)</label><input type="number" id="c-br-d" placeholder="25" step="0.5" oninput="calcCorte()"></div>
+        <div class="fg"><label>Largo (mm)</label><input type="number" id="c-br-largo" placeholder="6000" oninput="calcCorte()"></div>
+      </div>
+      <div id="dims-barra-cuad" class="frow" style="display:none;">
+        <div class="fg"><label>Lado (mm)</label><input type="number" id="c-bc-lado" placeholder="25" step="0.5" oninput="calcCorte()"></div>
+        <div class="fg"><label>Largo (mm)</label><input type="number" id="c-bc-largo" placeholder="6000" oninput="calcCorte()"></div>
+      </div>
+      <div id="dims-otro" class="frow" style="display:none;">
+        <div class="fg"><label>Descripción / referencia</label>
+          <input type="text" id="c-otro-desc" placeholder="Ej: Platina 80×8 mm">
+        </div>
+        <div class="fg"><label>Largo (mm)</label><input type="number" id="c-otro-largo" placeholder="6000" oninput="calcCorte()"></div>
+      </div>
+
+      <!-- PESO CALCULADO PLANCHA -->
+      <div class="frow" style="margin-top:.25rem;">
+        <div class="fg">
+          <label>Peso por unidad (kg/ud) <span style="color:var(--oa);font-size:9px;font-weight:800;">AUTO</span></label>
+          <input type="number" id="c-peso-unit" placeholder="calculado automático" readonly style="background:var(--su);font-weight:700;color:var(--sd);">
+        </div>
+        <div class="fg">
+          <label>Peso total material (kg) <span style="color:var(--oa);font-size:9px;font-weight:800;">AUTO</span></label>
+          <input type="number" id="c-peso-plancha" placeholder="calculado automático" readonly style="background:var(--su);font-weight:700;color:var(--sd);">
+        </div>
+      </div>
+
+      <!-- BALANCE: piezas vs material -->
+      <div class="plancha-calc" id="c-calc-area" style="display:none;margin:.5rem 0;">
+        <div class="pc-item">
+          <div class="pc-lbl">Peso piezas cortadas</div>
+          <div class="pc-val" id="calc-peso-partes" style="color:var(--sd);">—</div>
+          <div style="font-size:9px;color:var(--gm);">kg (Tekla)</div>
+        </div>
+        <div class="pc-item">
+          <div class="pc-lbl">Sobrante estimado</div>
+          <div class="pc-val" id="calc-sobrante" style="color:#166534;">—</div>
+          <div style="font-size:9px;color:var(--gm);">kg</div>
+        </div>
+        <div class="pc-item">
+          <div class="pc-lbl">Desperdicio</div>
+          <div class="pc-val" id="calc-waste" style="color:var(--rt);">—</div>
+          <div style="font-size:9px;color:var(--gm);">kg</div>
+        </div>
+      </div>
+
+      <!-- SOBRANTE CON DIMENSIONES COMPLETAS IGUALES A LA PLANCHA -->
+      <div style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:9px;padding:.875rem 1rem;margin-top:.375rem;">
+        <div style="font-size:10px;font-weight:800;color:#166534;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.625rem;">
+          📦 Registro del sobrante — dimensiones completas
+        </div>
+
+        <div class="frow">
+          <div class="fg fix" style="min-width:130px;"><label>¿Hay sobrante?</label>
+            <select id="c-sob-hay" onchange="toggleSobFields()" style="border-color:#86efac;">
+              <option value="si">Sí — hay sobrante</option>
+              <option value="no">No — todo usado</option>
+            </select>
+          </div>
+          <div class="fg"><label>N° Colada sobrante <span style="font-size:9px;color:#22c55e;">(hereda plancha)</span></label>
+            <input type="text" id="c-sob-colada" placeholder="igual a plancha origen" style="border-color:#86efac;font-weight:600;">
+          </div>
+          <div class="fg fix" style="min-width:110px;"><label>Grado acero sob.</label>
+            <input type="text" id="c-sob-grado" placeholder="igual plancha" style="border-color:#86efac;">
+          </div>
+        </div>
+
+        <div id="sob-dim-fields">
+          <!-- Dimensiones del sobrante — misma lógica que el material original -->
+          <div id="sob-dims-plancha" class="frow">
+            <div class="fg fix" style="min-width:90px;"><label>Espesor (mm)</label>
+              <input type="number" id="c-sob-esp" placeholder="igual" oninput="calcSobrante()" style="border-color:#86efac;">
+            </div>
+            <div class="fg fix" style="min-width:90px;"><label>Ancho (mm)</label>
+              <input type="number" id="c-sob-ancho" placeholder="mm" oninput="calcSobrante()" style="border-color:#86efac;">
+            </div>
+            <div class="fg fix" style="min-width:90px;"><label>Largo (mm)</label>
+              <input type="number" id="c-sob-largo" placeholder="mm" oninput="calcSobrante()" style="border-color:#86efac;">
+            </div>
+            <div class="fg fix" style="min-width:75px;"><label>Cantidad</label>
+              <input type="number" id="c-sob-qty" value="1" min="1" oninput="calcSobrante()" style="border-color:#86efac;">
+            </div>
+          </div>
+          <div id="sob-dims-perfil" class="frow" style="display:none;">
+            <div class="fg fix" style="min-width:110px;"><label>Largo sobrante (mm)</label>
+              <input type="number" id="c-sob-largo-perfil" placeholder="mm" oninput="calcSobrante()" style="border-color:#86efac;">
+            </div>
+            <div class="fg fix" style="min-width:75px;"><label>Cantidad</label>
+              <input type="number" id="c-sob-qty-perfil" value="1" min="1" oninput="calcSobrante()" style="border-color:#86efac;">
+            </div>
+          </div>
+
+          <div class="frow">
+            <div class="fg">
+              <label>Peso sobrante (kg) <span style="color:#22c55e;font-weight:800;">AUTO</span></label>
+              <input type="number" id="c-sob-peso" placeholder="calculado automático" style="background:#dcfce7;border-color:#86efac;font-weight:700;" readonly>
+            </div>
+            <div class="fg fix" style="min-width:130px;"><label>Destino</label>
+              <select id="c-sob-dest" style="border-color:#86efac;">
+                <option value="stock">📦 Stock reutilizable</option>
+                <option value="waste">🗑 Desperdicio</option>
+              </select>
+            </div>
+            <div class="fg"><label>Ubicación / Referencia</label>
+              <input type="text" id="c-sob-ref" placeholder="Rack A-3, Bodega 2..." style="border-color:#86efac;">
+            </div>
+          </div>
+        </div>
+
+        <!-- DESPERDICIO FINAL -->
+        <div class="frow" style="margin-top:.25rem;">
+          <div class="fg">
+            <label>Desperdicio corte (kg) <span style="color:var(--rt);">AUTO</span></label>
+            <input type="number" id="c-desp" placeholder="0.00" readonly style="background:var(--rd);opacity:.9;font-weight:700;">
+          </div>
+          <div class="fg">
+            <label>% Aprovechamiento material</label>
+            <input type="text" id="c-aprovech" placeholder="—" readonly style="background:var(--su);font-weight:700;color:var(--sd);">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="frow" style="margin-top:.5rem;">
+      <div class="fg wide"><label>Observaciones</label><textarea id="c-obs" rows="2" placeholder="Notas del corte..."></textarea></div>
+    </div>
+    <div class="act-row">
+      <button class="btn btn-g" onclick="clearCorte()">Limpiar</button>
+      <button class="btn btn-p" onclick="addCorte()">Registrar corte</button>
+    </div>
+  </div>
+
+  <!-- HISTORIAL CORTE -->
+  <div>
+    <div class="card">
+      <div class="card-hdr">Historial de Cortes</div>
+      <div class="fbar no-print">
+        <input type="text" id="hc-q" placeholder="Buscar..." oninput="renderCorteHist()">
+        <select id="hc-op" onchange="renderCorteHist()"><option value="">Todos operarios</option></select>
+        <button class="btn btn-s btn-sm no-print" onclick="window.print()">🖨</button>
+      </div>
+      <div class="tw">
+        <table>
+          <thead><tr>
+            <th>Fecha</th><th>Conjunto</th><th>Parte</th>
+            <th class="r">Qty</th><th class="r">Kg piezas</th>
+            <th class="r">Sobrante</th><th class="r">Desperdicio</th>
+            <th>Material / Plancha</th><th class="c no-print">Acc.</th>
+          </tr></thead>
+          <tbody id="hc-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     PRODUCCIÓN (otras fases)
+════════════════════════════════════════════════════ -->
+<div id="panel-produccion" class="panel">
+<div class="container">
+<div class="g2">
+  <div class="card">
+    <div class="card-hdr">Registrar Ejecución de Fase</div>
+    <div class="frow">
+      <div class="fg"><label>Fecha</label><input type="date" id="p-fecha"></div>
+      <div class="fg"><label>Turno</label><select id="p-turno"><option>Diurno</option><option>Nocturno</option></select></div>
+    </div>
+    <div class="frow">
+      <div class="fg wide"><label>Conjunto</label>
+        <select id="p-cj" onchange="pUpdatePartes()"><option value="">Seleccionar...</option></select>
+      </div>
+    </div>
+    <div class="frow">
+      <div class="fg wide"><label>Parte</label>
+        <select id="p-parte" onchange="pCalcPeso()"><option value="">Seleccionar...</option></select>
+      </div>
+      <div class="fg fix" style="min-width:90px;"><label>Cantidad</label>
+        <input type="number" id="p-qty" min="1" placeholder="0" oninput="pCalcPeso()">
+      </div>
+    </div>
+    <div id="p-parte-info" style="display:none;background:var(--su);border-radius:7px;padding:8px 12px;margin-bottom:.5rem;font-size:11px;">
+      <span id="p-info-txt"></span>
+    </div>
+    <div class="frow">
+      <div class="fg"><label>Fase</label>
+        <select id="p-fase" onchange="toggleSoldExtra()">
+          <option>Armado</option><option>Soldadura</option>
+          <option>Perforaciones</option><option>Limpieza Mecánica</option><option>Pintura</option>
+        </select>
+      </div>
+      <div class="fg"><label>Operario</label><select id="p-op"><option value="">Seleccionar...</option></select></div>
+    </div>
+    <!-- SOLDADURA EXTRA -->
+    <div id="sold-extra-sup" style="display:none;background:#eef4ff;border:1.5px solid #bfdbfe;border-radius:10px;padding:.875rem;margin-bottom:.625rem;">
+      <div style="font-size:10px;font-weight:800;color:#1e40af;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.625rem;">🔥 Metrado de Soldadura</div>
+      <div class="frow">
+        <div class="fg"><label>Tipo</label>
+          <select id="p-sold-tipo">
+            <option value="SMAW">SMAW</option><option value="MIG">MIG/MAG</option>
+            <option value="TIG">TIG</option><option value="SAW">SAW</option><option value="otro">Otro</option>
+          </select>
+        </div>
+        <div class="fg"><label>Posición</label>
+          <select id="p-sold-pos">
+            <option value="1G/1F">1G/1F Plana</option><option value="2G/2F">2G/2F Horiz.</option>
+            <option value="3G/3F">3G/3F Vertical</option><option value="4G/4F">4G/4F Sobre cab.</option>
+            <option value="varias">Varias</option>
+          </select>
+        </div>
+      </div>
+      <div class="frow">
+        <div class="fg"><label>Metros lineales soldados (ml)</label>
+          <input type="number" id="p-sold-ml" placeholder="0.0" step="0.1">
+        </div>
+        <div class="fg"><label>Electrodo / Alambre (kg)</label>
+          <input type="number" id="p-sold-elec" placeholder="0.0" step="0.1">
+        </div>
+      </div>
+    </div>
+    <div class="frow">
+      <div class="fg"><label>Peso ejecutado (kg)</label><input type="number" id="p-peso" readonly placeholder="auto"></div>
+      <div class="fg"><label>Calidad</label>
+        <select id="p-cal">
+          <option value="ok">✓ Aprobado</option>
+          <option value="rep">⚠ Reproceso</option>
+          <option value="rec">✗ Rechazo</option>
+        </select>
+      </div>
+    </div>
+    <div class="frow">
+      <div class="fg wide"><label>Observaciones</label><textarea id="p-obs" rows="2"></textarea></div>
+    </div>
+    <div class="act-row">
+      <button class="btn btn-g" onclick="clearProd()">Limpiar</button>
+      <button class="btn btn-p" onclick="addProd()">Registrar</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-hdr">Registros de Producción</div>
+    <div class="fbar no-print">
+      <input type="text" id="pr-q" placeholder="Buscar..." oninput="renderProd()">
+      <select id="pr-fase" onchange="renderProd()">
+        <option value="">Todas las fases</option>
+        <option>Armado</option><option>Soldadura</option>
+        <option>Perforaciones</option><option>Limpieza Mecánica</option><option>Pintura</option>
+      </select>
+    </div>
+    <div class="tw">
+      <table>
+        <thead><tr>
+          <th>Fecha</th><th>Conjunto</th><th>Parte</th><th>Fase</th>
+          <th>Operario</th><th class="r">Qty</th><th class="r">Kg</th>
+          <th class="r">Sold. (ml)</th><th>Cal.</th><th class="c no-print">Acc.</th>
+        </tr></thead>
+        <tbody id="pr-tbody"></tbody>
+      </table>
+    </div>
+    <div id="pr-tot" style="font-size:11px;color:var(--gm);text-align:right;margin-top:.5rem;"></div>
+  </div>
+</div>
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     FASES KANBAN
+════════════════════════════════════════════════════ -->
+<div id="panel-fases" class="panel">
+<div class="container">
+  <div class="kpi-row" id="kpi-fases"></div>
+  <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:8px;" id="kanban-grid"></div>
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     STOCK SOBRANTES
+════════════════════════════════════════════════════ -->
+<div id="panel-stock" class="panel">
+<div class="container">
+  <div class="kpi-row" id="kpi-stock"></div>
+  <div class="card">
+    <div class="card-hdr">📦 Stock de Sobrantes de Plancha</div>
+    <div class="fbar no-print">
+      <input type="text" id="st-q" placeholder="Buscar material, colada..." oninput="renderStock()">
+      <select id="st-dest" onchange="renderStock()">
+        <option value="">Todos</option><option value="stock">Solo stock</option><option value="waste">Solo desperdicio</option>
+      </select>
+      <button class="btn btn-s btn-sm no-print" onclick="window.print()">🖨 Imprimir</button>
+    </div>
+    <div class="tw">
+      <table>
+        <thead><tr>
+          <th>Fecha</th><th>Colada / Serie sobrante</th><th>Grado</th>
+          <th class="r">Esp. (mm)</th><th class="r">Ancho (mm)</th><th class="r">Largo (mm)</th>
+          <th class="r">Cant.</th><th class="r">Peso (kg)</th>
+          <th>Destino</th><th>Ubicación</th><th>Parte origen</th><th class="c no-print">Acc.</th>
+        </tr></thead>
+        <tbody id="st-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:.875rem;">
+    <div class="card-hdr">Resumen por Material</div>
+    <div id="st-resumen"></div>
+  </div>
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     OPERARIOS
+════════════════════════════════════════════════════ -->
+<div id="panel-operarios" class="panel">
+<div class="container">
+
+  <!-- TABS INTERNOS -->
+  <div style="display:flex;gap:4px;margin-bottom:1rem;border-bottom:2px solid var(--gl);">
+    <button class="op-inner-tab active" id="opti-manual" onclick="switchOpTab('manual')" style="padding:7px 18px;font-size:11px;font-weight:700;background:none;border:none;border-bottom:3px solid var(--oa);cursor:pointer;color:var(--sd);margin-bottom:-2px;">✏ Registro Manual</button>
+    <button class="op-inner-tab" id="opti-excel" onclick="switchOpTab('excel')" style="padding:7px 18px;font-size:11px;font-weight:700;background:none;border:none;border-bottom:3px solid transparent;cursor:pointer;color:var(--gm);margin-bottom:-2px;">📋 Pegar desde Excel</button>
+  </div>
+
+  <!-- MANUAL -->
+  <div id="op-tab-manual">
+  <div class="g2">
+    <div class="card">
+      <div class="card-hdr">Registrar Operario</div>
+      <div class="frow">
+        <div class="fg"><label>Nombre</label><input type="text" id="op-nom" placeholder="Nombre"></div>
+        <div class="fg"><label>Apellido</label><input type="text" id="op-ape" placeholder="Apellido"></div>
+      </div>
+      <div class="frow">
+        <div class="fg"><label>Cédula / DNI</label><input type="text" id="op-ced" placeholder="1700000000"></div>
+        <div class="fg"><label>Especialidad</label>
+          <select id="op-rol">
+            <option>Cortador</option><option>Armador</option><option>Soldador</option>
+            <option>Perforador</option><option>Ayudante</option><option>Pintor</option><option>Operador Grúa</option>
+          </select>
+        </div>
+      </div>
+      <div class="frow">
+        <div class="fg"><label>Fase principal</label>
+          <select id="op-fase">
+            <option>Corte</option><option>Armado</option><option>Soldadura</option>
+            <option>Perforaciones</option><option>Limpieza Mecánica</option><option>Pintura</option><option>Soporte</option>
+          </select>
+        </div>
+        <div class="fg"><label>Teléfono</label><input type="text" id="op-tel" placeholder="+593..."></div>
+      </div>
+      <div class="frow">
+        <div class="fg"><label>Empresa / Contratista</label><input type="text" id="op-emp" placeholder="Nombre empresa o directa"></div>
+        <div class="fg"><label>Estado</label>
+          <select id="op-est"><option value="activo">Activo</option><option value="inactivo">Inactivo</option></select>
+        </div>
+      </div>
+      <div class="act-row">
+        <button class="btn btn-g" onclick="clearOp()">Limpiar</button>
+        <button class="btn btn-p" onclick="addOp()">Registrar operario</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-hdr">Personal Registrado <span id="op-count" style="font-weight:400;font-size:10px;color:var(--gm);margin-left:6px;"></span></div>
+      <div class="fbar no-print" style="margin-bottom:.75rem;">
+        <input type="text" id="op-q" placeholder="Buscar..." oninput="renderOps()" style="max-width:200px;">
+        <select id="op-fil-rol" onchange="renderOps()" style="max-width:160px;">
+          <option value="">Todos los roles</option>
+          <option>Cortador</option><option>Armador</option><option>Soldador</option>
+          <option>Perforador</option><option>Ayudante</option><option>Pintor</option><option>Operador Grúa</option>
+        </select>
+        <button class="btn btn-s btn-sm no-print" onclick="window.print()">🖨</button>
+      </div>
+      <div class="tw">
+        <table>
+          <thead><tr><th>#</th><th>Nombre completo</th><th>Especialidad</th><th>Fase</th><th>Cédula</th><th>Teléfono</th><th>Empresa</th><th>Estado</th><th class="c no-print">Acc.</th></tr></thead>
+          <tbody id="op-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  </div>
+
+  <!-- PEGAR DESDE EXCEL -->
+  <div id="op-tab-excel" style="display:none;">
+    <div class="card">
+      <div class="card-hdr">📋 Importar Operarios desde Excel / Planilla</div>
+      <div class="alert alert-info" style="margin-bottom:.75rem;">
+        ℹ️ Copie las filas directamente desde Excel y péguelas abajo. El sistema detecta las columnas automáticamente.<br>
+        <strong>Orden esperado de columnas:</strong> Nombre · Apellido · Cédula · Especialidad · Fase · Teléfono · Empresa
+      </div>
+
+      <!-- Plantilla descargable -->
+      <div style="display:flex;gap:10px;align-items:center;margin-bottom:1rem;flex-wrap:wrap;">
+        <button class="btn btn-g" onclick="downloadTemplate()">⬇ Descargar plantilla Excel</button>
+        <span style="font-size:11px;color:var(--gm);">— o pegue directamente su tabla de Excel aquí:</span>
+      </div>
+
+      <!-- Paste area -->
+      <div style="position:relative;">
+        <textarea id="op-paste-area" rows="10" placeholder="Pegue aquí los datos copiados de Excel (Ctrl+V)&#10;&#10;Ejemplo:&#10;Carlos	Mendoza	1712345678	Cortador	Corte	0991234567	Directa&#10;Pedro	Vargas	1723456789	Armador	Armado	0982345678	Constructora XYZ"
+          style="width:100%;font-family:monospace;font-size:12px;padding:12px;border:2px dashed var(--sl);border-radius:8px;background:var(--su);resize:vertical;"
+          oninput="parsePaste()" onpaste="setTimeout(parsePaste,50)"></textarea>
+      </div>
+
+      <!-- Preview -->
+      <div id="op-paste-preview" style="display:none;margin-top:.75rem;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem;">
+          <span style="font-size:11px;font-weight:700;color:var(--sd);">Vista previa — <span id="op-paste-count"></span> operarios detectados</span>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-g btn-sm" onclick="clearPaste()">Limpiar</button>
+            <button class="btn btn-p" onclick="importarOperarios()">✓ Importar todos</button>
+          </div>
+        </div>
+        <div class="tw">
+          <table>
+            <thead><tr><th>Nombre</th><th>Apellido</th><th>Cédula</th><th>Especialidad</th><th>Fase</th><th>Teléfono</th><th>Empresa</th><th>Estado</th></tr></thead>
+            <tbody id="op-paste-tbody"></tbody>
+          </table>
+        </div>
+        <div id="op-paste-errors" style="margin-top:.5rem;font-size:11px;color:var(--rt);"></div>
+      </div>
+    </div>
+
+    <!-- Lista registrados también visible aquí -->
+    <div class="card">
+      <div class="card-hdr">Personal Registrado <span id="op-count2" style="font-weight:400;font-size:10px;color:var(--gm);margin-left:6px;"></span></div>
+      <div class="tw">
+        <table>
+          <thead><tr><th>#</th><th>Nombre completo</th><th>Especialidad</th><th>Fase</th><th>Cédula</th><th>Teléfono</th><th>Empresa</th><th>Estado</th><th class="c no-print">Acc.</th></tr></thead>
+          <tbody id="op-tbody2"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     INFORMES
+════════════════════════════════════════════════════ -->
+<div id="panel-informes" class="panel">
+<div class="container">
+  <div class="card no-print">
+    <div class="card-hdr">Generar Informe</div>
+    <div class="frow">
+      <div class="fg fix"><label>Tipo</label>
+        <select id="rpt-tipo" onchange="renderInforme()">
+          <option value="diario">Diario</option>
+          <option value="semanal">Semanal</option>
+          <option value="mensual">Mensual</option>
+        </select>
+      </div>
+      <div class="fg fix"><label>Fecha</label><input type="date" id="rpt-fecha" onchange="renderInforme()"></div>
+      <div class="fg" style="justify-content:flex-end;flex-direction:row;align-items:flex-end;">
+        <button class="btn btn-s" onclick="window.print()">🖨 Imprimir</button>
+      </div>
+    </div>
+  </div>
+  <div id="informe-area"></div>
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     LINKS OPERARIOS
+════════════════════════════════════════════════════ -->
+<div id="panel-links" class="panel">
+<div class="container">
+  <div class="card">
+    <div class="card-hdr">🔗 Links personales para operarios</div>
+    <div class="alert alert-info" style="margin-bottom:1rem;">
+      Cada operario recibe su propio link. Al abrirlo en su celular, la app ya lo reconoce y puede registrar su trabajo directamente sin necesidad de buscar su nombre.
+    </div>
+    <div class="alert alert-warn" style="margin-bottom:1rem;">
+      ⚙ <strong>Cómo funciona:</strong> La app de operario (<code>worker_app.html</code>) comparte datos con esta supervisora usando almacenamiento local del navegador. Para un despliegue real en red, ambos archivos deben subirse a un servidor web y conectarse a una base de datos compartida.
+    </div>
+    <div id="links-list"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-hdr">📲 QR por operario</div>
+    <p style="font-size:12px;color:var(--gm);margin-bottom:.75rem;">Imprime esta página para entregar a cada operario. Escanean el código QR con su celular y entran directo a su app.</p>
+    <div id="qr-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;"></div>
+  </div>
+</div>
+</div>
+
+<!-- MODAL -->
+<div class="mbg" id="modal-bg" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <div class="mhdr"><span id="modal-ttl">Detalle</span><button class="mclose" onclick="closeModal()">✕</button></div>
+    <div id="modal-body"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ================================================
+// CONFIGURACIÓN — PEGA AQUÍ TU URL DE GOOGLE
+// ================================================
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbxgTFs6wtahK8JycnS276BBmqvGoIsOba_jEBvtWriPlGseZXqGwsgGPNwJE_68Uzei/exec';
+// Ejemplo: 'https://script.google.com/macros/s/AKfycb.../exec'
+// ================================================
+
+const LS = {
+  save:(k,v)=>{try{localStorage.setItem('prod_sup_'+k,JSON.stringify(v));}catch(e){}},
+  load:(k,d)=>{try{const r=localStorage.getItem('prod_sup_'+k);return r?JSON.parse(r):d;}catch(e){return d;}}
+};
+
+const GAS = {
+  configured:()=> GAS_URL && GAS_URL!=='PEGA_AQUI_TU_URL_DE_GOOGLE_APPS_SCRIPT',
+  get: async(action, params={})=>{
+    const q=new URLSearchParams({action,...params}).toString();
+    const r=await fetch(`${GAS_URL}?${q}`);
+    const d=await r.json(); if(d.error) throw new Error(d.error); return d;
+  },
+  post: async(action,data)=>{
+    const r=await fetch(GAS_URL,{method:'POST',body:JSON.stringify({action,data})});
+    return r.json();
+  },
+};
+
+function saveAll(){
+  LS.save('ops',ST.ops); LS.save('cortes',ST.cortes); LS.save('prods',ST.prods);
+}
+
+async function loadFromServer(){
+  const si=document.getElementById('sync-indicator');
+  if(si) si.textContent='⏳ Cargando datos...';
+
+  if(GAS.configured()){
+    try{
+      const [ops, recs] = await Promise.all([
+        GAS.get('getOperarios'),
+        GAS.get('getRegistros'),
+      ]);
+      if(ops && ops.length) { 
+        ST.ops=ops; LS.save('ops',ops);
+      } else if(ops && ops.length===0) {
+        // GAS sheet empty - push local operarios to GAS
+        if(ST.ops.length>0){
+          GAS.post('bulkOperarios', ST.ops).catch(()=>{});
+        }
+      }
+      if(recs){
+        ST.cortes=[]; ST.prods=[]; ST.exec={};
+        recs.forEach(r=>{
+          if(r.fase==='Corte'||r.tipo==='corte'){ ST.cortes.push(r); addExec(r.cj||r.conjunto,r.pr||r.parte||'—','Corte',r.qty); }
+          else{ ST.prods.push(r); addExec(r.cj||r.conjunto,r.pr||r.parte||'—',r.fase,r.qty); }
+        });
+        LS.save('cortes',ST.cortes); LS.save('prods',ST.prods);
+      }
+      const tot=ST.cortes.length+ST.prods.length;
+      if(si){ si.textContent=`🟢 Google conectado — ${tot} registros`; si.style.color='var(--gt)'; }
+    }catch(e){
+      // Fallback to localStorage
+      _loadFromLS();
+      if(si){ si.textContent='⚠ Sin conexión a Google — datos locales'; si.style.color='var(--warnt)'; }
+    }
+  } else {
+    _loadFromLS();
+    if(si){ si.textContent='⚫ Configura la URL de Google para sincronizar'; si.style.color='var(--gm)'; }
+  }
+}
+
+function _loadFromLS(){
+  const ops=LS.load('ops',null); if(ops&&ops.length) ST.ops=ops;
+  ST.cortes=LS.load('cortes',[]); ST.prods=LS.load('prods',[]); ST.exec={};
+  ST.cortes.forEach(r=>addExec(r.conjunto||r.cj,r.parte||r.pr||'—','Corte',r.qty));
+  ST.prods.forEach(r=>addExec(r.conjunto||r.cj,r.parte||r.pr||'—',r.fase,r.qty));
+}
+// ============================================================
+
+// =========== EXPORTAR / IMPORTAR DATOS ===========
+function exportarTodosDatos() {
+  const data = {
+    version: 2,
+    exportado: new Date().toISOString(),
+    proyecto: TEKLA.proyecto,
+    ops:    ST.ops,
+    cortes: ST.cortes,
+    prods:  ST.prods,
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'produccion_' + new Date().toISOString().slice(0,10) + '.json';
+  a.click();
+  toast('✓ Datos exportados como archivo JSON');
+}
+
+function importarDatosOperario() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.json';
+  input.onchange = e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        const data = JSON.parse(ev.target.result);
+        let importedCortes = 0, importedProds = 0;
+        const existIds = new Set([...ST.cortes.map(r=>r.id), ...ST.prods.map(r=>r.id)]);
+        // Import cortes
+        (data.cortes || []).forEach(r => {
+          if (!existIds.has(r.id)) {
+            ST.cortes.push(r);
+            addExec(r.conjunto||r.cj, r.parte||r.pr||'—', 'Corte', r.qty);
+            existIds.add(r.id);
+            importedCortes++;
+          }
+        });
+        // Import prods
+        (data.prods || []).forEach(r => {
+          if (!existIds.has(r.id)) {
+            ST.prods.push(r);
+            addExec(r.conjunto||r.cj, r.parte||r.pr||'—', r.fase, r.qty);
+            existIds.add(r.id);
+            importedProds++;
+          }
+        });
+        // Import operarios if not duplicate
+        (data.ops || []).forEach(op => {
+          if (!ST.ops.find(o => o.id === op.id)) ST.ops.push(op);
+        });
+        saveAll();
+        renderDashboard();
+        renderPendientes();
+        toast(`✓ Importado: ${importedCortes} cortes + ${importedProds} producciones`);
+        const si = document.getElementById('sync-indicator');
+        if(si) si.textContent = `✅ ${importedCortes+importedProds} registros importados de ${file.name}`;
+      } catch(e) {
+        toast('⚠ Error al leer el archivo: ' + e.message);
+      }
+    };
+    reader.readAsText(file);
+  };
+  input.click();
+}
+// ==================================================
+
+// =========================== DATA ===========================
+const TEKLA = {"proyecto":"CRUCE GUAYLLABAMBA V3","codigo":"CPC-DIS-PEG","fecha":"18.02.2026","conjuntos":[{"conjunto":"E-T-1","marca":"pr64","cantidad":113.0,"perfil":"VIGA","longitud":3024.0,"area":659.76,"material":"A588-50","peso_unit":253.95,"peso_total":28696.07,"partes":[{"parte":"pr64","cantidad":113.0,"perfil":"HI300-10-12*300","longitud":3000.0,"area":605.67,"material":"A588-50","peso_unit":234.56,"peso_total":26505.05},{"parte":"pr65","cantidad":226.0,"perfil":"PL12*300","longitud":300.0,"area":43.93,"material":"A588-50","peso_unit":8.48,"peso_total":1916.03},{"parte":"pr98","cantidad":452.0,"perfil":"PL8*100","longitud":100.0,"area":10.15,"material":"A588-50","peso_unit":0.61,"peso_total":274.99}]},{"conjunto":"E-T-2","marca":"pr73","cantidad":2.0,"perfil":"VIGA","longitud":3024.0,"area":12.17,"material":"A588-50","peso_unit":263.95,"peso_total":527.9,"partes":[{"parte":"pr65","cantidad":4.0,"perfil":"PL12*300","longitud":300.0,"area":0.78,"material":"A588-50","peso_unit":8.48,"peso_total":33.91},{"parte":"pr73","cantidad":2.0,"perfil":"HI300-10-12*300","longitud":3000.0,"area":10.72,"material":"A588-50","peso_unit":234.56,"peso_total":469.12},{"parte":"pr86","cantidad":2.0,"perfil":"PL10*205","longitud":800.0,"area":0.67,"material":"A588-50","peso_unit":12.43,"peso_total":24.87}]},{"conjunto":"E-T-3","marca":"pr73","cantidad":111.0,"perfil":"VIGA","longitud":3024.0,"area":675.41,"material":"A588-50","peso_unit":263.95,"peso_total":29298.27,"partes":[{"parte":"pr65","cantidad":222.0,"perfil":"PL12*300","longitud":300.0,"area":43.16,"material":"A588-50","peso_unit":8.48,"peso_total":1882.12},{"parte":"pr73","cantidad":111.0,"perfil":"HI300-10-12*300","longitud":3000.0,"area":594.95,"material":"A588-50","peso_unit":234.56,"peso_total":26035.94},{"parte":"pr115","cantidad":111.0,"perfil":"PL10*205","longitud":800.0,"area":37.3,"material":"A588-50","peso_unit":12.43,"peso_total":1380.22}]},{"conjunto":"E-T-4","marca":"pr68","cantidad":1.0,"perfil":"VIGA","longitud":7850.0,"area":45.1,"material":"A588-50","peso_unit":2627.53,"peso_total":2627.53,"partes":[{"parte":"pr65","cantidad":6.0,"perfil":"PL12*300","longitud":300.0,"area":1.17,"material":"A588-50","peso_unit":8.48,"peso_total":50.87},{"parte":"pr68","cantidad":1.0,"perfil":"HI250-10-20*300","longitud":7827.0,"area":13.17,"material":"A588-50","peso_unit":865.9,"peso_total":865.9},{"parte":"pr72","cantidad":6.0,"perfil":"HI300-10-12*300","longitud":349.0,"area":3.85,"material":"A588-50","peso_unit":27.29,"peso_total":163.72},{"parte":"pr76","cantidad":3.0,"perfil":"K60*3","longitud":150.0,"area":0.11,"material":"A572-50","peso_unit":0.81,"peso_total":2.42},{"parte":"pr80","cantidad":3.0,"perfil":"PL20*235","longitud":520.0,"area":0.73,"material":"A588-50","peso_unit":16.92,"peso_total":50.77},{"parte":"pr84","cantidad":18.0,"perfil":"PL10*145","longitud":206.0,"area":1.16,"material":"A588-50","peso_unit":2.27,"peso_total":40.93},{"parte":"pr85","cantidad":6.0,"perfil":"PL10*206","longitud":350.0,"area":0.73,"material":"A588-50","peso_unit":4.41,"peso_total":26.49},{"parte":"pr110","cantidad":1.0,"perfil":"HI234-8-12*180","longitud":3151.0,"area":3.47,"material":"A588-50","peso_unit":137.32,"peso_total":137.32},{"parte":"pr111","cantidad":1.0,"perfil":"HI234-8-12*180","longitud":401.0,"area":0.36,"material":"A588-50","peso_unit":13.32,"peso_total":13.32},{"parte":"pr112","cantidad":1.0,"perfil":"PL10*220","longitud":254.0,"area":0.12,"material":"A588-50","peso_unit":4.39,"peso_total":4.39},{"parte":"pr116","cantidad":2.0,"perfil":"PL10*175","longitud":255.0,"area":0.19,"material":"A588-50","peso_unit":3.48,"peso_total":6.96},{"parte":"pr117","cantidad":3.0,"perfil":"PL12*230","longitud":250.0,"area":0.38,"material":"A588-50","peso_unit":5.39,"peso_total":16.16},{"parte":"pr118","cantidad":5.0,"perfil":"PL12*230","longitud":250.0,"area":0.63,"material":"A588-50","peso_unit":5.39,"peso_total":26.94},{"parte":"pr119","cantidad":2.0,"perfil":"HI250-10-20*250","longitud":1686.0,"area":4.42,"material":"A588-50","peso_unit":137.15,"peso_total":274.29},{"parte":"pr121","cantidad":1.0,"perfil":"HI250-10-20*300","longitud":2239.0,"area":3.69,"material":"A588-50","peso_unit":241.53,"peso_total":241.53},{"parte":"pr122","cantidad":1.0,"perfil":"HI250-10-20*300","longitud":4632.0,"area":7.76,"material":"A588-50","peso_unit":509.42,"peso_total":509.42},{"parte":"pr123","cantidad":1.0,"perfil":"PL10*175","longitud":255.0,"area":0.1,"material":"A588-50","peso_unit":3.48,"peso_total":3.48},{"parte":"pr124","cantidad":1.0,"perfil":"HI250-10-20*250","longitud":845.0,"area":0.97,"material":"A588-50","peso_unit":57.17,"peso_total":57.17},{"parte":"pr126","cantidad":1.0,"perfil":"HI250-10-20*300","longitud":1251.0,"area":2.08,"material":"A588-50","peso_unit":135.44,"peso_total":135.44}]},{"conjunto":"E-T-6","marca":"pr63","cantidad":54.0,"perfil":"VIGA","longitud":6000.0,"area":1913.99,"material":"A588-50","peso_unit":2048.77,"peso_total":110633.63,"partes":[{"parte":"pr63","cantidad":54.0,"perfil":"HI250-10-20*300","longitud":6000.0,"area":545.84,"material":"A588-50","peso_unit":664.11,"peso_total":35861.94},{"parte":"pr65","cantidad":216.0,"perfil":"PL12*300","longitud":300.0,"area":41.99,"material":"A588-50","peso_unit":8.48,"peso_total":1831.25},{"parte":"pr67","cantidad":54.0,"perfil":"HI250-10-20*300","longitud":6000.0,"area":545.84,"material":"A588-50","peso_unit":664.11,"peso_total":35861.94},{"parte":"pr72","cantidad":216.0,"perfil":"HI300-10-12*300","longitud":349.0,"area":138.49,"material":"A588-50","peso_unit":27.29,"peso_total":5893.97},{"parte":"pr76","cantidad":108.0,"perfil":"K60*3","longitud":150.0,"area":3.97,"material":"A572-50","peso_unit":0.81,"peso_total":86.98},{"parte":"pr80","cantidad":108.0,"perfil":"PL20*235","longitud":520.0,"area":26.26,"material":"A588-50","peso_unit":16.92,"peso_total":1827.86},{"parte":"pr84","cantidad":648.0,"perfil":"PL10*145","longitud":206.0,"area":41.87,"material":"A588-50","peso_unit":2.27,"peso_total":1473.65},{"parte":"pr85","cantidad":216.0,"perfil":"PL10*206","longitud":350.0,"area":26.4,"material":"A588-50","peso_unit":4.41,"peso_total":953.52},{"parte":"pr110","cantidad":54.0,"perfil":"HI234-8-12*180","longitud":3151.0,"area":187.34,"material":"A588-50","peso_unit":137.32,"peso_total":7415.13},{"parte":"pr111","cantidad":108.0,"perfil":"HI234-8-12*180","longitud":401.0,"area":39.28,"material":"A588-50","peso_unit":13.32,"peso_total":1438.84},{"parte":"pr112","cantidad":108.0,"perfil":"PL10*220","longitud":254.0,"area":13.09,"material":"A588-50","peso_unit":4.39,"peso_total":473.75},{"parte":"pr116","cantidad":108.0,"perfil":"PL10*175","longitud":255.0,"area":10.48,"material":"A588-50","peso_unit":3.48,"peso_total":375.68},{"parte":"pr117","cantidad":216.0,"perfil":"PL12*230","longitud":250.0,"area":27.16,"material":"A588-50","peso_unit":5.39,"peso_total":1163.61},{"parte":"pr118","cantidad":216.0,"perfil":"PL12*230","longitud":250.0,"area":27.16,"material":"A588-50","peso_unit":5.39,"peso_total":1163.61},{"parte":"pr119","cantidad":108.0,"perfil":"HI250-10-20*250","longitud":1686.0,"area":238.82,"material":"A588-50","peso_unit":137.15,"peso_total":14811.91}]},{"conjunto":"E-T-7","marca":"pr63","cantidad":54.0,"perfil":"VIGA","longitud":6000.0,"area":1913.99,"material":"A588-50","peso_unit":2048.77,"peso_total":110633.63,"partes":[{"parte":"pr63","cantidad":54.0,"perfil":"HI250-10-20*300","longitud":6000.0,"area":545.84,"material":"A588-50","peso_unit":664.11,"peso_total":35861.94},{"parte":"pr65","cantidad":216.0,"perfil":"PL12*300","longitud":300.0,"area":41.99,"material":"A588-50","peso_unit":8.48,"peso_total":1831.25},{"parte":"pr67","cantidad":54.0,"perfil":"HI250-10-20*300","longitud":6000.0,"area":545.84,"material":"A588-50","peso_unit":664.11,"peso_total":35861.94},{"parte":"pr72","cantidad":216.0,"perfil":"HI300-10-12*300","longitud":349.0,"area":138.49,"material":"A588-50","peso_unit":27.29,"peso_total":5893.97},{"parte":"pr80","cantidad":108.0,"perfil":"PL20*235","longitud":520.0,"area":26.26,"material":"A588-50","peso_unit":16.92,"peso_total":1827.86},{"parte":"pr84","cantidad":648.0,"perfil":"PL10*145","longitud":206.0,"area":41.87,"material":"A588-50","peso_unit":2.27,"peso_total":1473.65},{"parte":"pr85","cantidad":216.0,"perfil":"PL10*206","longitud":350.0,"area":26.4,"material":"A588-50","peso_unit":4.41,"peso_total":953.52},{"parte":"pr119","cantidad":108.0,"perfil":"HI250-10-20*250","longitud":1686.0,"area":238.82,"material":"A588-50","peso_unit":137.15,"peso_total":14811.91}]},{"conjunto":"E-T-10","marca":"pr105","cantidad":112.0,"perfil":"ANGULO","longitud":4400.0,"area":153.26,"material":"A572-50","peso_unit":42.0,"peso_total":4704.07,"partes":[{"parte":"pr105","cantidad":112.0,"perfil":"L80*8","longitud":4400.0,"area":153.26,"material":"A572-50","peso_unit":42.0,"peso_total":4704.07}]},{"conjunto":"E-T-11","marca":"pr106","cantidad":224.0,"perfil":"ANGULO","longitud":2050.0,"area":142.81,"material":"A572-50","peso_unit":19.57,"peso_total":4383.34,"partes":[{"parte":"pr106","cantidad":224.0,"perfil":"L80*8","longitud":2050.0,"area":142.81,"material":"A572-50","peso_unit":19.57,"peso_total":4383.34}]},{"conjunto":"E-T-12","marca":"pr104","cantidad":111.0,"perfil":"PLACA","longitud":600.0,"area":28.77,"material":"A588-50","peso_unit":11.3,"peso_total":1254.63,"partes":[{"parte":"pr104","cantidad":111.0,"perfil":"PL12*200","longitud":600.0,"area":28.77,"material":"A588-50","peso_unit":11.3,"peso_total":1254.63}]},{"conjunto":"E-T-13","marca":"pr102","cantidad":110.0,"perfil":"ANGULO","longitud":4400.0,"area":140.84,"material":"A572-50","peso_unit":39.24,"peso_total":4316.12,"partes":[{"parte":"pr102","cantidad":110.0,"perfil":"L75*8","longitud":4400.0,"area":140.84,"material":"A572-50","peso_unit":39.24,"peso_total":4316.12}]},{"conjunto":"E-T-21","marca":"pr100","cantidad":444.0,"perfil":"ANGULO","longitud":1980.0,"area":255.82,"material":"A572-50","peso_unit":17.66,"peso_total":7839.64,"partes":[{"parte":"pr100","cantidad":444.0,"perfil":"L75*8","longitud":1980.0,"area":255.82,"material":"A572-50","peso_unit":17.66,"peso_total":7839.64}]},{"conjunto":"E-T-23","marca":"pr101","cantidad":106.0,"perfil":"VIGA","longitud":2330.0,"area":313.98,"material":"A588-50","peso_unit":117.59,"peso_total":12464.1,"partes":[{"parte":"pr101","cantidad":106.0,"perfil":"HI234-8-12*180","longitud":2310.0,"area":288.28,"material":"A588-50","peso_unit":108.81,"peso_total":11534.14},{"parte":"pr112","cantidad":212.0,"perfil":"PL10*220","longitud":254.0,"area":25.7,"material":"A588-50","peso_unit":4.39,"peso_total":929.95}]},{"conjunto":"E-T-40","marca":"pr143","cantidad":2.0,"perfil":"ANGULO","longitud":2064.0,"area":1.28,"material":"A572-50","peso_unit":19.7,"peso_total":39.4,"partes":[{"parte":"pr143","cantidad":2.0,"perfil":"L80*8","longitud":2064.0,"area":1.28,"material":"A572-50","peso_unit":19.7,"peso_total":39.4},{"parte":"pr155","cantidad":440.0,"perfil":"PL15*135","longitud":506.0,"area":68.53,"material":"A588-50","peso_unit":8.04,"peso_total":3536.56},{"parte":"pr154","cantidad":220.0,"perfil":"PL15*300","longitud":506.0,"area":72.06,"material":"A588-50","peso_unit":17.87,"peso_total":3929.51},{"parte":"pr151","cantidad":220.0,"perfil":"PL12*160","longitud":456.0,"area":35.33,"material":"A588-50","peso_unit":6.87,"peso_total":1510.8},{"parte":"pr152","cantidad":220.0,"perfil":"PL15*300","longitud":504.0,"area":71.85,"material":"A588-50","peso_unit":17.81,"peso_total":3917.86},{"parte":"pr153","cantidad":440.0,"perfil":"PL15*135","longitud":504.0,"area":68.33,"material":"A588-50","peso_unit":8.01,"peso_total":3526.08},{"parte":"pr150","cantidad":220.0,"perfil":"PL12*160","longitud":454.0,"area":35.21,"material":"A588-50","peso_unit":6.84,"peso_total":1505.83}]}]};
+
+const FASES = ['Corte','Armado','Soldadura','Perforaciones','Limpieza Mecánica','Pintura'];
+
+const ST = {
+  ops: [
+    {id:1,nom:'Carlos',ape:'Mendoza',ced:'1712345678',rol:'Cortador',fase:'Corte'},
+    {id:2,nom:'Pedro',ape:'Vargas',ced:'1723456789',rol:'Armador',fase:'Armado'},
+    {id:3,nom:'Luis',ape:'Torres',ced:'1734567890',rol:'Soldador',fase:'Soldadura'},
+    {id:4,nom:'Marco',ape:'Reyes',ced:'1745678901',rol:'Perforador',fase:'Perforaciones'},
+    {id:5,nom:'Jorge',ape:'Castillo',ced:'1756789012',rol:'Ayudante',fase:'Limpieza Mecánica'},
+    {id:6,nom:'Andrés',ape:'Salazar',ced:'1767890123',rol:'Pintor',fase:'Pintura'},
+    {id:7,nom:'Raúl',ape:'Mora',ced:'1778901234',rol:'Operador Grúa',fase:'Soporte'},
+  ],
+  cortes: [],    // {id,fecha,turno,conjunto,parte,perfil,qty,pesoParts,sobLargo,sobPeso,destSob,sobRef,desperdicio,colada,material,espesor,ancho,largo,pesoPlancha,obs,opId,opNom}
+  prods: [],     // {id,fecha,turno,conjunto,parte,qty,kg,fase,opId,opNom,cal,obs}
+  // Execution counter: key = `${conjunto}::${parte}`
+  exec: {},      // cumulative executed quantities per parte per fase
+};
+
+// Helper: get executed qty for a parte across all records (cortes count as "Corte" phase)
+function getExec(conjunto, parte, fase) {
+  const key = `${conjunto}||${parte}||${fase}`;
+  return ST.exec[key] || 0;
+}
+function addExec(conjunto, parte, fase, qty) {
+  const key = `${conjunto}||${parte}||${fase}`;
+  ST.exec[key] = (ST.exec[key] || 0) + qty;
+}
+
+// Get total executed for a parte in Corte (from cortes)
+function getCortadoQty(conjunto, parte) {
+  return ST.cortes.filter(c=>c.conjunto===conjunto&&c.parte===parte).reduce((s,c)=>s+c.qty,0);
+}
+
+// Get all partes flattened
+function allPartes() {
+  const res = [];
+  TEKLA.conjuntos.forEach(c=>c.partes.forEach(p=>res.push({...p,conjunto:c.conjunto,tipo:c.perfil})));
+  return res;
+}
+
+// ======================= NAV =======================
+function goTab(id, btn) {
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('panel-'+id).classList.add('active');
+  if(btn) btn.classList.add('active');
+  const renders = {dashboard:renderDashboard,pendientes:renderPendientes,partes:renderTekla,
+    corte:()=>{initCorteSelects();renderCorteHist();},
+    produccion:()=>{initProdSelects();renderProd();},
+    fases:renderFases,
+    stock:renderStock,operarios:renderOps,
+    informes:()=>{setRptDate();renderInforme();},
+    links:renderLinks};
+  if(renders[id]) renders[id]();
+}
+
+// ======================= DASHBOARD =======================
+// == CHART INSTANCES (prevent duplicate renders) ==
+const CHARTS = {};
+function mkChart(id, type, data, opts={}) {
+  if(CHARTS[id]) { try{CHARTS[id].destroy();}catch(e){} }
+  const canvas = document.getElementById(id);
+  if(!canvas) return;
+  // Ensure canvas has dimensions before drawing
+  if(!canvas.offsetWidth) {
+    setTimeout(()=>mkChart(id,type,data,opts), 80);
+    return;
+  }
+  CHARTS[id] = new Chart(canvas, {type, data, options: opts});
+  return CHARTS[id];
+}
+
+const FASE_COLORS_HEX = {
+  'Corte':'#1e40af','Armado':'#065f46','Soldadura':'#92400e',
+  'Perforaciones':'#9d174d','Limpieza Mecánica':'#5b21b6','Pintura':'#991b1b'
+};
+
+function renderDashboard() {
+  const totalPlan = TEKLA.conjuntos.reduce((s,c)=>s+c.cantidad,0);
+  const totalKgPlan = TEKLA.conjuntos.reduce((s,c)=>s+c.peso_total,0);
+  const partesTotal = allPartes().reduce((s,p)=>s+p.cantidad,0);
+  const totalCortado = ST.cortes.reduce((s,c)=>s+c.qty,0);
+  const totalProd = ST.prods.reduce((s,p)=>s+p.qty,0);
+  const totalStock = ST.cortes.filter(c=>c.destSob==='stock'||c.sob_dest==='stock').reduce((s,c)=>s+(c.sobPeso||c.sob_peso||0),0);
+  const totalDesp = ST.cortes.reduce((s,c)=>s+(c.desperdicio||0),0);
+  const totalKgEjec = ST.cortes.reduce((s,c)=>s+(c.pesoParts||c.pesoPzas||0),0);
+  const pendPartes = allPartes().reduce((s,p)=>s+Math.max(0,p.cantidad-getCortadoQty(p.conjunto,p.parte)),0);
+  const pctGlobal = partesTotal>0?Math.min(100,(partesTotal-pendPartes)/partesTotal*100):0;
+
+  // == KPIs ==
+  document.getElementById('kpi-main').innerHTML = `
+    <div class="kpi k-blue"><div class="kpi-lbl">Partes Tekla</div><div class="kpi-val">${partesTotal.toLocaleString()}</div><div class="kpi-sub">${TEKLA.conjuntos.length} conjuntos</div></div>
+    <div class="kpi k-warn"><div class="kpi-lbl">⚠ Pendientes</div><div class="kpi-val">${pendPartes.toLocaleString()}</div><div class="kpi-sub">por fabricar</div></div>
+    <div class="kpi k-orange"><div class="kpi-lbl">Avance global</div><div class="kpi-val">${pctGlobal.toFixed(1)}%</div><div class="kpi-sub">${(partesTotal-pendPartes).toLocaleString()} ejecutadas</div></div>
+    <div class="kpi k-green"><div class="kpi-lbl">Kg ejecutados</div><div class="kpi-val">${(totalKgEjec/1000).toFixed(1)}t</div><div class="kpi-sub">de ${(totalKgPlan/1000).toFixed(0)}t plan</div></div>
+    <div class="kpi"><div class="kpi-lbl">Stock sobrante</div><div class="kpi-val">${totalStock.toFixed(0)}</div><div class="kpi-sub">kg reutilizable</div></div>
+    <div class="kpi k-warn" style="background:#f8d7da;border-color:#f5c6cb;"><div class="kpi-lbl" style="color:#721c24;">Desperdicio</div><div class="kpi-val" style="color:#721c24;">${totalDesp.toFixed(0)}</div><div class="kpi-sub" style="color:#721c24;">kg total</div></div>`;
+  if(document.getElementById('dash-pct-global'))
+    document.getElementById('dash-pct-global').textContent = pctGlobal.toFixed(1)+'% avance';
+
+  // == CHART 1: Avance por conjunto (barras horizontal) ==
+  const cjLabels = TEKLA.conjuntos.map(c=>c.conjunto);
+  const cjPlan   = TEKLA.conjuntos.map(c=>c.cantidad);
+  const cjEjec   = TEKLA.conjuntos.map(c=>ST.cortes.filter(x=>(x.conjunto||x.cj)===c.conjunto).reduce((s,x)=>s+x.qty,0));
+  mkChart('chart-conjuntos','bar',{
+    labels: cjLabels,
+    datasets:[
+      {label:'Planificado', data:cjPlan, backgroundColor:'#d6e4f7', borderColor:'#4a7ab5', borderWidth:1, borderRadius:3},
+      {label:'Ejecutado',   data:cjEjec, backgroundColor:'#e8631a', borderColor:'#c4521a', borderWidth:1, borderRadius:3},
+    ]
+  },{
+    indexAxis:'y',
+    plugins:{legend:{position:'top'}},
+    scales:{
+      x:{grid:{color:'#f0f2f6'}, ticks:{font:{size:10}}},
+      y:{grid:{display:false}, ticks:{font:{size:10}}}
+    }
+  });
+
+  // == CHART 2: Fases — barras comparativas Plan vs Ejecutado ==
+  const fasePlan = FASES.map(f=>{
+    const partesFase = allPartes(); // simplified: show executed vs total
+    return allPartes().reduce((s,p)=>s+p.cantidad,0)/FASES.length; // equal plan per fase
+  });
+  const faseEjec = FASES.map(f=>{
+    if(f==='Corte') return ST.cortes.reduce((s,c)=>s+c.qty,0);
+    return ST.prods.filter(p=>p.fase===f).reduce((s,p)=>s+p.qty,0);
+  });
+  const faseKg = FASES.map(f=>{
+    if(f==='Corte') return ST.cortes.reduce((s,c)=>s+(c.pesoParts||c.pesoPzas||0),0);
+    return ST.prods.filter(p=>p.fase===f).reduce((s,p)=>s+(p.kg||p.pesoPzas||0),0);
+  });
+  mkChart('chart-fases','bar',{
+    labels: FASES.map(f=>f.length>12?f.slice(0,12)+'…':f),
+    datasets:[
+      {label:'Uds ejecutadas', data:faseEjec,
+       backgroundColor:FASES.map(f=>FASE_COLORS_HEX[f]+'cc'), borderColor:FASES.map(f=>FASE_COLORS_HEX[f]),
+       borderWidth:1.5, borderRadius:4, yAxisID:'y'},
+      {label:'Kg ejecutados', data:faseKg,
+       type:'line', borderColor:'#e8631a', backgroundColor:'rgba(232,99,26,.1)',
+       pointBackgroundColor:'#e8631a', pointRadius:5, tension:.35, fill:true, yAxisID:'y2'},
+    ]
+  },{
+    plugins:{legend:{position:'top'}},
+    scales:{
+      y:{position:'left',grid:{color:'#f0f2f6'},title:{display:true,text:'Unidades',font:{size:10}}},
+      y2:{position:'right',grid:{drawOnChartArea:false},title:{display:true,text:'Kg',font:{size:10}}}
+    }
+  });
+
+  // == CHART 3: Balance de material (dona) ==
+  const kgPiezas = ST.cortes.reduce((s,c)=>s+(c.pesoParts||c.pesoPzas||0),0);
+  const kgSob    = totalStock;
+  const kgDesp   = totalDesp;
+  const kgNoUsado = Math.max(0, totalKgPlan - kgPiezas - kgSob - kgDesp);
+  mkChart('chart-material','doughnut',{
+    labels:['Piezas fabricadas','Sobrante stock','Desperdicio','Pendiente fabricar'],
+    datasets:[{
+      data:[kgPiezas,kgSob,kgDesp,kgNoUsado],
+      backgroundColor:['#1e40af','#166534','#721c24','#d1d5db'],
+      borderColor:['#1e3a8a','#14532d','#5f1d24','#9ca3af'],
+      borderWidth:2
+    }]
+  },{
+    plugins:{
+      legend:{position:'right',labels:{font:{size:10},boxWidth:14}},
+      tooltip:{callbacks:{label:ctx=>`${ctx.label}: ${ctx.parsed.toFixed(0)} kg`}}
+    }
+  });
+
+  // == CHART 4: Tendencia últimos 14 días ==
+  const days = [];
+  for(let i=13;i>=0;i--){
+    const d=new Date(); d.setDate(d.getDate()-i);
+    days.push(d.toISOString().split('T')[0]);
+  }
+  const allRecs = [...ST.cortes.map(c=>({...c,_fase:'Corte'})),...ST.prods];
+  const tendData = days.map(d=>allRecs.filter(r=>r.fecha===d).reduce((s,r)=>s+r.qty,0));
+  const tendCorte = days.map(d=>ST.cortes.filter(r=>r.fecha===d).reduce((s,r)=>s+r.qty,0));
+  mkChart('chart-tendencia','line',{
+    labels:days.map(d=>d.slice(5)),  // MM-DD
+    datasets:[
+      {label:'Total producción',data:tendData,borderColor:'#1a2b4a',backgroundColor:'rgba(26,43,74,.08)',
+       fill:true,tension:.4,pointRadius:4,pointBackgroundColor:'#1a2b4a'},
+      {label:'Solo corte',data:tendCorte,borderColor:'#e8631a',backgroundColor:'rgba(232,99,26,.08)',
+       fill:true,tension:.4,pointRadius:3,pointBackgroundColor:'#e8631a',borderDash:[4,4]},
+    ]
+  },{
+    plugins:{legend:{position:'top'}},
+    scales:{
+      x:{grid:{color:'#f0f2f6'},ticks:{font:{size:10}}},
+      y:{grid:{color:'#f0f2f6'},ticks:{font:{size:10}},beginAtZero:true}
+    }
+  });
+
+  // == Tabla conjuntos ==
+  document.getElementById('dash-cj').innerHTML = TEKLA.conjuntos.map(c=>{
+    const ej = ST.cortes.filter(x=>(x.conjunto||x.cj)===c.conjunto).reduce((s,x)=>s+x.qty,0);
+    const pend = Math.max(0,c.cantidad-ej);
+    const pct = c.cantidad>0?Math.min(100,ej/c.cantidad*100):0;
+    const pc = pct>=100?'#22c55e':pct>0?'var(--oa)':'var(--gl)';
+    return `<tr class="${pct>=100?'done-row':pend>0?'pend-row':''}">
+      <td><strong>${c.conjunto}</strong></td><td>${typeBadge(c.perfil)}</td>
+      <td class="r">${c.cantidad}</td><td class="r">${ej}</td>
+      <td class="r"><strong style="color:${pend>0?'#b45309':'#166534'}">${pend}</strong></td>
+      <td><div class="pgw"><div class="pgb" style="width:${pct.toFixed(0)}%;background:${pc}"></div></div></td>
+    </tr>`;
+  }).join('');
+
+  // == Actividad reciente ==
+  const recent = allRecs.sort((a,b)=>b.id-a.id).slice(0,8);
+  document.getElementById('dash-recent').innerHTML = recent.length
+    ? recent.map(r=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--gl);font-size:12px;">
+        <div><strong>${r.cj||r.conjunto}</strong> <span style="color:var(--oa);">${r._fase||r.fase}</span> ${r.pr&&r.pr!=='—'?'·'+r.pr:''}</div>
+        <div><span style="font-weight:700;color:var(--sd);">${r.qty} uds</span> <span style="color:var(--gm);font-size:10px;">${r.fecha}</span></div>
+      </div>`).join('') : '<div style="color:var(--gm);text-align:center;padding:.75rem;">Sin registros aún.</div>';
+
+  const stockItems = ST.cortes.filter(c=>(c.destSob==='stock'||c.sob_dest==='stock')&&(c.sobPeso||c.sob_peso||0)>0);
+  document.getElementById('dash-stock-mini').innerHTML = stockItems.length
+    ? stockItems.slice(0,5).map(c=>`<div style="padding:5px 0;border-bottom:1px solid var(--gl);font-size:12px;">
+        <span class="stock-tag">STOCK</span> <strong>${c.sobColada||c.sob_colada||c.colada||'—'}</strong> · ${c.sobGrado||c.material||''} · <strong>${(c.sobPeso||c.sob_peso||0).toFixed(1)} kg</strong>
+        <span style="color:var(--gm);font-size:10px;float:right">${c.sobRef||c.sob_ref||'—'}</span>
+      </div>`).join('') : '<div style="color:var(--gm);font-size:12px;">Sin sobrantes registrados.</div>';
+}
+
+function getTotalExec(conjunto, parte) {
+  // Corte is tracked in ST.cortes; other phases in ST.prods
+  return getCortadoQty(conjunto, parte);
+}
+
+// ======================= PENDIENTES =======================
+function renderPendientes() {
+  const q = (document.getElementById('pend-search')?.value||'').toLowerCase();
+  const ft = document.getElementById('pend-tipo')?.value||'';
+
+  const rows = []; let totPend=0, totPendKg=0;
+  TEKLA.conjuntos.forEach(c=>{
+    c.partes.forEach(p=>{
+      const ej = getTotalExec(c.conjunto, p.parte);
+      const pend = Math.max(0, p.cantidad - ej);
+      if(pend<=0) return;
+      if(q && !(c.conjunto+p.parte+p.perfil).toLowerCase().includes(q)) return;
+      if(ft && c.perfil!==ft) return;
+      const ejCorte = getCortadoQty(c.conjunto, p.parte);
+      const ejArm  = ST.prods.filter(r=>r.conjunto===c.conjunto&&r.parte===p.parte&&r.fase==='Armado').reduce((s,r)=>s+r.qty,0);
+      const ejSold = ST.prods.filter(r=>r.conjunto===c.conjunto&&r.parte===p.parte&&r.fase==='Soldadura').reduce((s,r)=>s+r.qty,0);
+      const ejPerf = ST.prods.filter(r=>r.conjunto===c.conjunto&&r.parte===p.parte&&r.fase==='Perforaciones').reduce((s,r)=>s+r.qty,0);
+      const ejLimp = ST.prods.filter(r=>r.conjunto===c.conjunto&&r.parte===p.parte&&r.fase==='Limpieza Mecánica').reduce((s,r)=>s+r.qty,0);
+      const ejPint = ST.prods.filter(r=>r.conjunto===c.conjunto&&r.parte===p.parte&&r.fase==='Pintura').reduce((s,r)=>s+r.qty,0);
+      totPend += pend; totPendKg += pend * p.peso_unit;
+      rows.push({conjunto:c.conjunto,tipo:c.perfil,parte:p.parte,perfil:p.perfil,
+        plan:p.cantidad,ej,pend,pendKg:pend*p.peso_unit,longitud:p.longitud,material:p.material,
+        ejCorte,ejArm,ejSold,ejPerf,ejLimp,ejPint});
+    });
+  });
+  rows.sort((a,b)=>b.pend-a.pend);
+
+  const totPlanAll = allPartes().reduce((s,p)=>s+p.cantidad,0);
+  const totEjAll   = allPartes().reduce((s,p)=>s+getTotalExec(p.conjunto||'',p.parte),0);
+
+  document.getElementById('kpi-pend').innerHTML = `
+    <div class="kpi k-warn"><div class="kpi-lbl">⚠ Pendientes fabricar</div><div class="kpi-val">${totPend.toLocaleString()}</div><div class="kpi-sub">unidades por ejecutar</div></div>
+    <div class="kpi k-blue"><div class="kpi-lbl">Peso pendiente</div><div class="kpi-val">${(totPendKg/1000).toFixed(1)}t</div><div class="kpi-sub">${totPendKg.toFixed(0)} kg</div></div>
+    <div class="kpi k-green"><div class="kpi-lbl">Ejecutado total</div><div class="kpi-val">${totEjAll.toLocaleString()}</div><div class="kpi-sub">de ${totPlanAll.toLocaleString()} plan</div></div>
+    <div class="kpi"><div class="kpi-lbl">Tipos con pendiente</div><div class="kpi-val">${rows.length}</div><div class="kpi-sub">tipos de parte</div></div>`;
+
+  document.getElementById('pend-cnt').textContent = `${rows.length} filas`;
+  document.getElementById('pend-tbody').innerHTML = rows.length ? rows.map(r=>`
+    <tr class="pend-row">
+      <td><strong>${r.conjunto}</strong></td>
+      <td><code style="font-size:11px;">${r.parte}</code></td>
+      <td style="font-size:11px;font-family:monospace;">${r.perfil}</td>
+      <td>${typeBadge(r.tipo)}</td>
+      <td class="r" style="font-weight:700;">${r.plan}</td>
+      <td class="r" style="color:#166534;font-weight:700;">${r.ej}</td>
+      <td class="r"><span style="font-size:13px;font-weight:800;color:#b45309;background:#fff3cd;padding:2px 8px;border-radius:5px;">${r.pend}</span></td>
+      <td class="r">${r.pendKg.toFixed(1)}</td>
+      <td class="r" style="font-size:10px;white-space:nowrap;">
+        <span title="Corte" style="color:${r.ejCorte>0?'#166534':'#d1d5db'};font-weight:700;">✂${r.ejCorte}</span>
+        <span title="Armado" style="color:${r.ejArm>0?'#166534':'#d1d5db'};margin-left:3px;">A${r.ejArm}</span>
+        <span title="Soldadura" style="color:${r.ejSold>0?'#166534':'#d1d5db'};margin-left:3px;">S${r.ejSold}</span>
+        <span title="Perforaciones" style="color:${r.ejPerf>0?'#166534':'#d1d5db'};margin-left:3px;">P${r.ejPerf}</span>
+        <span title="Pintura" style="color:${r.ejPint>0?'#166534':'#d1d5db'};margin-left:3px;">🎨${r.ejPint}</span>
+      </td>
+      <td class="r">${r.longitud||'—'}</td>
+      <td class="c no-print">
+        <button class="btn btn-p btn-sm" onclick="goToCorte('${r.conjunto}','${r.parte}')">✂ Cortar</button>
+      </td>
+    </tr>`).join('')
+    : '<tr><td colspan="12" style="text-align:center;padding:2rem;color:var(--gm);">✓ Sin pendientes</td></tr>';
+}
+
+function goToCorte(cj, parte) {
+  const btn = document.getElementById('tab-corte');
+  goTab('corte', btn);
+  setTimeout(()=>{
+    const selCj=document.getElementById('c-cj');
+    if(selCj){ selCj.value=cj; onConjuntoChange(); }
+    setTimeout(()=>{ const selP=document.getElementById('c-parte'); if(selP&&parte){ selP.value=parte; onParteChange();} },150);
+  },250);
+}
+
+// ======================= TEKLA TABLE =======================
+function typeBadge(t){
+  if(t==='VIGA') return '<span class="badge b-viga">VIGA</span>';
+  if(t==='PLACA') return '<span class="badge b-placa">PLACA</span>';
+  if(t==='ANGULO') return '<span class="badge b-angulo">ÁNGULO</span>';
+  return `<span class="badge b-pend">${t}</span>`;
+}
+function renderTekla() {
+  const q=(document.getElementById('tek-q')?.value||'').toLowerCase();
+  const tp=document.getElementById('tek-tp')?.value||'';
+  const mat=document.getElementById('tek-mat')?.value||'';
+  let rows='',cjCount=0;
+  TEKLA.conjuntos.forEach(c=>{
+    const match=(!tp||c.perfil===tp)&&c.partes.some(p=>!q||(c.conjunto+p.parte+p.perfil).toLowerCase().includes(q))&&(!mat||c.material===mat);
+    if(!match)return; cjCount++;
+    rows+=`<tr class="row-cj">
+      <td colspan="2"><strong>${c.conjunto}</strong></td>
+      <td colspan="2">${typeBadge(c.perfil)}</td>
+      <td class="r">${c.longitud||'—'}</td>
+      <td class="r"><strong>${c.cantidad}</strong></td>
+      <td class="r">${c.area.toFixed(2)}</td>
+      <td>${c.material}</td>
+      <td class="r">${c.peso_unit.toFixed(2)}</td>
+      <td class="r"><strong>${c.peso_total.toFixed(0)}</strong></td>
+      <td class="r">—</td><td class="r">—</td>
+      <td class="c no-print"><button class="btn btn-g btn-sm" onclick="openModal('${c.conjunto}')">Ver</button></td>
+    </tr>`;
+    c.partes.forEach(p=>{
+      if(q&&!(c.conjunto+p.parte+p.perfil).toLowerCase().includes(q))return;
+      const ej=getCortadoQty(c.conjunto,p.parte);
+      const pend=Math.max(0,p.cantidad-ej);
+      rows+=`<tr class="row-parte">
+        <td>${c.conjunto}</td><td>${p.parte}</td>
+        <td class="mono">${p.perfil}</td><td>—</td>
+        <td class="r">${p.longitud||'—'}</td>
+        <td class="r">${p.cantidad}</td>
+        <td class="r">${p.area?p.area.toFixed(2):'—'}</td>
+        <td>${p.material}</td>
+        <td class="r">${p.peso_unit.toFixed(2)}</td>
+        <td class="r">${p.peso_total.toFixed(0)}</td>
+        <td class="r" style="color:#166534;font-weight:700;">${ej}</td>
+        <td class="r"><span style="font-weight:800;color:${pend>0?'#b45309':'#166534'}">${pend}</span></td>
+        <td class="c no-print"></td>
+      </tr>`;
+    });
+  });
+  document.getElementById('tek-tbody').innerHTML=rows||'<tr><td colspan="13" style="text-align:center;padding:2rem;color:var(--gm)">Sin resultados</td></tr>';
+  document.getElementById('tek-cnt').textContent=`${cjCount} conjuntos`;
+}
+
+// ======================= CORTE =======================
+function initCorteSelects() {
+  const selCj=document.getElementById('c-cj');
+  if(!selCj.options.length||selCj.options.length===1){
+    selCj.innerHTML='<option value="">Seleccionar conjunto...</option>'+
+      TEKLA.conjuntos.map(c=>`<option value="${c.conjunto}">${c.conjunto} — ${c.perfil} (${c.cantidad} plan)</option>`).join('');
+  }
+  const selOp=document.getElementById('c-op');
+  selOp.innerHTML='<option value="">Seleccionar...</option>'+
+    ST.ops.filter(o=>o.rol==='Cortador'||o.rol==='Operador Grúa').map(o=>`<option value="${o.id}">${o.nom} ${o.ape}</option>`).join('');
+  const hcOp=document.getElementById('hc-op');
+  if(hcOp) hcOp.innerHTML='<option value="">Todos operarios</option>'+ST.ops.map(o=>`<option value="${o.id}">${o.nom} ${o.ape}</option>`).join('');
+  const f=document.getElementById('c-fecha');
+  if(f&&!f.value) f.value=today();
+}
+function onConjuntoChange() {
+  const cj=document.getElementById('c-cj').value;
+  const sel=document.getElementById('c-parte');
+  sel.innerHTML='<option value="">Seleccionar parte...</option>';
+  document.getElementById('c-parte-info').style.display='none';
+  if(!cj)return;
+  const c=TEKLA.conjuntos.find(x=>x.conjunto===cj);
+  if(!c)return;
+  c.partes.forEach(p=>{
+    const ej=getCortadoQty(cj,p.parte);
+    const pend=Math.max(0,p.cantidad-ej);
+    sel.innerHTML+=`<option value="${p.parte}" data-pu="${p.peso_unit}" data-plan="${p.cantidad}" data-ej="${ej}" data-pend="${pend}" data-lng="${p.longitud}" data-mat="${p.material}">${p.parte} — ${p.perfil} | Pend: ${pend}/${p.cantidad}</option>`;
+  });
+}
+function onParteChange() {
+  const sel=document.getElementById('c-parte');
+  const opt=sel.options[sel.selectedIndex];
+  if(!opt||!opt.value){document.getElementById('c-parte-info').style.display='none';return;}
+  const pend=parseInt(opt.dataset.pend||0);
+  const plan=parseInt(opt.dataset.plan||0);
+  const ej=parseInt(opt.dataset.ej||0);
+  document.getElementById('c-info-txt').textContent=`Plan: ${plan} | Ejecutado: ${ej} | Pendiente: ${pend} | Long: ${opt.dataset.lng||'—'} mm | Mat: ${opt.dataset.mat||'—'}`;
+  const badge=document.getElementById('c-pend-badge');
+  badge.textContent=`⚠ ${pend} PENDIENTES`;
+  badge.className='pend-cnt'+(pend===0?' zero':'');
+  document.getElementById('c-parte-info').style.display='block';
+  // auto-fill material grade
+  if(opt.dataset.mat) document.getElementById('c-mat-grado').value=opt.dataset.mat;
+  calcCorte();
+}
+// == CÁLCULO DE PESO POR TIPO DE PERFIL ======================================
+const D = 7.85e-6; // kg/mm³ — densidad del acero
+
+function g(id){ return parseFloat(document.getElementById(id)?.value)||0; }
+function sv(id,val){ const el=document.getElementById(id); if(el) el.value=val; }
+
+// Calcula el peso unitario (kg) según tipo de perfil y sus dimensiones
+function pesoPerfilUnit(tipo){
+  switch(tipo){
+    case 'plancha':  { const e=g('c-esp'),a=g('c-ancho'),l=g('c-largo'); return e&&a&&l? e*a*l*D : 0; }
+    case 'angulo':   {
+      const ala=g('c-ang-ala'), esp=g('c-ang-esp'), l=g('c-ang-largo');
+      const tipoL=document.getElementById('c-ang-tipo')?.value||'L';
+      const ala2=tipoL==='LD'?(g('c-ang-ala2')||ala):ala;
+      // Área sección L = 2*ala*esp - esp²
+      if(!ala||!esp||!l) return 0;
+      const areaL = (ala+ala2-esp)*esp; // mm²
+      return areaL*l*D;
+    }
+    case 'ipe':
+    case 'upn':      {
+      const h=g('c-ipe-h'),b=g('c-ipe-b'),tw=g('c-ipe-tw'),tf=g('c-ipe-tf'),l=g('c-ipe-largo');
+      if(!h||!b||!tw||!tf||!l) return 0;
+      // Área I = 2*b*tf + (h-2*tf)*tw
+      const area = 2*b*tf + (h-2*tf)*tw;
+      return area*l*D;
+    }
+    case 'heb':      {
+      const h=g('c-heb-h'),b=g('c-heb-b'),tw=g('c-heb-tw'),tf=g('c-heb-tf'),l=g('c-heb-largo');
+      if(!h||!b||!tw||!tf||!l) return 0;
+      const area = 2*b*tf + (h-2*tf)*tw;
+      return area*l*D;
+    }
+    case 'tubo_rect':{
+      const an=g('c-tr-ancho'),al=g('c-tr-alto'),esp=g('c-tr-esp'),l=g('c-tr-largo');
+      if(!an||!al||!esp||!l) return 0;
+      const area=(an*al)-((an-2*esp)*(al-2*esp));
+      return area*l*D;
+    }
+    case 'tubo_cuad':{
+      const lado=g('c-tc-lado'),esp=g('c-tc-esp'),l=g('c-tc-largo');
+      if(!lado||!esp||!l) return 0;
+      const area=lado*lado-(lado-2*esp)*(lado-2*esp);
+      return area*l*D;
+    }
+    case 'tubo_circ':{
+      const d=g('c-tcirc-d'),esp=g('c-tcirc-esp'),l=g('c-tcirc-largo');
+      if(!d||!esp||!l) return 0;
+      const ri=d/2-esp;
+      const area=Math.PI*((d/2)**2 - ri**2);
+      return area*l*D;
+    }
+    case 'barra_red':{
+      const d=g('c-br-d'),l=g('c-br-largo');
+      if(!d||!l) return 0;
+      const area=Math.PI*(d/2)**2;
+      return area*l*D;
+    }
+    case 'barra_cuad':{
+      const lado=g('c-bc-lado'),l=g('c-bc-largo');
+      if(!lado||!l) return 0;
+      return lado*lado*l*D;
+    }
+    default: return 0;
+  }
+}
+
+// Peso del sobrante usando misma lógica de sección pero largo/dims del sobrante
+function pesoSobranteUnit(tipo){
+  const isPerfil = !['plancha','otro'].includes(tipo);
+  if(isPerfil){
+    // Para perfiles: misma sección, distinto largo
+    const largoSob = g('c-sob-largo-perfil');
+    const qty = g('c-sob-qty-perfil')||1;
+    if(!largoSob) return 0;
+    // Reuse section area: pesoPerfilUnit / largo_original * largo_sobrante
+    const largoOrig = getLargoOriginal(tipo);
+    if(!largoOrig) return 0;
+    const pesoOrig = pesoPerfilUnit(tipo);
+    if(!pesoOrig) return 0;
+    return (pesoOrig/largoOrig)*largoSob*qty;
+  } else {
+    // Plancha: dimensiones propias
+    const e=g('c-sob-esp')||g('c-esp');
+    const a=g('c-sob-ancho')||g('c-ancho');
+    const l=g('c-sob-largo');
+    const qty=g('c-sob-qty')||1;
+    if(!e||!a||!l) return 0;
+    return e*a*l*D*qty;
+  }
+}
+
+function getLargoOriginal(tipo){
+  const map={plancha:'c-largo',angulo:'c-ang-largo',ipe:'c-ipe-largo',upn:'c-ipe-largo',
+             heb:'c-heb-largo',tubo_rect:'c-tr-largo',tubo_cuad:'c-tc-largo',
+             tubo_circ:'c-tcirc-largo',barra_red:'c-br-largo',barra_cuad:'c-bc-largo'};
+  return g(map[tipo]||'c-largo');
+}
+
+function onTipoMaterialChange(){
+  const tipo=document.getElementById('c-mat-tipo')?.value||'plancha';
+  // Show/hide dimension panels for material
+  const dimPanels=['plancha','angulo','ipe','heb','tubo-rect','tubo-cuad','tubo-circ','barra-red','barra-cuad','otro'];
+  dimPanels.forEach(p=>{ const el=document.getElementById('dims-'+p); if(el) el.style.display='none'; });
+  const map={plancha:'dims-plancha',angulo:'dims-angulo',ipe:'dims-ipe',upn:'dims-ipe',
+             heb:'dims-heb',tubo_rect:'dims-tubo-rect',tubo_cuad:'dims-tubo-cuad',
+             tubo_circ:'dims-tubo-circ',barra_red:'dims-barra-red',barra_cuad:'dims-barra-cuad',otro:'dims-otro'};
+  const target=document.getElementById(map[tipo]);
+  if(target) target.style.display='flex';
+  // Show/hide sobrante dim panels
+  const isPerfil=!['plancha','otro'].includes(tipo);
+  const sobPlancha=document.getElementById('sob-dims-plancha');
+  const sobPerfil=document.getElementById('sob-dims-perfil');
+  if(sobPlancha) sobPlancha.style.display=isPerfil?'none':'flex';
+  if(sobPerfil)  sobPerfil.style.display=isPerfil?'flex':'none';
+  // LD angle second ala
+  if(tipo==='angulo'){
+    const tipoL=document.getElementById('c-ang-tipo')?.value||'L';
+    const alaWrap=document.getElementById('c-ang-ala2-wrap');
+    if(alaWrap) alaWrap.style.display=tipoL==='LD'?'block':'none';
+  }
+  clearCalcDisplay();
+  calcCorte();
+}
+
+function autoFillSobColada(){
+  const col=document.getElementById('c-sob-colada');
+  if(col&&!col.value) col.value=document.getElementById('c-colada')?.value||'';
+}
+function autoFillSobGrado(){
+  const g2=document.getElementById('c-sob-grado');
+  if(g2&&!g2.value) g2.value=document.getElementById('c-mat-grado')?.value||'';
+}
+
+function toggleSobFields(){
+  const hay=document.getElementById('c-sob-hay')?.value;
+  const fields=document.getElementById('sob-dim-fields');
+  if(fields) fields.style.display=hay==='si'?'block':'none';
+  calcCorte();
+}
+
+function clearCalcDisplay(){
+  sv('c-peso-unit',''); sv('c-peso-plancha','');
+  sv('c-sob-peso',''); sv('c-desp',''); sv('c-aprovech','');
+  document.getElementById('c-calc-area').style.display='none';
+}
+
+function calcSobrante(){
+  const tipo=document.getElementById('c-mat-tipo')?.value||'plancha';
+  const isPerfil=!['plancha','otro'].includes(tipo);
+  let sobPeso=0;
+  if(isPerfil){
+    const largoSob=g('c-sob-largo-perfil');
+    const qty=g('c-sob-qty-perfil')||1;
+    const largoOrig=getLargoOriginal(tipo);
+    const pesoOrig=pesoPerfilUnit(tipo);
+    if(largoSob>0&&largoOrig>0&&pesoOrig>0){
+      sobPeso=(pesoOrig/largoOrig)*largoSob*qty;
+    }
+  } else {
+    const e=g('c-sob-esp')||g('c-esp'),a=g('c-sob-ancho')||g('c-ancho'),l=g('c-sob-largo');
+    const qty=g('c-sob-qty')||1;
+    if(e>0&&a>0&&l>0) sobPeso=e*a*l*D*qty;
+  }
+  if(sobPeso>0) sv('c-sob-peso',sobPeso.toFixed(2));
+  // Auto-fill colada/grado from plancha
+  const coladaEl=document.getElementById('c-sob-colada');
+  if(coladaEl&&!coladaEl.value){ coladaEl.value=document.getElementById('c-colada')?.value||''; }
+  const gradoEl=document.getElementById('c-sob-grado');
+  if(gradoEl&&!gradoEl.value){ gradoEl.value=document.getElementById('c-mat-grado')?.value||''; }
+  calcCorte();
+}
+
+function calcCorte() {
+  const tipo=document.getElementById('c-mat-tipo')?.value||'plancha';
+  const matQty=g('c-mat-qty')||1;
+
+  // 1. Peso unitario del material
+  const pesoUnit=pesoPerfilUnit(tipo);
+  const pesoPlancha=pesoUnit*matQty;
+
+  if(pesoUnit>0){
+    sv('c-peso-unit', pesoUnit.toFixed(2));
+    sv('c-peso-plancha', pesoPlancha.toFixed(2));
+  }
+
+  // 2. Piezas cortadas y su peso (Tekla peso_unit × qty)
+  const selParte=document.getElementById('c-parte');
+  const opt=selParte?.options[selParte.selectedIndex];
+  const puTekla=parseFloat(opt?.dataset?.pu||0);
+  const qtyCortada=parseFloat(document.getElementById('c-qty')?.value)||0;
+  const pesoPiezas=qtyCortada&&puTekla ? qtyCortada*puTekla : 0;
+
+  // 3. Sobrante
+  const hay=document.getElementById('c-sob-hay')?.value||'si';
+  const sobPeso=hay==='si'?(parseFloat(document.getElementById('c-sob-peso')?.value)||0):0;
+
+  // 4. Desperdicio = material - piezas - sobrante
+  const desp=pesoPlancha>0 ? Math.max(0, pesoPlancha-pesoPiezas-sobPeso) : 0;
+  const aprovech=pesoPlancha>0 ? ((pesoPiezas/pesoPlancha)*100) : 0;
+
+  if(pesoPlancha>0||pesoPiezas>0){
+    document.getElementById('c-calc-area').style.display='grid';
+    document.getElementById('calc-peso-partes').textContent=pesoPiezas.toFixed(1);
+    document.getElementById('calc-sobrante').textContent=sobPeso.toFixed(1);
+    document.getElementById('calc-waste').textContent=desp.toFixed(1);
+    sv('c-desp', desp.toFixed(2));
+    sv('c-aprovech', pesoPlancha>0?aprovech.toFixed(1)+'%':'—');
+  } else {
+    document.getElementById('c-calc-area').style.display='none';
+  }
+}
+function addCorte() {
+  const fecha=document.getElementById('c-fecha').value;
+  const cj=document.getElementById('c-cj').value;
+  const parte=document.getElementById('c-parte').value;
+  const qty=parseFloat(document.getElementById('c-qty').value)||0;
+  if(!fecha||!cj||!parte||qty<=0){toast('⚠ Completa: fecha, conjunto, parte y cantidad');return;}
+  const sel=document.getElementById('c-parte');
+  const opt=sel.options[sel.selectedIndex];
+  const pu=parseFloat(opt?.dataset?.pu||0);
+  const opId=document.getElementById('c-op').value;
+  const op=ST.ops.find(o=>o.id==opId);
+  const pesoPlancha=parseFloat(document.getElementById('c-peso-plancha').value)||0;
+  const sobPeso=parseFloat(document.getElementById('c-sob-peso').value)||0;
+  const sobQty=parseFloat(document.getElementById('c-sob-qty')?.value)||1;
+  const desp=parseFloat(document.getElementById('c-desp').value)||0;
+  const c=TEKLA.conjuntos.find(x=>x.conjunto===cj);
+  const p=c?.partes.find(x=>x.parte===parte);
+  const tipoMat=document.getElementById('c-mat-tipo')?.value||'plancha';
+  const isPerfil=!['plancha','otro'].includes(tipoMat);
+  const sobEsp   = parseFloat(document.getElementById('c-sob-esp')?.value)  || parseFloat(document.getElementById('c-esp')?.value)||0;
+  const sobAncho = parseFloat(document.getElementById('c-sob-ancho')?.value) || parseFloat(document.getElementById('c-ancho')?.value)||0;
+  const sobLargo = isPerfil
+    ? parseFloat(document.getElementById('c-sob-largo-perfil')?.value)||0
+    : parseFloat(document.getElementById('c-sob-largo')?.value)||0;
+  const sobQty2  = isPerfil
+    ? parseFloat(document.getElementById('c-sob-qty-perfil')?.value)||1
+    : parseFloat(document.getElementById('c-sob-qty')?.value)||1;
+  const sobHay   = document.getElementById('c-sob-hay')?.value||'si';
+  const sobColada= document.getElementById('c-sob-colada')?.value.trim() || document.getElementById('c-colada').value.trim();
+  const sobGrado = document.getElementById('c-sob-grado')?.value.trim()  || document.getElementById('c-mat-grado').value.trim();
+  const matQty   = parseFloat(document.getElementById('c-mat-qty')?.value)||1;
+  const pesoUnit = parseFloat(document.getElementById('c-peso-unit')?.value)||0;
+  const aprovech = document.getElementById('c-aprovech')?.value||'—';
+  const rec={
+    id:Date.now(),fecha,turno:document.getElementById('c-turno').value,
+    conjunto:cj,parte,perfil:p?.perfil||'',qty,
+    pesoParts:qty*pu,
+    // Material original completo
+    tipoMat,
+    colada:document.getElementById('c-colada').value.trim(),
+    material:document.getElementById('c-mat-grado').value.trim(),
+    matQty, pesoUnit,
+    espesor:parseFloat(document.getElementById('c-esp')?.value)||0,
+    ancho:parseFloat(document.getElementById('c-ancho')?.value)||0,
+    largo:parseFloat(document.getElementById('c-largo')?.value)||0,
+    pesoPlancha,
+    aprovech,
+    // Sobrante con dimensiones completas
+    sobHay, sobEsp, sobAncho, sobLargo, sobQty:sobQty2,
+    sobPeso, sobColada, sobGrado,
+    destSob:document.getElementById('c-sob-dest').value,
+    sobRef:document.getElementById('c-sob-ref').value.trim(),
+    desperdicio:desp,
+    obs:document.getElementById('c-obs').value.trim(),
+    opId,opNom:op?`${op.nom} ${op.ape}`:'—'
+  };
+  // Normalizar campos para compatibilidad con worker y servidor
+  rec.cj=cj; rec.pr=parte; ST.cortes.push(rec); addExec(cj,parte,'Corte',qty);
+  saveAll();
+  if(GAS.configured()) GAS.post('addRegistro',rec).catch(()=>{});
+  clearCorte(); renderCorteHist(); renderDashboard();
+  toast(`✓ Corte: ${cj}/${parte} — ${qty} uds | Desp: ${desp.toFixed(1)} kg`);
+}
+function clearCorte(){
+  ['c-cj','c-parte','c-turno','c-op','c-qty','c-colada','c-mat-grado','c-mat-qty','c-esp','c-ancho','c-largo','c-ang-ala','c-ang-esp','c-ang-largo','c-ang-ala2','c-ipe-h','c-ipe-b','c-ipe-tw','c-ipe-tf','c-ipe-largo','c-heb-h','c-heb-b','c-heb-tw','c-heb-tf','c-heb-largo','c-tr-ancho','c-tr-alto','c-tr-esp','c-tr-largo','c-tc-lado','c-tc-esp','c-tc-largo','c-tcirc-d','c-tcirc-esp','c-tcirc-largo','c-br-d','c-br-largo','c-bc-lado','c-bc-largo','c-otro-desc','c-otro-largo','c-peso-unit','c-peso-plancha','c-sob-esp','c-sob-ancho','c-sob-largo','c-sob-qty','c-sob-largo-perfil','c-sob-qty-perfil','c-sob-peso','c-sob-colada','c-sob-grado','c-sob-ref','c-obs','c-desp','c-aprovech'].forEach(id=>{
+    const el=document.getElementById(id);if(el)el.value=el.tagName==='SELECT'?el.options[0]?.value||'':'';
+  });
+  document.getElementById('c-parte-info').style.display='none';
+  document.getElementById('c-calc-area').style.display='none';
+  document.getElementById('c-mat-grado').value='';
+}
+function renderCorteHist(){
+  const q=(document.getElementById('hc-q')?.value||'').toLowerCase();
+  const op=document.getElementById('hc-op')?.value||'';
+  const recs=ST.cortes.filter(r=>(!q||(r.conjunto+r.parte+r.colada+r.opNom).toLowerCase().includes(q))&&(!op||r.opId==op));
+  document.getElementById('hc-tbody').innerHTML=recs.length?recs.map(r=>{
+  const hasSob = r.sobHay!=='no' && r.sobPeso>0;
+  const sobCell = hasSob
+    ? `<span class="stock-tag">${r.sobPeso.toFixed(1)} kg</span><br>
+       <span style="font-size:10px;color:#166534;">${r.sobEsp||r.espesor||'?'}×${r.sobAncho||r.ancho||'?'}×${r.sobLargo||'?'} mm ×${r.sobQty||1}</span><br>
+       <span style="font-size:9px;color:#3730a3;font-weight:700;">📋 ${r.sobColada||r.colada||'—'}</span>`
+    : '<span style="color:var(--gm);font-size:11px;">Sin sobrante</span>';
+  const matCell = `<span style="font-size:10px;">
+    ${r.tipoMat?'<strong>['+r.tipoMat+']</strong><br>':''}
+    📋 ${r.colada||'—'}<br>
+    ${r.espesor?r.espesor+'×'+r.ancho+'×'+r.largo+' mm':''} ${r.matQty>1?'×'+r.matQty:''}<br>
+    ${r.material||''} ${r.pesoUnit?'('+r.pesoUnit+' kg/ud)':''}
+  </span>`;
+  const despCell = `<span style="color:var(--rt);font-weight:700;">${r.desperdicio.toFixed(1)} kg</span><br>
+    <span style="font-size:9px;color:var(--gm);">${r.aprovech||'—'} aprov.</span>`;
+  return `<tr>
+    <td>${r.fecha}</td><td><strong>${r.conjunto}</strong></td>
+    <td style="font-size:11px;">${r.parte}<br><span style="color:var(--gm);font-family:monospace;">${r.perfil||''}</span></td>
+    <td class="r">${r.qty}</td><td class="r">${r.pesoParts.toFixed(1)}</td>
+    <td class="r">${sobCell}</td>
+    <td class="r">${despCell}</td>
+    <td>${matCell}</td>
+    <td class="c no-print"><button class="btn btn-d btn-sm" onclick="delCorte(${r.id})">✕</button></td>
+  </tr>`;}).join('')
+  :'<tr><td colspan="9" style="text-align:center;padding:1.5rem;color:var(--gm);">Sin cortes registrados</td></tr>';
+}
+function delCorte(id){
+  const r=ST.cortes.find(x=>x.id===id);
+  if(r){addExec(r.conjunto||r.cj,r.parte||r.pr,'Corte',-r.qty);}
+  ST.cortes=ST.cortes.filter(x=>x.id!==id);
+  saveAll(); renderCorteHist(); renderDashboard();
+}
+
+// ======================= PRODUCCIÓN =======================
+function initProdSelects(){
+  const selCj=document.getElementById('p-cj');
+  if(!selCj.options.length||selCj.options.length===1)
+    selCj.innerHTML='<option value="">Seleccionar...</option>'+TEKLA.conjuntos.map(c=>`<option value="${c.conjunto}">${c.conjunto} — ${c.perfil}</option>`).join('');
+  const selOp=document.getElementById('p-op');
+  selOp.innerHTML='<option value="">Seleccionar...</option>'+ST.ops.map(o=>`<option value="${o.id}">${o.nom} ${o.ape} (${o.rol})</option>`).join('');
+  const f=document.getElementById('p-fecha');if(f&&!f.value)f.value=today();
+}
+function pUpdatePartes(){
+  const cj=document.getElementById('p-cj').value;
+  const sel=document.getElementById('p-parte');
+  sel.innerHTML='<option value="">Seleccionar parte...</option>';
+  document.getElementById('p-parte-info').style.display='none';
+  if(!cj)return;
+  const c=TEKLA.conjuntos.find(x=>x.conjunto===cj);
+  if(!c)return;
+  c.partes.forEach(p=>{
+    sel.innerHTML+=`<option value="${p.parte}" data-pu="${p.peso_unit}" data-plan="${p.cantidad}">${p.parte} — ${p.perfil}</option>`;
+  });
+}
+function toggleSoldExtra(){
+  const fase = document.getElementById('p-fase')?.value;
+  const el = document.getElementById('sold-extra-sup');
+  if(el) el.style.display = fase==='Soldadura' ? '' : 'none';
+}
+function pCalcPeso(){
+  const sel=document.getElementById('p-parte');
+  const opt=sel.options[sel.selectedIndex];
+  const pu=parseFloat(opt?.dataset?.pu||0);
+  const qty=parseFloat(document.getElementById('p-qty').value)||0;
+  document.getElementById('p-peso').value=qty&&pu?(qty*pu).toFixed(2):'';
+  if(opt&&opt.value){
+    const plan=opt.dataset.plan||0;
+    document.getElementById('p-info-txt').textContent=`Plan total: ${plan} uds`;
+    document.getElementById('p-parte-info').style.display='block';
+  }
+}
+function addProd(){
+  const fecha=document.getElementById('p-fecha').value;
+  const cj=document.getElementById('p-cj').value;
+  const parte=document.getElementById('p-parte').value;
+  const qty=parseFloat(document.getElementById('p-qty').value)||0;
+  const fase=document.getElementById('p-fase').value;
+  const opId=document.getElementById('p-op').value;
+  if(!fecha||!cj||!parte||qty<=0){toast('⚠ Completa todos los campos');return;}
+  const op=ST.ops.find(o=>o.id==opId);
+  const peso=parseFloat(document.getElementById('p-peso').value)||0;
+  const prodRec={id:Date.now(),fecha,turno:document.getElementById('p-turno').value,
+    conjunto:cj,parte,cj,pr:parte,qty,kg:peso,fase,opId,opNom:op?`${op.nom} ${op.ape}`:'—',
+    cal:document.getElementById('p-cal').value,obs:document.getElementById('p-obs').value.trim(),
+    sold_ml:document.getElementById('p-sold-ml')?.value||'',
+    sold_elec:document.getElementById('p-sold-elec')?.value||'',
+    sold_tipo:document.getElementById('p-sold-tipo')?.value||'',
+    sold_pos:document.getElementById('p-sold-pos')?.value||''};
+  ST.prods.push(prodRec); addExec(cj,parte,fase,qty);
+  saveAll();
+  if(GAS.configured()) GAS.post('addRegistro',prodRec).catch(()=>{});
+  clearProd(); renderProd(); renderDashboard();
+  toast(`✓ ${fase}: ${cj}/${parte} — ${qty} uds`);
+}
+function clearProd(){['p-cj','p-parte','p-fase','p-op','p-qty','p-peso','p-cal','p-obs'].forEach(id=>{const el=document.getElementById(id);if(el)el.value=el.tagName==='SELECT'?el.options[0]?.value||'':'';}); document.getElementById('p-parte-info').style.display='none';}
+function renderProd(){
+  const q=(document.getElementById('pr-q')?.value||'').toLowerCase();
+  const ff=document.getElementById('pr-fase')?.value||'';
+  const recs=ST.prods.filter(r=>(!q||(r.conjunto+r.parte+r.fase+r.opNom).toLowerCase().includes(q))&&(!ff||r.fase===ff));
+  const calBadge=c=>c==='ok'?'<span class="badge b-done">OK</span>':c==='rep'?'<span class="badge b-prog">Rep.</span>':'<span class="badge b-rej">Rec.</span>';
+  document.getElementById('pr-tbody').innerHTML=recs.length?recs.map(r=>`<tr>
+    <td>${r.fecha}</td><td><strong>${r.conjunto}</strong></td><td>${r.parte}</td>
+    <td>${r.fase}</td><td>${r.opNom}</td>
+    <td class="r">${r.qty}</td><td class="r">${r.kg.toFixed(1)}</td>
+    <td class="r">${r.sold_ml?`<span style="font-size:11px;font-weight:700;color:#1e40af;">${r.sold_ml} ml</span>`:'—'}</td>
+    <td>${calBadge(r.cal)}</td>
+    <td class="c no-print"><button class="btn btn-d btn-sm" onclick="ST.prods=ST.prods.filter(x=>x.id!==${r.id});saveAll();renderProd()">✕</button></td>
+  </tr>`).join(''):'<tr><td colspan="9" style="text-align:center;padding:1.5rem;color:var(--gm);">Sin registros</td></tr>';
+  const tot=recs.reduce((s,r)=>s+r.qty,0);
+  const totkg=recs.reduce((s,r)=>s+r.kg,0);
+  document.getElementById('pr-tot').textContent=recs.length?`Total: ${tot} unidades — ${totkg.toFixed(1)} kg`:'';
+}
+
+// ======================= FASES KANBAN =======================
+const FASE_COLORS = {
+  'Corte':            {bg:'#dbeafe',hdr:'#1e40af'},
+  'Armado':           {bg:'#d1fae5',hdr:'#065f46'},
+  'Soldadura':        {bg:'#fef3c7',hdr:'#92400e'},
+  'Perforaciones':    {bg:'#fce7f3',hdr:'#9d174d'},
+  'Limpieza Mecánica':{bg:'#ede9fe',hdr:'#5b21b6'},
+  'Pintura':          {bg:'#fee2e2',hdr:'#991b1b'},
+};
+
+function getExecFase(conjunto, parte, fase) {
+  if (fase === 'Corte') return getCortadoQty(conjunto, parte);
+  return ST.prods.filter(p=>p.conjunto===conjunto&&p.parte===parte&&p.fase===fase).reduce((s,p)=>s+p.qty,0);
+}
+
+function renderFases() {
+  // KPIs per fase
+  const kpiHtml = FASES.map(f=>{
+    const qty = f==='Corte'
+      ? ST.cortes.reduce((s,c)=>s+c.qty,0)
+      : ST.prods.filter(p=>p.fase===f).reduce((s,p)=>s+p.qty,0);
+    const fc = FASE_COLORS[f];
+    return `<div class="kpi" style="border-color:${fc.hdr}30;">
+      <div class="kpi-lbl" style="color:${fc.hdr}">${f}</div>
+      <div class="kpi-val" style="color:${fc.hdr};font-size:20px;">${qty}</div>
+      <div class="kpi-sub">uds ejecutadas</div>
+    </div>`;
+  }).join('');
+  document.getElementById('kpi-fases').innerHTML = kpiHtml;
+
+  // Kanban columns per fase
+  const kanban = FASES.map(f=>{
+    const fc = FASE_COLORS[f];
+    // Build cards for each conjunto/parte
+    let cards = '';
+    TEKLA.conjuntos.forEach(c=>{
+      c.partes.forEach(p=>{
+        const ej = getExecFase(c.conjunto, p.parte, f);
+        const pend = Math.max(0, p.cantidad - ej);
+        const pct = p.cantidad>0 ? Math.min(100,ej/p.cantidad*100) : 0;
+        const barColor = pct>=100 ? '#22c55e' : pct>0 ? '#f59e0b' : '#d1d5db';
+        const textColor = pct>=100 ? '#166534' : pct>0 ? '#92400e' : '#6b7280';
+        cards += `<div style="background:#fff;border:1px solid #e5e7eb;border-radius:7px;padding:8px 10px;cursor:pointer;margin-bottom:6px;" onclick="openModalFase('${c.conjunto}','${p.parte}','${f}')">
+          <div style="font-size:11px;font-weight:700;color:#1a2b4a;">${c.conjunto}</div>
+          <div style="font-size:10px;color:#6c757d;margin-bottom:4px;">${p.parte} · ${p.perfil.length>18?p.perfil.slice(0,18)+'…':p.perfil}</div>
+          <div style="background:#e5e7eb;border-radius:3px;height:5px;overflow:hidden;margin-bottom:4px;">
+            <div style="height:100%;border-radius:3px;background:${barColor};width:${pct.toFixed(0)}%"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:10px;">
+            <span style="color:${textColor};font-weight:700;">${ej}/${p.cantidad}</span>
+            <span style="color:${pend>0?'#b45309':'#166534'};font-weight:800;">${pend>0?'⚠ '+pend+' pend.':'✓ OK'}</span>
+          </div>
+        </div>`;
+      });
+    });
+    return `<div style="border-radius:10px;border:1px solid #dee2e6;overflow:hidden;">
+      <div style="background:${fc.hdr};color:#fff;padding:8px 12px;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;text-align:center;">${f}</div>
+      <div style="padding:8px;background:${fc.bg};max-height:560px;overflow-y:auto;">${cards}</div>
+    </div>`;
+  }).join('');
+  document.getElementById('kanban-grid').innerHTML = kanban;
+}
+
+function openModalFase(cj, parte, fase) {
+  const c = TEKLA.conjuntos.find(x=>x.conjunto===cj);
+  const p = c?.partes.find(x=>x.parte===parte);
+  if(!c||!p) return;
+  const ej = getExecFase(cj, parte, fase);
+  const pend = Math.max(0, p.cantidad - ej);
+  document.getElementById('modal-ttl').textContent = `${cj} / ${parte} — ${fase}`;
+  const recs = fase==='Corte'
+    ? ST.cortes.filter(r=>r.conjunto===cj&&r.parte===parte)
+    : ST.prods.filter(r=>r.conjunto===cj&&r.parte===parte&&r.fase===fase);
+  document.getElementById('modal-body').innerHTML = `
+    <div class="kpi-row" style="grid-template-columns:repeat(4,1fr);margin-bottom:.75rem;">
+      <div class="kpi"><div class="kpi-lbl">Plan</div><div class="kpi-val">${p.cantidad}</div></div>
+      <div class="kpi k-green"><div class="kpi-lbl">Ejecutado</div><div class="kpi-val">${ej}</div></div>
+      <div class="kpi k-warn"><div class="kpi-lbl">Pendiente</div><div class="kpi-val">${pend}</div></div>
+      <div class="kpi"><div class="kpi-lbl">Avance</div><div class="kpi-val">${p.cantidad>0?(ej/p.cantidad*100).toFixed(0):0}%</div></div>
+    </div>
+    <div style="font-size:11px;color:#6c757d;margin-bottom:.75rem;">
+      <strong>Perfil:</strong> ${p.perfil} &nbsp;·&nbsp; <strong>Long:</strong> ${p.longitud||'—'} mm &nbsp;·&nbsp; <strong>Peso unit:</strong> ${p.peso_unit} kg &nbsp;·&nbsp; <strong>Material:</strong> ${p.material}
+    </div>
+    <div style="font-size:11px;font-weight:800;color:#1a2b4a;margin-bottom:.5rem;">Registros de ejecución</div>
+    ${recs.length ? `<div class="tw"><table><thead><tr><th>Fecha</th><th>Operario</th><th class="r">Qty</th>${fase==='Corte'?'<th class="r">Kg partes</th><th class="r">Sobrante</th><th class="r">Desp.</th>':'<th class="r">Kg</th>'}<th>Obs.</th></tr></thead>
+    <tbody>${recs.map(r=>fase==='Corte'
+      ? `<tr><td>${r.fecha}</td><td>${r.opNom}</td><td class="r">${r.qty}</td><td class="r">${r.pesoParts.toFixed(1)}</td><td class="r"><span class="stock-tag">${r.sobPeso.toFixed(1)}</span></td><td class="r" style="color:#991b1b;">${r.desperdicio.toFixed(1)}</td><td style="font-size:10px;">${r.obs||'—'}</td></tr>`
+      : `<tr><td>${r.fecha}</td><td>${r.opNom}</td><td class="r">${r.qty}</td><td class="r">${r.kg.toFixed(1)}</td><td style="font-size:10px;">${r.obs||'—'}</td></tr>`
+    ).join('')}</tbody></table></div>`
+    : '<div style="text-align:center;padding:1.5rem;color:#6c757d;font-size:12px;">Sin registros de ejecución para esta fase</div>'}
+    <div class="act-row" style="margin-top:.75rem;">
+      <button class="btn btn-p" onclick="closeModal();goToCorte('${cj}','${parte}')">✂ Registrar corte</button>
+    </div>`;
+  document.getElementById('modal-bg').classList.add('open');
+}
+
+// ======================= STOCK =======================
+function renderStock(){
+  const q=(document.getElementById('st-q')?.value||'').toLowerCase();
+  const dest=document.getElementById('st-dest')?.value||'';
+  const items=ST.cortes.filter(c=>c.sobPeso>0||c.destSob)
+    .filter(c=>(!q||(c.colada+c.material+c.parte+c.conjunto).toLowerCase().includes(q))&&(!dest||c.destSob===dest));
+  const totStock=items.filter(i=>i.destSob==='stock').reduce((s,i)=>s+i.sobPeso,0);
+  const totWaste=ST.cortes.reduce((s,c)=>s+c.desperdicio,0);
+  document.getElementById('kpi-stock').innerHTML=`
+    <div class="kpi k-green"><div class="kpi-lbl">Stock reutilizable</div><div class="kpi-val">${totStock.toFixed(1)}</div><div class="kpi-sub">kg disponibles</div></div>
+    <div class="kpi k-warn"><div class="kpi-lbl">Desperdicio total</div><div class="kpi-val">${totWaste.toFixed(1)}</div><div class="kpi-sub">kg desperdicio acum.</div></div>
+    <div class="kpi"><div class="kpi-lbl">Ítems en stock</div><div class="kpi-val">${items.filter(i=>i.destSob==='stock').length}</div><div class="kpi-sub">piezas sobrantes</div></div>`;
+  document.getElementById('st-tbody').innerHTML=items.length?items.map(c=>`<tr>
+    <td>${c.fecha}</td>
+    <td><span style="font-weight:700;color:#3730a3;">📋 ${c.sobColada||c.colada||'—'}</span><br><span style="font-size:9px;color:var(--gm);">${c.tipoMat||'plancha'}</span></td>
+    <td>${c.sobGrado||c.material||'—'}</td>
+    <td class="r">${c.sobEsp||c.espesor||'—'}</td>
+    <td class="r">${c.sobAncho||c.ancho||'—'}</td>
+    <td class="r">${c.sobLargo||'—'}</td>
+    <td class="r">${c.sobQty||1}</td>
+    <td class="r"><strong>${c.sobPeso.toFixed(1)}</strong></td>
+    <td>${c.destSob==='stock'?'<span class="badge b-stock">📦 STOCK</span>':'<span class="badge b-waste">🗑 DESP.</span>'}</td>
+    <td style="font-size:11px;">${c.sobRef||'—'}</td>
+    <td style="font-size:10px;">${c.conjunto}/${c.parte}</td>
+    <td class="c no-print"><button class="btn btn-d btn-sm" onclick="delStock(${c.id})">✕</button></td>
+  </tr>`).join(''):'<tr><td colspan="11" style="text-align:center;padding:1.5rem;color:var(--gm);">Sin sobrantes registrados</td></tr>';
+  // Resumen por material
+  const byMat={};
+  ST.cortes.forEach(c=>{if(!byMat[c.material])byMat[c.material]={stock:0,waste:0};if(c.destSob==='stock')byMat[c.material].stock+=c.sobPeso;byMat[c.material].waste+=c.desperdicio;});
+  document.getElementById('st-resumen').innerHTML='<div class="tw"><table><thead><tr><th>Material</th><th class="r">Stock (kg)</th><th class="r">Desperdicio (kg)</th><th class="r">% Desperdicio</th></tr></thead><tbody>'+
+    Object.entries(byMat).map(([mat,v])=>`<tr><td><strong>${mat}</strong></td><td class="r" style="color:#166534;font-weight:700;">${v.stock.toFixed(1)}</td><td class="r" style="color:var(--rt);font-weight:700;">${v.waste.toFixed(1)}</td><td class="r">${v.stock+v.waste>0?((v.waste/(v.stock+v.waste))*100).toFixed(1):'—'}%</td></tr>`).join('')+
+    '</tbody></table></div>';
+}
+function delStock(id){ST.cortes=ST.cortes.filter(c=>c.id!==id);renderStock();}
+
+// ======================= OPERARIOS =======================
+function renderOps(){
+  const q   = (document.getElementById('op-q')?.value||'').toLowerCase();
+  const frol= document.getElementById('op-fil-rol')?.value||'';
+  const list= ST.ops.filter(o=>(!q||(o.nom+o.ape+o.ced+o.rol).toLowerCase().includes(q))&&(!frol||o.rol===frol));
+  const row = (o,i)=>`<tr style="${o.est==='inactivo'?'opacity:.5':''}">
+    <td>${i+1}</td>
+    <td><strong>${o.nom} ${o.ape}</strong></td>
+    <td>${o.rol}</td><td>${o.fase}</td>
+    <td class="mono" style="font-size:11px;">${o.ced||'—'}</td>
+    <td style="font-size:11px;">${o.tel||'—'}</td>
+    <td style="font-size:11px;">${o.emp||'—'}</td>
+    <td><span class="badge ${o.est==='activo'?'b-done':'b-pend'}">${o.est||'activo'}</span></td>
+    <td class="c no-print">
+      <button class="btn btn-d btn-sm" onclick="ST.ops=ST.ops.filter(x=>x.id!==${o.id});saveAll();renderOps();toast('Operario eliminado')">✕</button>
+    </td>
+  </tr>`;
+  const html = list.length ? list.map(row).join('') : '<tr><td colspan="9" style="text-align:center;padding:1.5rem;color:var(--gm)">Sin operarios registrados</td></tr>';
+  const cnt = `${ST.ops.length} operarios`;
+  const tbody1 = document.getElementById('op-tbody');
+  const tbody2 = document.getElementById('op-tbody2');
+  const cnt1   = document.getElementById('op-count');
+  const cnt2   = document.getElementById('op-count2');
+  if(tbody1) tbody1.innerHTML = html;
+  if(tbody2) tbody2.innerHTML = html;
+  if(cnt1) cnt1.textContent = cnt;
+  if(cnt2) cnt2.textContent = cnt;
+}
+function addOp(){
+  const nom=document.getElementById('op-nom').value.trim();
+  const ape=document.getElementById('op-ape').value.trim();
+  if(!nom||!ape){toast('⚠ Nombre y apellido requeridos');return;}
+  const fase=document.getElementById('op-fase').value;
+  const ICONS={'Corte':'✂','Armado':'🔧','Soldadura':'🔥','Perforaciones':'🔩','Limpieza Mecánica':'🧹','Pintura':'🎨','Soporte':'🏗'};
+  const newOp={id:Date.now(),nom,ape,
+    ced:document.getElementById('op-ced').value.trim(),
+    rol:document.getElementById('op-rol').value,
+    fase, icon:ICONS[fase]||'👷',
+    tel:document.getElementById('op-tel').value.trim(),
+    emp:document.getElementById('op-emp')?.value.trim()||'',
+    est:document.getElementById('op-est')?.value||'activo'};
+  ST.ops.push(newOp);
+  saveAll();
+  // Sync to Google Apps Script
+  if(GAS.configured()){
+    GAS.post('addOperario', newOp)
+      .then(r=>{ if(r&&r.ok) toast(`✓ Operario guardado en Google: ${nom} ${ape}`); })
+      .catch(()=>toast(`✓ Operario guardado localmente: ${nom} ${ape}`));
+  }
+  clearOp();renderOps();initCorteSelects();initProdSelects();
+  toast(`✓ Operario registrado: ${nom} ${ape}`);
+}
+
+
+
+function clearOp(){['op-nom','op-ape','op-ced','op-tel','op-emp'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});}
+
+// == OPERARIOS: INNER TABS ==
+function switchOpTab(tab){
+  document.querySelectorAll('.op-inner-tab').forEach(b=>{
+    b.style.borderBottomColor = b.id===`opti-${tab}` ? 'var(--oa)' : 'transparent';
+    b.style.color = b.id===`opti-${tab}` ? 'var(--sd)' : 'var(--gm)';
+  });
+  document.getElementById('op-tab-manual').style.display = tab==='manual' ? '' : 'none';
+  document.getElementById('op-tab-excel').style.display  = tab==='excel'  ? '' : 'none';
+  if(tab==='excel') renderOps();
+}
+
+// == OPERARIOS: PASTE FROM EXCEL ==
+let pastePreview = [];
+
+function parsePaste(){
+  const raw = document.getElementById('op-paste-area').value.trim();
+  if(!raw){ document.getElementById('op-paste-preview').style.display='none'; return; }
+  const ROLES_VALID = ['Cortador','Armador','Soldador','Perforador','Ayudante','Pintor','Operador Grúa'];
+  const FASES_VALID = ['Corte','Armado','Soldadura','Perforaciones','Limpieza Mecánica','Pintura','Soporte'];
+  const lines = raw.split('\n').map(l=>l.trim()).filter(l=>l && !l.startsWith('#'));
+  pastePreview = []; const errors = [];
+  lines.forEach((line, i)=>{
+    const cols = line.split('\t').map(c=>c.trim());
+    if(cols.length < 2){ errors.push(`Fila ${i+1}: datos insuficientes`); return; }
+    const nom  = cols[0]||'';
+    const ape  = cols[1]||'';
+    const ced  = cols[2]||'';
+    const rol  = cols[3]||'Cortador';
+    const fase = cols[4]||'Corte';
+    const tel  = cols[5]||'';
+    const emp  = cols[6]||'';
+    if(!nom){ errors.push(`Fila ${i+1}: nombre vacío`); return; }
+    const rolFinal  = ROLES_VALID.find(r=>r.toLowerCase()===rol.toLowerCase())||rol;
+    const faseFinal = FASES_VALID.find(f=>f.toLowerCase()===fase.toLowerCase())||fase;
+    pastePreview.push({nom,ape,ced,rol:rolFinal,fase:faseFinal,tel,emp,est:'activo',ok:!!(nom&&ape)});
+  });
+  const tbody = document.getElementById('op-paste-tbody');
+  tbody.innerHTML = pastePreview.map((p,i)=>`<tr style="${!p.ok?'background:var(--rd)':''}">
+    <td>${p.nom}</td><td>${p.ape}</td><td>${p.ced||'—'}</td>
+    <td>${p.rol}</td><td>${p.fase}</td><td>${p.tel||'—'}</td><td>${p.emp||'—'}</td>
+    <td><span class="badge ${p.ok?'b-done':'b-rej'}">${p.ok?'OK':'Error'}</span></td>
+  </tr>`).join('');
+  document.getElementById('op-paste-count').textContent = pastePreview.filter(p=>p.ok).length;
+  document.getElementById('op-paste-errors').innerHTML = errors.map(e=>`⚠ ${e}`).join('<br>');
+  document.getElementById('op-paste-preview').style.display = '';
+}
+
+function importarOperarios(){
+  const valid = pastePreview.filter(p=>p.ok);
+  if(!valid.length){ toast('⚠ No hay operarios válidos para importar'); return; }
+  let imported = 0;
+  valid.forEach(p=>{
+    // Skip duplicates by cédula
+    if(p.ced && ST.ops.find(o=>o.ced===p.ced)){ return; }
+    ST.ops.push({id:Date.now()+Math.random(),nom:p.nom,ape:p.ape,ced:p.ced,
+      rol:p.rol,fase:p.fase,tel:p.tel,emp:p.emp,est:p.est});
+    imported++;
+  });
+  saveAll(); clearPaste(); renderOps(); initCorteSelects(); initProdSelects();
+  toast(`✓ ${imported} operarios importados`);
+}
+
+function clearPaste(){
+  document.getElementById('op-paste-area').value='';
+  document.getElementById('op-paste-preview').style.display='none';
+  pastePreview=[];
+}
+
+function downloadTemplate(){
+  const rows = [
+    ['Nombre','Apellido','Cedula','Especialidad','Fase','Telefono','Empresa'],
+    ['Carlos','Mendoza','1712345678','Cortador','Corte','0991234567','Contratista ABC'],
+    ['Pedro','Vargas','1723456789','Armador','Armado','0982345678','Directa'],
+    ['Luis','Torres','1734567890','Soldador','Soldadura','0973456789','Directa'],
+  ];
+  const tsv = rows.map(r=>r.join('\t')).join('\n');
+  const blob = new Blob([tsv], {type:'text/tab-separated-values'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'plantilla_operarios.tsv';
+  a.click();
+  toast('📥 Plantilla descargada — ábrela en Excel, edita y copia-pega de vuelta.');
+}
+
+// ======================= INFORMES =======================
+function setRptDate(){const el=document.getElementById('rpt-fecha');if(el&&!el.value)el.value=today();}
+function renderInforme(){
+  const tipo=document.getElementById('rpt-tipo')?.value||'diario';
+  const fecha=document.getElementById('rpt-fecha')?.value||today();
+  let filtro,lbl;
+  if(tipo==='diario'){filtro=r=>r.fecha===fecha;lbl=`Fecha: ${fecha}`;}
+  else if(tipo==='semanal'){
+    const d=new Date(fecha),day=d.getDay()||7;
+    const lun=new Date(d);lun.setDate(d.getDate()-day+1);
+    const dom=new Date(lun);dom.setDate(lun.getDate()+6);
+    const f0=lun.toISOString().split('T')[0],f1=dom.toISOString().split('T')[0];
+    filtro=r=>r.fecha>=f0&&r.fecha<=f1;lbl=`Semana: ${f0} al ${f1}`;
+  } else {
+    const mes=fecha.slice(0,7);filtro=r=>r.fecha.startsWith(mes);lbl=`Mes: ${mes}`;
+  }
+  const cortes=ST.cortes.filter(filtro);
+  const prods=ST.prods.filter(filtro);
+  const totCorteQty=cortes.reduce((s,c)=>s+c.qty,0);
+  const totProdQty=prods.reduce((s,p)=>s+p.qty,0);
+  const totKgCorte=cortes.reduce((s,c)=>s+c.pesoParts,0);
+  const totStock=cortes.filter(c=>c.destSob==='stock').reduce((s,c)=>s+c.sobPeso,0);
+  const totDesp=cortes.reduce((s,c)=>s+c.desperdicio,0);
+  const byFase={};
+  FASES.forEach(f=>{
+    if(f==='Corte') byFase[f]={qty:totCorteQty,kg:totKgCorte};
+    else byFase[f]={qty:prods.filter(p=>p.fase===f).reduce((s,p)=>s+p.qty,0),kg:prods.filter(p=>p.fase===f).reduce((s,p)=>s+p.kg,0)};
+  })
+  setTimeout(()=>renderInformeCharts(cortes,prods,byFase),100);;
+  // Pending summary
+  const pendTotal=allPartes().reduce((s,p)=>s+Math.max(0,p.cantidad-getCortadoQty(p.conjunto,p.parte)),0);
+
+  document.getElementById('informe-area').innerHTML=`
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:1rem;margin-bottom:1rem;border-bottom:2px solid var(--sd);">
+      <div>
+        <div style="font-size:17px;font-weight:800;color:var(--sd);text-transform:uppercase;">Informe ${tipo} de Producción</div>
+        <div style="font-size:12px;color:var(--gm);margin-top:3px;">${TEKLA.proyecto} · ${TEKLA.codigo}</div>
+        <div style="font-size:11px;color:var(--gm);">${lbl}</div>
+      </div>
+      <div style="text-align:right;font-size:10px;color:var(--gm);">Generado: ${new Date().toLocaleString('es-EC')}</div>
+    </div>
+    <div class="kpi-row">
+      <div class="kpi k-blue"><div class="kpi-lbl">Partes cortadas</div><div class="kpi-val">${totCorteQty}</div></div>
+      <div class="kpi k-orange"><div class="kpi-lbl">Otras fases</div><div class="kpi-val">${totProdQty}</div></div>
+      <div class="kpi k-green"><div class="kpi-lbl">Stock sobrante</div><div class="kpi-val">${totStock.toFixed(0)}</div><div class="kpi-sub">kg</div></div>
+      <div class="kpi k-warn"><div class="kpi-lbl">Desperdicio</div><div class="kpi-val">${totDesp.toFixed(0)}</div><div class="kpi-sub">kg</div></div>
+      <div class="kpi"><div class="kpi-lbl">Pend. fabricar</div><div class="kpi-val" style="color:#b45309;">${pendTotal.toLocaleString()}</div></div>
+    </div>
+    <!-- Charts en el informe -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:1rem;">
+      <div style="background:var(--su);border-radius:9px;padding:12px;">
+        <div style="font-size:11px;font-weight:800;color:var(--sd);margin-bottom:8px;">Producción por Fase (uds)</div>
+        <canvas id="rpt-chart-fases" height="160"></canvas>
+      </div>
+      <div style="background:var(--su);border-radius:9px;padding:12px;">
+        <div style="font-size:11px;font-weight:800;color:var(--sd);margin-bottom:8px;">Balance de material (kg)</div>
+        <canvas id="rpt-chart-material" height="160"></canvas>
+      </div>
+    </div>
+    <div style="font-size:12px;font-weight:800;color:var(--sd);margin:.75rem 0 .5rem;">Producción por Fase</div>
+    <div class="tw" style="margin-bottom:.75rem;"><table><thead><tr><th>Fase</th><th class="r">Unidades</th><th class="r">Peso (kg)</th><th class="r">Sold. (ml)</th><th class="r">Desp. (kg)</th></tr></thead>
+    <tbody>${FASES.map(f=>{
+      const soldML = f==='Corte'? 0 : ST.prods.filter(p=>p.fase===f&&filtro(p)).reduce((s,p)=>s+parseFloat(p.sold_ml||0),0);
+      const despKg = f==='Corte'? ST.cortes.filter(filtro).reduce((s,c)=>s+c.desperdicio,0) : 0;
+      return `<tr><td><strong>${f}</strong></td><td class="r">${byFase[f].qty}</td><td class="r">${byFase[f].kg.toFixed(1)}</td><td class="r">${soldML>0?soldML.toFixed(1):'—'}</td><td class="r">${despKg>0?despKg.toFixed(1):'—'}</td></tr>`;
+    }).join('')}
+    <tr style="background:var(--sp);font-weight:800;"><td>TOTAL</td><td class="r">${totCorteQty+totProdQty}</td><td class="r">${(totKgCorte+prods.reduce((s,p)=>s+p.kg,0)).toFixed(1)}</td><td class="r">${ST.prods.filter(filtro).reduce((s,p)=>s+parseFloat(p.sold_ml||0),0).toFixed(1)} ml</td><td class="r">${ST.cortes.filter(filtro).reduce((s,c)=>s+c.desperdicio,0).toFixed(1)}</td></tr>
+    </tbody></table></div>
+    ${cortes.length?`<div style="font-size:12px;font-weight:800;color:var(--sd);margin:.75rem 0 .5rem;">Detalle de Cortes – Plancha</div>
+    <div class="tw" style="margin-bottom:.75rem;"><table><thead><tr><th>Fecha</th><th>Conjunto</th><th>Parte</th><th class="r">Qty</th><th class="r">Kg partes</th><th>Plancha</th><th class="r">Sobrante (kg)</th><th class="r">Desp. (kg)</th></tr></thead>
+    <tbody>${cortes.map(c=>`<tr><td>${c.fecha}</td><td>${c.conjunto}</td><td>${c.parte}</td><td class="r">${c.qty}</td><td class="r">${c.pesoParts.toFixed(1)}</td><td style="font-size:10px;">${c.colada||'—'} ${c.material} ${c.espesor?c.espesor+'×'+c.ancho+'×'+c.largo:''}</td><td class="r"><span class="stock-tag">${c.sobPeso.toFixed(1)}</span></td><td class="r" style="color:var(--rt);">${c.desperdicio.toFixed(1)}</td></tr>`).join('')}</tbody></table></div>`:''}
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:2rem;margin-top:2rem;padding-top:1.5rem;border-top:1px solid var(--gl);">
+      ${['Elaborado por','Revisado por','Aprobado por'].map(l=>`<div style="text-align:center;"><div style="font-size:10px;color:var(--gm);margin-bottom:2rem;">${l}:</div><div style="border-top:1px solid var(--tx);padding-top:5px;font-size:10px;color:var(--gm);">Firma y sello</div></div>`).join('')}
+    </div>
+  </div>`;
+}
+
+// ======================= MODAL =======================
+function renderInformeCharts(cortes, prods, byFase) {
+  try {
+    const faseEj=FASES.map(f=>byFase[f]?.qty||0);
+    mkChart('rpt-chart-fases','bar',{
+      labels:FASES.map(f=>f.length>10?f.slice(0,10)+'…':f),
+      datasets:[{label:'Unidades',data:faseEj,
+        backgroundColor:FASES.map(f=>({'Corte':'#1e40af','Armado':'#065f46','Soldadura':'#92400e','Perforaciones':'#9d174d','Limpieza Mecánica':'#5b21b6','Pintura':'#991b1b'}[f]+'bb')),
+        borderRadius:4}]
+    },{plugins:{legend:{display:false}},
+      scales:{x:{grid:{display:false},ticks:{font:{size:9}}},y:{grid:{color:'#eee'},ticks:{font:{size:9}},beginAtZero:true}}});
+    const kgP=cortes.reduce((s,c)=>s+(c.pesoParts||c.pesoPzas||0),0);
+    const kgS=cortes.filter(c=>c.destSob==='stock'||c.sob_dest==='stock').reduce((s,c)=>s+(c.sobPeso||c.sob_peso||0),0);
+    const kgD=cortes.reduce((s,c)=>s+(c.desperdicio||0),0);
+    if(kgP+kgS+kgD>0) mkChart('rpt-chart-material','doughnut',{
+      labels:['Piezas','Sobrante','Desperdicio'],
+      datasets:[{data:[kgP,kgS,kgD],backgroundColor:['#1e40af','#166534','#721c24'],borderWidth:2}]
+    },{plugins:{legend:{position:'right',labels:{font:{size:10},boxWidth:12}}},cutout:'55%'});
+  } catch(e) { console.warn('chart error',e); }
+}
+
+
+function openModal(cj){
+  const c=TEKLA.conjuntos.find(x=>x.conjunto===cj);if(!c)return;
+  const totEj=getCortadoQty(cj,c.marca);
+  document.getElementById('modal-ttl').textContent=`${c.conjunto} — ${c.perfil} (${c.cantidad} plan)`;
+  let html=`<div class="kpi-row" style="grid-template-columns:repeat(3,1fr);">
+    <div class="kpi"><div class="kpi-lbl">Plan</div><div class="kpi-val">${c.cantidad}</div></div>
+    <div class="kpi k-orange"><div class="kpi-lbl">Cortado</div><div class="kpi-val">${totEj}</div></div>
+    <div class="kpi k-warn"><div class="kpi-lbl">Pendiente</div><div class="kpi-val">${Math.max(0,c.cantidad-totEj)}</div></div>
+  </div>
+  <div style="font-size:11px;font-weight:800;color:var(--sd);margin:.75rem 0 .5rem;">Partes del conjunto</div>
+  <div class="tw"><table><thead><tr><th>Parte</th><th>Perfil</th><th class="r">Plan</th><th class="r">Long (mm)</th><th class="r">Pu (kg)</th><th class="r">Ejec.</th><th class="r">Pend.</th></tr></thead>
+  <tbody>${c.partes.map(p=>{const ej=getCortadoQty(cj,p.parte);const pend=Math.max(0,p.cantidad-ej);return`<tr class="${pend>0?'pend-row':'done-row'}"><td>${p.parte}</td><td class="mono">${p.perfil}</td><td class="r">${p.cantidad}</td><td class="r">${p.longitud||'—'}</td><td class="r">${p.peso_unit.toFixed(2)}</td><td class="r" style="color:#166534;font-weight:700;">${ej}</td><td class="r"><strong style="color:${pend>0?'#b45309':'#166534'}">${pend}</strong></td></tr>`;}).join('')}
+  </tbody></table></div>`;
+  document.getElementById('modal-body').innerHTML=html;
+  document.getElementById('modal-bg').classList.add('open');
+}
+function closeModal(){document.getElementById('modal-bg').classList.remove('open');}
+
+// ======================= UTILS =======================
+function today(){return new Date().toISOString().split('T')[0];}
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.style.opacity='1';setTimeout(()=>t.style.opacity='0',3000);}
+
+// ======================= LINKS OPERARIOS =======================
+function renderLinks() {
+  const div = document.getElementById('links-list');
+  const qrDiv = document.getElementById('qr-grid');
+  if(!div) return;
+  div.innerHTML = `
+    <div style="background:var(--su);border:1px solid var(--sl);border-radius:10px;padding:1rem;margin-bottom:1rem;">
+      <div style="font-size:13px;font-weight:700;color:var(--sm);margin-bottom:.5rem;">📱 Cómo dar acceso a los operarios</div>
+      <ol style="font-size:12px;color:var(--gm);padding-left:1.25rem;line-height:1.8;">
+        <li>Comparte el archivo <strong>worker.html</strong> por WhatsApp con cada operario</li>
+        <li>El operario lo abre en su celular y selecciona su nombre</li>
+        <li>Al final del día toca <strong>"📤 Enviar mis datos al supervisor"</strong></li>
+        <li>Te manda el archivo JSON por WhatsApp</li>
+        <li>Tú lo importas aquí con <strong>"📥 Importar datos operario"</strong></li>
+      </ol>
+    </div>
+    <div class="tw"><table>
+      <thead><tr><th>#</th><th>Nombre completo</th><th>Especialidad</th><th>Fase</th><th>Estado</th></tr></thead>
+      <tbody>${ST.ops.map((o,i)=>`<tr>
+        <td>${i+1}</td>
+        <td><strong>${o.nom} ${o.ape}</strong></td>
+        <td>${o.rol}</td>
+        <td>${o.fase}</td>
+        <td><span class="badge b-done">${o.est||'activo'}</span></td>
+      </tr>`).join('')}</tbody>
+    </table></div>`;
+  if(qrDiv) qrDiv.innerHTML = '';
+}
+
+
+function copyLink(url, nom) {
+  navigator.clipboard?.writeText(url).then(()=>toast(`✓ Link de ${nom} copiado`)).catch(()=>{
+    prompt(`Link de ${nom}:`, url);
+  });
+}
+
+// Sync production data FROM worker app (localStorage)
+// == WORKER APP SYNC ==
+
+
+
+// Auto-sync when supervisor app gains focus (worker may have entered data on phone)
+// Auto-sync handled by SSE
+// React to storage events (same browser, different tabs)
+window.addEventListener('storage', e=>{
+  // SSE handles real-time sync now
+  if(e.key==='prodapp_operarios'){
+    // Workers updated — refresh selects
+    const ws=JSON.parse(e.newValue||'[]');
+    if(ws.length){ toast(`ℹ ${ws.length} operarios actualizados`); }
+  }
+});
+
+// ======================= INIT =======================
+document.addEventListener('DOMContentLoaded', async ()=>{
+  await loadFromServer();
+  renderDashboard();
+  ['c-fecha','p-fecha'].forEach(id=>{const el=document.getElementById(id);if(el&&!el.value)el.value=today();});
+  initCorteSelects();
+  initProdSelects();
+  // Push workers to localStorage so worker_app can load them immediately
+  try{
+    const FASE_ICONS={'Corte':'✂','Armado':'🔧','Soldadura':'🔥','Perforaciones':'🔩','Limpieza Mecánica':'🧹','Pintura':'🎨','Soporte':'🏗'};
+    const workerData = JSON.stringify(ST.ops.map(o=>({
+      id:o.id,nom:o.nom,ape:o.ape,rol:o.rol,fase:o.fase,
+      icon:FASE_ICONS[o.fase]||'👷',tel:o.tel||'',emp:o.emp||''
+    })));
+    localStorage.setItem('prodapp_operarios', workerData);
+    // Touch update key so worker_app reacts via storage event
+    localStorage.setItem('prodapp_workers_update', Date.now().toString());
+  }catch(e){}
+});
+</script>
+</body>
+</html>

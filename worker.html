@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0">
-<title>Mi Trabajo — Producción</title> 
+<title>Mi Trabajo — Producción</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{--b:#1a2b4a;--o:#e8631a;--g:#166534;--gl:#d4edda;--r:#721c24;--rl:#f8d7da;--y:#856404;--yl:#fff3cd;--gr:#6c757d;--bg:#f4f6f9;--w:#fff;--bd:#dee2e6}
@@ -405,6 +405,10 @@ document.addEventListener('DOMContentLoaded',()=>{
   // Sync pending records
   setTimeout(syncPendingToGAS, 5000);
   setInterval(syncPendingToGAS, 60000);
+  // Refresh worker list every 2 minutes (picks up new operarios added by supervisor)
+  setInterval(()=>{
+    if(GAS.configured() && !W) loadAndRenderWorkers();
+  }, 120000);
   const opId=new URLSearchParams(location.search).get('op');
   if(opId){const ws=JSON.parse((()=>{try{return sessionStorage.getItem('workers');}catch(e){return null;}})() ||'[]');const w=ws.find(x=>x.id==opId);if(w){selectWorker(w);return;}}
 });
