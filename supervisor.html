@@ -2633,6 +2633,18 @@ document.addEventListener('DOMContentLoaded', async ()=>{
     // Touch update key so worker_app reacts via storage event
     localStorage.setItem('prodapp_workers_update', Date.now().toString());
   }catch(e){}
+
+  // Auto-refresh every 30 seconds - picks up worker registros automatically
+  let _refreshCnt = 0;
+  setInterval(async () => {
+    _refreshCnt++;
+    await loadFromServer();
+    renderDashboard();
+    const si = document.getElementById('sync-indicator');
+    const t = new Date().toLocaleTimeString('es-EC',{hour:'2-digit',minute:'2-digit'});
+    if(si) si.textContent = `= Auto-sync ${t} (#${_refreshCnt})`;
+    si && (si.style.color = 'var(--gt)');
+  }, 30000);
 });
 </script>
 </body>
