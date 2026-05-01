@@ -320,7 +320,17 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);min-height
     <div id="ok-hist"></div>
   </div>
   <button class="btn-main" onclick="go('sc-fase')">✚  Registrar otro trabajo</button>
+  <button class="btn-blue" style="background:#e8631a;margin-top:.5rem" onclick="go('sc-historial')">📝  Ver y corregir mis registros</button>
   <button class="btn-blue" onclick="go('sc-home')">🏠  Ir al inicio</button>
+</div>
+
+<!-- HISTORIAL / CORREGIR -->
+<div class="sc" id="sc-historial">
+  <button class="btn-back" onclick="go('sc-home')">← Inicio</button>
+  <div style="font-size:17px;font-weight:700;color:var(--b);margin-bottom:.5rem">📝 Mis registros de hoy</div>
+  <div style="font-size:12px;color:var(--gr);margin-bottom:.875rem">Toca ✕ para eliminar un registro incorrecto</div>
+  <div id="hist-list"></div>
+  <button class="btn-main" style="margin-top:.5rem" onclick="go('sc-fase')">✚ Agregar nuevo registro</button>
 </div>
 
 <!-- PENDIENTES -->
@@ -333,6 +343,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);min-height
 <div class="bnav">
   <button class="nb active" id="nb-home" onclick="navTo('home')"><span class="ni">🏠</span>Inicio</button>
   <button class="nb" id="nb-reg"  onclick="navTo('reg')"><span class="ni">✚</span>Registrar</button>
+  <button class="nb" id="nb-hist" onclick="navTo('hist')"><span class="ni">📝</span>Corregir</button>
   <button class="nb" id="nb-pend" onclick="navTo('pend')"><span class="ni">⚠</span>Pendientes</button>
 </div>
 
@@ -384,6 +395,7 @@ function navTo(d){
   if(!W){go('sc-login');return;}
   if(d==='home')go('sc-home');
   else if(d==='reg')go('sc-fase');
+  else if(d==='hist'){renderHistorial();go('sc-historial');}
   else if(d==='pend'){renderPend();go('sc-pend');}
 }
 
@@ -416,7 +428,7 @@ document.addEventListener('DOMContentLoaded',()=>{
 // ================================================
 // CONFIGURACIÓN — PEGA AQUÍ TU URL DE GOOGLE
 // ================================================
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbwSZ2-SnX9jvX9GX__4SY3wz4H78rg_TT3BX-8lOfv5Q56polOd6w1faqS06a2QDaA/exec';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbwlzDI5gkgp2PjF3MI3fdaYUfprOx4yAyHeFkTKlA5bVib5ZAH-QEfJwTOEFJiQXzzM/exec';
 // Ejemplo: 'https://script.google.com/macros/s/AKfycb.../exec'
 // ================================================
 
@@ -436,23 +448,57 @@ const DEFAULT_WORKERS=[
 // == API Google Apps Script ======================
 const GAS = {
   configured: () => GAS_URL && !GAS_URL.includes('PEGA_AQUI'),
-  get: async (action, params={}) => {
-    if (!GAS.configured()) throw new Error('no_url');
-    const url = GAS_URL + '?' + new URLSearchParams({action, ...params});
-    const r = await fetch(url, {redirect:'follow', cache:'no-cache'});
-    const d = JSON.parse(await r.text());
-    if (d && d.error) throw new Error(d.error);
-    return d;
-  },
+
+  // GET via JSONP - funciona en iOS Safari, Android, cualquier navegador
+  get: (action, params={}) => new Promise((resolve, reject) => {
+    if (!GAS.configured()) { reject(new Error('no_url')); return; }
+    const cbName = '_cb' + Date.now() + Math.random().toString(36).slice(2);
+    const timer = setTimeout(() => {
+      delete window[cbName];
+      script && script.parentNode && script.parentNode.removeChild(script);
+      reject(new Error('timeout'));
+    }, 10000);
+    window[cbName] = (data) => {
+      clearTimeout(timer);
+      delete window[cbName];
+      script && script.parentNode && script.parentNode.removeChild(script);
+      if (data && data.error) reject(new Error(data.error));
+      else resolve(data);
+    };
+    const q = new URLSearchParams({action, callback: cbName, ...params});
+    const script = document.createElement('script');
+    script.src = GAS_URL + '?' + q;
+    script.onerror = () => {
+      clearTimeout(timer);
+      delete window[cbName];
+      reject(new Error('script_error'));
+    };
+    document.head.appendChild(script);
+  }),
+
+  // POST via fetch (funciona en Android/desktop) con fallback JSONP
   post: async (action, data) => {
     if (!GAS.configured()) return null;
+    // Intento 1: fetch POST directo
     try {
+      const ctrl = new AbortController();
+      setTimeout(() => ctrl.abort(), 8000);
       const r = await fetch(GAS_URL, {
-        method:'POST', redirect:'follow',
+        method: 'POST', redirect: 'follow', signal: ctrl.signal,
         body: JSON.stringify({action, data}),
       });
-      return JSON.parse(await r.text());
-    } catch(e) { console.warn('GAS post:', e.message); return null; }
+      const txt = await r.text();
+      if (txt && (txt.startsWith('{') || txt.startsWith('['))) {
+        return JSON.parse(txt);
+      }
+    } catch(e) {}
+    // Intento 2: GET via JSONP con datos serializados
+    try {
+      return await GAS.get(action, {data: JSON.stringify(data)});
+    } catch(e) {
+      console.warn('GAS post failed:', e.message);
+      return null;
+    }
   },
 };
 const LS = {
