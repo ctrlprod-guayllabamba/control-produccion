@@ -274,18 +274,15 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);min-height
   </div>
   <div class="card">
     <div class="card-t">✂ Piezas cortadas de <span id="corte-pr-lbl" style="color:var(--o)"></span></div>
-    <div class="field"><label>¿Cuántas piezas cortaste?</label>
-      <input type="number" class="num-big" id="ct-qty" inputmode="numeric" min="1" placeholder="0" oninput="calcCtPeso()">
-      <div class="num-ctrl">
-        <button class="nbtn" onclick="adj('ct-qty',-10)">−10</button>
-        <button class="nbtn" onclick="adj('ct-qty',-1)">−1</button>
-        <button class="nbtn" onclick="adj('ct-qty',1)">+1</button>
-        <button class="nbtn" onclick="adj('ct-qty',10)">+10</button>
+    <!-- Bloques por plancha (multi-plancha) -->
+    <div id="ct-por-plancha"></div>
+    <!-- Total acumulado -->
+    <div id="ct-total-box" style="display:none;background:#f0fdf4;border-radius:10px;padding:.75rem 1rem;margin-bottom:.875rem">
+      <div style="font-size:11px;font-weight:700;color:#065f46">TOTAL ACUMULADO</div>
+      <div style="display:flex;justify-content:space-between;margin-top:4px">
+        <span style="font-size:18px;font-weight:800;color:#065f46" id="ct-total-qty">0 piezas</span>
+        <span style="font-size:16px;font-weight:700;color:#065f46" id="ct-total-peso">0.0 kg</span>
       </div>
-    </div>
-    <div class="field" style="display:none" id="ct-peso-row">
-      <label>Peso piezas cortadas (kg) AUTO</label>
-      <input type="number" id="ct-peso-pzas" readonly style="background:#f0fdf4;font-weight:700">
     </div>
     <div class="field"><label>¿Cómo salieron las piezas?</label>
       <div class="cal-row">
@@ -305,51 +302,14 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);min-height
 <div class="sc" id="sc-sob">
   <button class="btn-back" onclick="go('sc-cortes')">← Volver a piezas</button>
   <div id="sb-sob"></div>
-  <div class="ebox eb-yellow">
-    <div class="eb-t">🗃 Plancha origen</div>
-    <div id="sob-plancha-txt" style="font-size:13px;color:#92400e"></div>
+  <!-- Contenedor dinámico: un bloque por plancha -->
+  <div id="sob-bloques"></div>
+  <!-- Resumen global -->
+  <div id="sob-resumen-global" style="display:none;background:#1a2b4a;color:#fff;border-radius:12px;padding:1rem;margin-bottom:.875rem">
+    <div style="font-size:11px;font-weight:700;opacity:.7;margin-bottom:.5rem">RESUMEN GLOBAL</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px" id="sob-resumen-grid"></div>
   </div>
-  <div class="card">
-    <div class="card-t">📦 Sobrante de plancha</div>
-    <div class="field"><label>¿Hay sobrante reutilizable?</label>
-      <select id="sob-hay" onchange="toggleSob()" style="font-size:15px">
-        <option value="si">Sí — queda material sobrante</option>
-        <option value="no">No — todo usado / desperdicio</option>
-      </select>
-    </div>
-    <div id="sob-fields">
-      <div class="ebox eb-green">
-        <div class="eb-t">📐 Dimensiones del sobrante</div>
-        <div style="font-size:12px;color:var(--g);margin-bottom:.5rem">
-          N° colada del sobrante: <strong id="sob-colada-lbl">—</strong> (mismo que plancha original)
-        </div>
-        <div class="frow">
-          <div class="field"><label>Espesor (mm)</label><input type="number" id="sob-esp" inputmode="numeric" placeholder="igual plancha" oninput="calcSob()" style="border-color:#86efac"></div>
-          <div class="field"><label>Ancho (mm)</label><input type="number" id="sob-ancho" inputmode="numeric" placeholder="mm" oninput="calcSob()" style="border-color:#86efac"></div>
-          <div class="field"><label>Largo (mm)</label><input type="number" id="sob-largo" inputmode="numeric" placeholder="mm" oninput="calcSob()" style="border-color:#86efac"></div>
-        </div>
-        <div class="frow">
-          <div class="field"><label>Cantidad piezas sobrantes</label><input type="number" id="sob-qty" value="1" min="1" oninput="calcSob()" style="border-color:#86efac"></div>
-          <div class="field"><label>Peso sobrante (kg) AUTO</label><input type="number" id="sob-peso" readonly placeholder="calculado" style="background:#f0fdf4;font-weight:700;border-color:#86efac"></div>
-        </div>
-        <div class="frow">
-          <div class="field"><label>Destino</label>
-            <select id="sob-dest" style="font-size:15px;border-color:#86efac">
-              <option value="stock">📦 Stock — reutilizable</option>
-              <option value="waste">🗑 Desperdicio</option>
-            </select>
-          </div>
-          <div class="field"><label>Ubicación / Referencia</label>
-            <input type="text" id="sob-ref" placeholder="Rack A-3, Bodega..." style="border-color:#86efac">
-          </div>
-        </div>
-      </div>
-    </div>
-    <div id="sob-desp-box" style="display:none;margin-bottom:.875rem">
-      <div style="background:var(--rl);border-radius:10px;padding:.75rem;font-size:13px;color:var(--r);font-weight:700" id="sob-desp-txt">Desperdicio: — kg</div>
-    </div>
-    <button class="btn-main" id="btn-guardar-corte" onclick="guardarCorte()">✔  Guardar registro de corte</button>
-  </div>
+  <button class="btn-main" id="btn-guardar-corte" onclick="guardarCorte()">✔  Guardar registro de corte</button>
 </div>
 
 <!-- FORM OTRAS FASES -->
@@ -1110,7 +1070,6 @@ function irACortes(){
   const isPlancha = tipo === 'plancha';
   
   if(isPlancha){
-    // Validate at least one plancha with dimensions
     const valid = planchasData.filter(p=>p.esp&&p.ancho&&p.largo);
     if(!valid.length){alert('Ingresa las dimensiones de al menos una plancha');return;}
     const total = planchasData.reduce((s,p)=>s+(p.peso||0),0);
@@ -1126,7 +1085,6 @@ function irACortes(){
       peso: total
     };
   } else {
-    // Perfil
     if(!window._perfilData){alert('Ingresa las dimensiones del perfil y la longitud');return;}
     const pd = window._perfilData;
     const num = document.getElementById('pl-num-perfil').value.trim()||'—';
@@ -1156,88 +1114,369 @@ function irACortes(){
   }
   document.getElementById('plancha-txt').innerHTML = matResumen;
   document.getElementById('corte-pr-lbl').textContent=`${selParte.pr} (${selParte.perfil})`;
-  document.getElementById('ct-peso-row').style.display='';
-  sv('ct-qty','');sv('ct-peso-pzas','');
+
+  // Build per-plancha quantity inputs
+  buildCtPorPlancha();
   go('sc-cortes');
 }
 
-function calcCtPeso(){
-  const q=parseInt(document.getElementById('ct-qty').value)||0;
-  sv('ct-peso-pzas',q>0?(q*selParte.pu).toFixed(1):'');
+function buildCtPorPlancha(){
+  const cont = document.getElementById('ct-por-plancha');
+  const totalBox = document.getElementById('ct-total-box');
+  const planchas = draft.pl.planchas || [];
+  const esSoloUna = planchas.length <= 1 || draft.pl.tipo !== 'plancha';
+
+  if(esSoloUna){
+    // Modo simple: un solo campo de cantidad
+    totalBox.style.display = 'none';
+    cont.innerHTML = `
+      <div class="field"><label>¿Cuántas piezas cortaste?</label>
+        <input type="number" class="num-big" id="ct-qty-0" inputmode="numeric" min="0" placeholder="0" oninput="recalcCtTotal()">
+        <div class="num-ctrl">
+          <button class="nbtn" onclick="adjCt(0,-10)">−10</button>
+          <button class="nbtn" onclick="adjCt(0,-1)">−1</button>
+          <button class="nbtn" onclick="adjCt(0,1)">+1</button>
+          <button class="nbtn" onclick="adjCt(0,10)">+10</button>
+        </div>
+      </div>
+      <div id="ct-peso-row-0" style="background:#f0fdf4;border-radius:8px;padding:.5rem .75rem;margin-bottom:.875rem;font-size:13px;font-weight:700;color:#065f46;display:none">
+        Peso piezas: <span id="ct-peso-txt-0">—</span>
+      </div>`;
+  } else {
+    // Modo multi-plancha: un bloque por cada plancha
+    totalBox.style.display = '';
+    cont.innerHTML = planchas.map((p, i) => {
+      const kgPieza = selParte?.pu || 0;
+      return `
+      <div style="border:1.5px solid #bfdbfe;border-radius:10px;padding:.75rem;margin-bottom:.625rem;background:#f8faff">
+        <div style="font-size:12px;font-weight:700;color:#1e40af;margin-bottom:.5rem">
+          📋 Plancha ${i+1} — ${p.esp}mm × ${p.ancho}×${p.largo}mm · ${p.mat} · ${p.peso.toFixed(1)} kg
+          ${p.num ? `<span style="color:#6b7280;font-weight:400"> · ${p.num}</span>` : ''}
+        </div>
+        <div class="field" style="margin-bottom:.375rem"><label style="font-size:10px">Piezas cortadas de esta plancha</label>
+          <input type="number" class="num-big" id="ct-qty-${i}" inputmode="numeric" min="0" placeholder="0"
+            oninput="recalcCtTotal()" style="font-size:32px;padding:.375rem">
+          <div class="num-ctrl" style="margin-top:.375rem">
+            <button class="nbtn" onclick="adjCt(${i},-10)">−10</button>
+            <button class="nbtn" onclick="adjCt(${i},-1)">−1</button>
+            <button class="nbtn" onclick="adjCt(${i},1)">+1</button>
+            <button class="nbtn" onclick="adjCt(${i},10)">+10</button>
+          </div>
+        </div>
+        <div id="ct-peso-row-${i}" style="background:#f0fdf4;border-radius:6px;padding:4px 8px;font-size:12px;font-weight:700;color:#065f46;display:none">
+          Peso: <span id="ct-peso-txt-${i}">—</span>
+        </div>
+      </div>`;
+    }).join('');
+  }
 }
+
+function adjCt(idx, n){
+  const el = document.getElementById(`ct-qty-${idx}`);
+  if(el) { el.value = Math.max(0, (parseInt(el.value||'0') + n)); recalcCtTotal(); }
+}
+
+function recalcCtTotal(){
+  const planchas = draft.pl.planchas || [];
+  const esSoloUna = planchas.length <= 1 || draft.pl.tipo !== 'plancha';
+  const kgPieza = selParte?.pu || 0;
+  let totalQty = 0, totalPeso = 0;
+
+  if(esSoloUna){
+    const q = parseInt(document.getElementById('ct-qty-0')?.value)||0;
+    totalQty = q;
+    totalPeso = q * kgPieza;
+    const pr = document.getElementById('ct-peso-row-0');
+    const pt = document.getElementById('ct-peso-txt-0');
+    if(pr && pt){ pr.style.display = q>0?'':'none'; pt.textContent = `${totalPeso.toFixed(1)} kg`; }
+  } else {
+    planchas.forEach((p, i) => {
+      const q = parseInt(document.getElementById(`ct-qty-${i}`)?.value)||0;
+      const pesoI = q * kgPieza;
+      totalQty += q; totalPeso += pesoI;
+      const pr = document.getElementById(`ct-peso-row-${i}`);
+      const pt = document.getElementById(`ct-peso-txt-${i}`);
+      if(pr && pt){ pr.style.display = q>0?'':'none'; pt.textContent = `${q} pzas × ${kgPieza} kg/ud = ${pesoI.toFixed(1)} kg`; }
+    });
+    document.getElementById('ct-total-qty').textContent = `${totalQty} piezas`;
+    document.getElementById('ct-total-peso').textContent = `${totalPeso.toFixed(1)} kg`;
+  }
+}
+
+// Compat legacy
+function calcCtPeso(){ recalcCtTotal(); }
 
 function irASobrante(){
-  const qty=parseInt(document.getElementById('ct-qty').value)||0;
-  if(qty<=0){alert('Ingresa cuántas piezas cortaste');return;}
-  // Warning if exceeding plan
+  const planchas = draft.pl.planchas || [];
+  const esSoloUna = planchas.length <= 1 || draft.pl.tipo !== 'plancha';
+  let totalQty = 0;
+  const cortesPorPlancha = [];
+
+  if(esSoloUna){
+    totalQty = parseInt(document.getElementById('ct-qty-0')?.value)||0;
+    if(planchas.length === 1) cortesPorPlancha.push({planchaIdx:0, qty:totalQty});
+  } else {
+    planchas.forEach((p, i) => {
+      const q = parseInt(document.getElementById(`ct-qty-${i}`)?.value)||0;
+      totalQty += q;
+      cortesPorPlancha.push({planchaIdx:i, qty:q});
+    });
+  }
+
+  if(totalQty <= 0){alert('Ingresa cuántas piezas cortaste (al menos 1 en total)');return;}
+
   const yaHecho = totalExec(selCj.cj, selParte.pr, 'Corte');
   const plan = selParte.plan;
-  if(yaHecho + qty > plan){
-    const exceso = (yaHecho + qty) - plan;
-    const ok = confirm(`⚠ ADVERTENCIA: Esta cantidad supera el plan Tekla.\n\nPlan: ${plan} uds\nYa cortado: ${yaHecho} uds\nEstás ingresando: ${qty} uds\nExceso: ${exceso} uds\n\n¿Deseas continuar de todas formas?`);
+  if(yaHecho + totalQty > plan){
+    const exceso = (yaHecho + totalQty) - plan;
+    const ok = confirm(`⚠ ADVERTENCIA: Esta cantidad supera el plan Tekla.\n\nPlan: ${plan} uds\nYa cortado: ${yaHecho} uds\nEstás ingresando: ${totalQty} uds\nExceso: ${exceso} uds\n\n¿Deseas continuar de todas formas?`);
     if(!ok) return;
   }
-  draft.ct={qty,cal:calidad,obs:document.getElementById('ct-obs').value.trim(),pesoPzas:qty*selParte.pu};
-  document.getElementById('sb-sob').innerHTML=stepbar(3,['Plancha','Cortes','Sobrante']);
-  document.getElementById('sob-plancha-txt').textContent=`📋 ${draft.pl.num} · ${draft.pl.mat} · ${draft.pl.esp}×${draft.pl.ancho}×${draft.pl.largo} mm`;
-  document.getElementById('sob-colada-lbl').textContent=draft.pl.num;
-  sv('sob-esp',draft.pl.esp);sv('sob-ancho',draft.pl.ancho);sv('sob-largo','');sv('sob-qty',1);sv('sob-peso','');
-  toggleSob();go('sc-sob');
+
+  draft.ct = {
+    qty: totalQty,
+    cal: calidad,
+    obs: document.getElementById('ct-obs').value.trim(),
+    pesoPzas: totalQty * selParte.pu,
+    cortesPorPlancha
+  };
+
+  document.getElementById('sb-sob').innerHTML = stepbar(3,['Material','Cortes','Sobrante']);
+  buildSobBloques();
+  go('sc-sob');
 }
 
-function toggleSob(){
-  const hay=document.getElementById('sob-hay').value;
-  document.getElementById('sob-fields').style.display=hay==='si'?'block':'none';
-  calcSob();
-}
+function buildSobBloques(){
+  const planchas = draft.pl.planchas || [];
+  const esSoloUna = planchas.length <= 1 || draft.pl.tipo !== 'plancha';
+  const cont = document.getElementById('sob-bloques');
+  const resGlobal = document.getElementById('sob-resumen-global');
 
-function calcSob(){
-  const e=gv('sob-esp')||draft.pl.esp,a=gv('sob-ancho')||draft.pl.ancho,l=gv('sob-largo'),q=gv('sob-qty')||1;
-  if(e&&a&&l){sv('sob-peso',(e*a*l*D*q).toFixed(2));}
-  const pl=draft.pl.peso||0,pzas=draft.ct.pesoPzas||0,sob=parseFloat(gv('sob-peso'))||0;
-  const hay=document.getElementById('sob-hay').value;
-  const sobReal=hay==='si'?sob:0;
-  const desp=pl>0?Math.max(0,pl-pzas-sobReal):0;
-  const pctAprov=pl>0?(pzas/pl*100):0;
-  const pctSob=pl>0?(sobReal/pl*100):0;
-  const pctDesp=pl>0?(desp/pl*100):0;
-  const db=document.getElementById('sob-desp-box');
-  if(pl>0){
-    db.style.display='';
-    db.innerHTML=`
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:.5rem;">
-        <div style="background:#d1fae5;border-radius:8px;padding:8px;text-align:center;">
-          <div style="font-size:10px;color:#065f46;font-weight:700;">✅ APROVECHAMIENTO</div>
-          <div style="font-size:20px;font-weight:800;color:#065f46;">${pctAprov.toFixed(1)}%</div>
-          <div style="font-size:10px;color:#065f46;">${pzas.toFixed(1)} kg</div>
-        </div>
-        <div style="background:${sobReal>0?'#dbeafe':'#f3f4f6'};border-radius:8px;padding:8px;text-align:center;">
-          <div style="font-size:10px;color:#1e40af;font-weight:700;">📦 SOBRANTE</div>
-          <div style="font-size:20px;font-weight:800;color:#1e40af;">${pctSob.toFixed(1)}%</div>
-          <div style="font-size:10px;color:#1e40af;">${sobReal.toFixed(1)} kg</div>
-        </div>
-        <div style="background:${pctDesp>10?'#fee2e2':'#fef3c7'};border-radius:8px;padding:8px;text-align:center;">
-          <div style="font-size:10px;color:${pctDesp>10?'#991b1b':'#92400e'};font-weight:700;">🗑 DESPERDICIO</div>
-          <div style="font-size:20px;font-weight:800;color:${pctDesp>10?'#991b1b':'#92400e'};">${pctDesp.toFixed(1)}%</div>
-          <div style="font-size:10px;color:${pctDesp>10?'#991b1b':'#92400e'};">${desp.toFixed(1)} kg</div>
+  if(esSoloUna){
+    // Modo simple — una sola plancha o perfil
+    const pl = planchas[0] || draft.pl;
+    const qtyCortado = draft.ct.cortesPorPlancha?.[0]?.qty ?? draft.ct.qty;
+    resGlobal.style.display = 'none';
+    cont.innerHTML = `
+      <div class="ebox eb-yellow">
+        <div class="eb-t">🗃 Plancha origen</div>
+        <div style="font-size:13px;color:#92400e">
+          📋 ${pl.num||draft.pl.num||'—'} · ${pl.mat||draft.pl.mat} · 
+          ${pl.esp||draft.pl.esp}×${pl.ancho||draft.pl.ancho}×${pl.largo||draft.pl.largo} mm · 
+          ${(pl.peso||draft.pl.peso||0).toFixed(1)} kg
         </div>
       </div>
-      <div style="background:#f9fafb;border-radius:6px;padding:6px 10px;margin-top:6px;font-size:11px;color:#6b7280;text-align:center;">
-        Plancha total: <strong>${pl.toFixed(1)} kg</strong> = Piezas + Sobrante + Desperdicio
-      </div>
-      ${pctDesp>8?'<div style="background:#fee2e2;border-radius:6px;padding:6px 10px;margin-top:4px;font-size:11px;color:#991b1b;font-weight:700;text-align:center;">⚠ Desperdicio alto ('+pctDesp.toFixed(1)+'%) — revisa las dimensiones del sobrante</div>':''}
-    `;
+      ${sobFormHTML(0, pl, qtyCortado)}`;
+  } else {
+    resGlobal.style.display = '';
+    cont.innerHTML = planchas.map((pl, i) => {
+      const qtyCortado = draft.ct.cortesPorPlancha?.[i]?.qty || 0;
+      return `
+      <div style="border:2px solid #fcd34d;border-radius:12px;padding:.875rem;margin-bottom:.875rem;background:#fffbeb">
+        <div style="font-size:12px;font-weight:800;color:#92400e;margin-bottom:.625rem">
+          📋 PLANCHA ${i+1} — ${pl.esp}mm × ${pl.ancho}×${pl.largo}mm · ${pl.mat}
+          ${pl.num?`<span style="font-weight:400;color:#6b7280"> · ${pl.num}</span>`:''}
+          <span style="float:right;background:#92400e;color:#fff;border-radius:6px;padding:1px 8px;font-size:11px">${(pl.peso||0).toFixed(1)} kg</span>
+        </div>
+        <div style="font-size:11px;color:#92400e;margin-bottom:.5rem">
+          ✂ Piezas cortadas de esta plancha: <strong>${qtyCortado}</strong> 
+          (${(qtyCortado * selParte.pu).toFixed(1)} kg en piezas)
+        </div>
+        ${sobFormHTML(i, pl, qtyCortado)}
+      </div>`;
+    }).join('');
+    calcSobGlobal();
   }
 }
+
+function sobFormHTML(idx, pl, qtyCortado){
+  return `
+    <div class="field"><label>¿Hay sobrante reutilizable de plancha ${idx+1}?</label>
+      <select id="sob-hay-${idx}" onchange="calcSobPlancha(${idx})" style="font-size:15px">
+        <option value="si">Sí — queda material sobrante</option>
+        <option value="no">No — todo usado / desperdicio</option>
+      </select>
+    </div>
+    <div id="sob-fields-${idx}">
+      <div class="ebox eb-green" style="margin-bottom:.625rem">
+        <div class="eb-t">📐 Dimensiones del sobrante</div>
+        <div style="font-size:12px;color:var(--g);margin-bottom:.5rem">
+          N° colada: <strong>${pl.num||'—'}</strong> (mismo que plancha original)
+        </div>
+        <div class="frow">
+          <div class="field"><label>Espesor (mm)</label>
+            <input type="number" id="sob-esp-${idx}" inputmode="numeric" value="${pl.esp||''}" oninput="calcSobPlancha(${idx})" style="border-color:#86efac"></div>
+          <div class="field"><label>Ancho (mm)</label>
+            <input type="number" id="sob-ancho-${idx}" inputmode="numeric" placeholder="mm" oninput="calcSobPlancha(${idx})" style="border-color:#86efac"></div>
+          <div class="field"><label>Largo (mm)</label>
+            <input type="number" id="sob-largo-${idx}" inputmode="numeric" placeholder="mm" oninput="calcSobPlancha(${idx})" style="border-color:#86efac"></div>
+        </div>
+        <div class="frow">
+          <div class="field"><label>Cant. sobrantes</label>
+            <input type="number" id="sob-qty-${idx}" value="1" min="1" oninput="calcSobPlancha(${idx})" style="border-color:#86efac"></div>
+          <div class="field"><label>Peso sobrante (kg) AUTO</label>
+            <input type="number" id="sob-peso-${idx}" readonly placeholder="calculado" style="background:#f0fdf4;font-weight:700;border-color:#86efac"></div>
+        </div>
+        <div class="frow">
+          <div class="field"><label>Destino</label>
+            <select id="sob-dest-${idx}" style="font-size:14px;border-color:#86efac">
+              <option value="stock">📦 Stock</option>
+              <option value="waste">🗑 Desperdicio</option>
+            </select>
+          </div>
+          <div class="field"><label>Ubicación / Ref.</label>
+            <input type="text" id="sob-ref-${idx}" placeholder="Rack A-3..." style="border-color:#86efac">
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="sob-desp-box-${idx}" style="display:none;border-radius:10px;padding:.75rem;margin-bottom:.5rem"></div>`;
+}
+
+function calcSobPlancha(idx){
+  const planchas = draft.pl.planchas || [];
+  const pl = planchas[idx] || draft.pl;
+  const hay = document.getElementById(`sob-hay-${idx}`)?.value;
+  const camposEl = document.getElementById(`sob-fields-${idx}`);
+  if(camposEl) camposEl.style.display = hay==='si'?'block':'none';
+
+  const e = parseFloat(document.getElementById(`sob-esp-${idx}`)?.value)||0;
+  const a = parseFloat(document.getElementById(`sob-ancho-${idx}`)?.value)||0;
+  const l = parseFloat(document.getElementById(`sob-largo-${idx}`)?.value)||0;
+  const q = parseFloat(document.getElementById(`sob-qty-${idx}`)?.value)||1;
+  const sobPeso = (hay==='si' && e&&a&&l) ? e*a*l*D*q : 0;
+  if(document.getElementById(`sob-peso-${idx}`))
+    document.getElementById(`sob-peso-${idx}`).value = sobPeso>0 ? sobPeso.toFixed(2) : '';
+
+  // Desperdicio de esta plancha
+  const qtyCortado = draft.ct.cortesPorPlancha?.[idx]?.qty || 0;
+  const pesoPzas = qtyCortado * selParte.pu;
+  const plPeso = pl.peso || 0;
+  const sobReal = hay==='si' ? sobPeso : 0;
+  const desp = plPeso > 0 ? Math.max(0, plPeso - pesoPzas - sobReal) : 0;
+  const pctAprov = plPeso>0 ? (pesoPzas/plPeso*100) : 0;
+  const pctSob   = plPeso>0 ? (sobReal/plPeso*100) : 0;
+  const pctDesp  = plPeso>0 ? (desp/plPeso*100) : 0;
+
+  const db = document.getElementById(`sob-desp-box-${idx}`);
+  if(db && plPeso>0){
+    db.style.display = '';
+    db.innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+        <div style="background:#d1fae5;border-radius:8px;padding:6px;text-align:center">
+          <div style="font-size:9px;color:#065f46;font-weight:700">✅ APROVECH.</div>
+          <div style="font-size:17px;font-weight:800;color:#065f46">${pctAprov.toFixed(1)}%</div>
+          <div style="font-size:9px;color:#065f46">${pesoPzas.toFixed(1)} kg</div>
+        </div>
+        <div style="background:${sobReal>0?'#dbeafe':'#f3f4f6'};border-radius:8px;padding:6px;text-align:center">
+          <div style="font-size:9px;color:#1e40af;font-weight:700">📦 SOBRANTE</div>
+          <div style="font-size:17px;font-weight:800;color:#1e40af">${pctSob.toFixed(1)}%</div>
+          <div style="font-size:9px;color:#1e40af">${sobReal.toFixed(1)} kg</div>
+        </div>
+        <div style="background:${pctDesp>8?'#fee2e2':'#fef3c7'};border-radius:8px;padding:6px;text-align:center">
+          <div style="font-size:9px;color:${pctDesp>8?'#991b1b':'#92400e'};font-weight:700">🗑 DESP.</div>
+          <div style="font-size:17px;font-weight:800;color:${pctDesp>8?'#991b1b':'#92400e'}">${pctDesp.toFixed(1)}%</div>
+          <div style="font-size:9px;color:${pctDesp>8?'#991b1b':'#92400e'}">${desp.toFixed(1)} kg</div>
+        </div>
+      </div>
+      ${pctDesp>8?`<div style="background:#fee2e2;border-radius:6px;padding:4px 8px;margin-top:4px;font-size:11px;color:#991b1b;font-weight:700">⚠ Desperdicio alto (${pctDesp.toFixed(1)}%) — revisa dimensiones del sobrante</div>`:''}`;
+  }
+  calcSobGlobal();
+}
+
+function calcSobGlobal(){
+  const planchas = draft.pl.planchas || [];
+  if(planchas.length <= 1) return;
+  let totalPl=0, totalPzas=0, totalSob=0, totalDesp=0;
+  planchas.forEach((pl,i)=>{
+    const hay = document.getElementById(`sob-hay-${i}`)?.value;
+    const sobPeso = hay==='si' ? parseFloat(document.getElementById(`sob-peso-${i}`)?.value)||0 : 0;
+    const qtyCortado = draft.ct.cortesPorPlancha?.[i]?.qty||0;
+    const pesoPzas = qtyCortado * selParte.pu;
+    const plPeso = pl.peso||0;
+    totalPl += plPeso; totalPzas += pesoPzas; totalSob += sobPeso;
+    totalDesp += Math.max(0, plPeso - pesoPzas - sobPeso);
+  });
+  const pctA = totalPl>0?(totalPzas/totalPl*100):0;
+  const pctS = totalPl>0?(totalSob/totalPl*100):0;
+  const pctD = totalPl>0?(totalDesp/totalPl*100):0;
+  document.getElementById('sob-resumen-grid').innerHTML = `
+    <div style="text-align:center">
+      <div style="font-size:9px;opacity:.7;font-weight:700">✅ APROVECH.</div>
+      <div style="font-size:22px;font-weight:800;color:#86efac">${pctA.toFixed(1)}%</div>
+      <div style="font-size:10px;opacity:.7">${totalPzas.toFixed(1)} kg</div>
+    </div>
+    <div style="text-align:center">
+      <div style="font-size:9px;opacity:.7;font-weight:700">📦 SOBRANTE</div>
+      <div style="font-size:22px;font-weight:800;color:#93c5fd">${pctS.toFixed(1)}%</div>
+      <div style="font-size:10px;opacity:.7">${totalSob.toFixed(1)} kg</div>
+    </div>
+    <div style="text-align:center">
+      <div style="font-size:9px;opacity:.7;font-weight:700">🗑 DESPERD.</div>
+      <div style="font-size:22px;font-weight:800;color:${pctD>8?'#fca5a5':'#fde68a'}">${pctD.toFixed(1)}%</div>
+      <div style="font-size:10px;opacity:.7">${totalDesp.toFixed(1)} kg</div>
+    </div>`;
+}
+
+// Compat stubs para no romper referencias antiguas
+function toggleSob(){ calcSobPlancha(0); }
+function calcSob(){ calcSobPlancha(0); }
 
 function guardarCorte(){
   const btn=document.getElementById('btn-guardar-corte');
   btn.disabled=true;btn.textContent='Guardando...';
-  const hay=document.getElementById('sob-hay').value;
-  const sobPeso=hay==='si'?gv('sob-peso'):0;
-  const desp=Math.max(0,(draft.pl.peso||0)-draft.ct.pesoPzas-(hay==='si'?sobPeso:0));
-  // Build plancha summary for record
-  const pl0 = draft.pl.planchas?.[0] || draft.pl;
+
+  const planchas = draft.pl.planchas || [];
+  const esSoloUna = planchas.length <= 1 || draft.pl.tipo !== 'plancha';
+
+  // Recoger datos de sobrante por plancha
+  const sobrantesPorPlancha = [];
+  let totalSobPeso = 0, totalDesp = 0;
+
+  if(esSoloUna){
+    const pl = planchas[0] || draft.pl;
+    const hay = document.getElementById('sob-hay-0')?.value || 'no';
+    const sobPeso = hay==='si' ? parseFloat(document.getElementById('sob-peso-0')?.value)||0 : 0;
+    const desp = Math.max(0,(draft.pl.peso||0) - draft.ct.pesoPzas - sobPeso);
+    sobrantesPorPlancha.push({
+      planchaIdx:0, hay, sobPeso,
+      esp: parseFloat(document.getElementById('sob-esp-0')?.value)||pl.esp||0,
+      ancho: parseFloat(document.getElementById('sob-ancho-0')?.value)||0,
+      largo: parseFloat(document.getElementById('sob-largo-0')?.value)||0,
+      qty: parseFloat(document.getElementById('sob-qty-0')?.value)||1,
+      dest: document.getElementById('sob-dest-0')?.value||'stock',
+      ref: document.getElementById('sob-ref-0')?.value.trim()||'',
+      colada: pl.num||draft.pl.num||'—', mat: pl.mat||draft.pl.mat||'—',
+      desperdicio: parseFloat(desp.toFixed(2))
+    });
+    totalSobPeso = sobPeso;
+    totalDesp = desp;
+  } else {
+    planchas.forEach((pl, i) => {
+      const hay = document.getElementById(`sob-hay-${i}`)?.value || 'no';
+      const sobPeso = hay==='si' ? parseFloat(document.getElementById(`sob-peso-${i}`)?.value)||0 : 0;
+      const qtyCortado = draft.ct.cortesPorPlancha?.[i]?.qty||0;
+      const pesoPzasI = qtyCortado * selParte.pu;
+      const desp = Math.max(0,(pl.peso||0) - pesoPzasI - sobPeso);
+      sobrantesPorPlancha.push({
+        planchaIdx:i, hay, sobPeso,
+        esp: parseFloat(document.getElementById(`sob-esp-${i}`)?.value)||pl.esp||0,
+        ancho: parseFloat(document.getElementById(`sob-ancho-${i}`)?.value)||0,
+        largo: parseFloat(document.getElementById(`sob-largo-${i}`)?.value)||0,
+        qty: parseFloat(document.getElementById(`sob-qty-${i}`)?.value)||1,
+        dest: document.getElementById(`sob-dest-${i}`)?.value||'stock',
+        ref: document.getElementById(`sob-ref-${i}`)?.value.trim()||'',
+        colada: pl.num||'—', mat: pl.mat||'—',
+        desperdicio: parseFloat(desp.toFixed(2))
+      });
+      totalSobPeso += sobPeso;
+      totalDesp += desp;
+    });
+  }
+
+  // Build record — usar plancha 1 como referencia para campos legacy
+  const pl0 = planchas[0] || draft.pl;
+  const sob0 = sobrantesPorPlancha[0] || {};
   const rec={
     id:Date.now(),tipo:'corte',fecha:todayISO(),hora:timeNow(),
     opId:W.id,opNom:`${W.nom} ${W.ape}`,opRol:W.rol,
@@ -1252,21 +1491,31 @@ function guardarCorte(){
     pl_peso:draft.pl.peso||0,
     pl_tipo:draft.pl.tipo||'plancha',
     pl_planchas: draft.pl.planchas ? JSON.stringify(draft.pl.planchas) : '',
+    pl_cortes_por_plancha: draft.ct.cortesPorPlancha ? JSON.stringify(draft.ct.cortesPorPlancha) : '',
     pl_kgM: draft.pl.kgM||0,
-    sob_hay:hay,sob_peso:sobPeso,
-    sob_esp:gv('sob-esp')||pl0.esp||0,
-    sob_ancho:gv('sob-ancho')||pl0.ancho||0,
-    sob_largo:gv('sob-largo'),sob_qty:gv('sob-qty')||1,
-    sob_colada:pl0.num||draft.pl.num||'—',
-    sob_mat:pl0.mat||draft.pl.mat||'—',
-    sob_dest:document.getElementById('sob-dest').value,
-    sob_ref:document.getElementById('sob-ref').value.trim(),
-    desperdicio:parseFloat(desp.toFixed(2)),
+    // Sobrante resumen (plancha 1 para compat)
+    sob_hay:sob0.hay||'no',sob_peso:sob0.sobPeso||0,
+    sob_esp:sob0.esp||0,
+    sob_ancho:sob0.ancho||0,
+    sob_largo:sob0.largo||0,sob_qty:sob0.qty||1,
+    sob_colada:sob0.colada||'—',
+    sob_mat:sob0.mat||'—',
+    sob_dest:sob0.dest||'stock',
+    sob_ref:sob0.ref||'',
+    desperdicio:parseFloat(totalDesp.toFixed(2)),
+    // Detalle completo multi-plancha
+    sob_por_plancha: JSON.stringify(sobrantesPorPlancha),
   };
   saveRec(rec);
   setSync(true,'ok');
   btn.disabled=false;btn.textContent='✔  Guardar registro de corte';
-  document.getElementById('ok-detail').innerHTML=`✂ <strong>Corte</strong> · ${selCj.cj}/${selParte.pr} · <strong>${rec.qty} piezas</strong><br>📋 ${rec.pl_num} · Sobrante: ${hay==='si'?sobPeso.toFixed(1)+' kg':'ninguno'} · Desp: ${desp.toFixed(1)} kg`;
+
+  // Texto resumen
+  const sobResumen = planchas.length > 1
+    ? `${sobrantesPorPlancha.filter(s=>s.hay==='si').length} sobrante(s) de ${planchas.length} planchas`
+    : (sob0.hay==='si' ? `${totalSobPeso.toFixed(1)} kg sobrante` : 'sin sobrante');
+
+  document.getElementById('ok-detail').innerHTML=`✂ <strong>Corte</strong> · ${selCj.cj}/${selParte.pr} · <strong>${rec.qty} piezas</strong><br>📋 ${planchas.length>1?planchas.length+' planchas':rec.pl_num} · ${sobResumen} · Desp total: ${totalDesp.toFixed(1)} kg`;
   loadMyRecs().then(()=>{ document.getElementById('ok-hist').innerHTML=renderHistItems(_cache.filter(r=>r.fecha===todayISO())); });
   renderHomeHist();go('sc-ok');
 }
