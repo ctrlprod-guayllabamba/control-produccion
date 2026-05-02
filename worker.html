@@ -430,7 +430,7 @@ document.addEventListener('DOMContentLoaded',()=>{
 // ================================================
 // CONFIGURACIÓN — PEGA AQUÍ TU URL DE GOOGLE
 // ================================================
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbwlzDI5gkgp2PjF3MI3fdaYUfprOx4yAyHeFkTKlA5bVib5ZAH-QEfJwTOEFJiQXzzM/exec';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbxGAjW8ZwoqNlc4104aqnk-1LNwyk7NPUeDDvzqxHwXdRBjABZ-n8MG6R1gRKipnFp3/exec';
 // Ejemplo: 'https://script.google.com/macros/s/AKfycb.../exec'
 // ================================================
 
@@ -451,44 +451,49 @@ const DEFAULT_WORKERS=[
 const GAS = {
   configured: () => GAS_URL && !GAS_URL.includes('PEGA_AQUI'),
 
-  // GET: intenta fetch primero, luego JSONP como fallback
+  // GET: fetch directo primero, JSONP como fallback para iOS
   get: async (action, params={}) => {
     if (!GAS.configured()) throw new Error('no_url');
-    const q = new URLSearchParams({action, ...params});
-    // Intento 1: fetch directo (funciona en Android/desktop y a veces iOS)
+    const q = new URLSearchParams({action, ...params}).toString();
+    // Intento 1: fetch directo
     try {
-      const ctrl = new AbortController();
-      setTimeout(()=>ctrl.abort(), 6000);
-      const r = await fetch(GAS_URL+'?'+q, {redirect:'follow', signal:ctrl.signal});
+      const r = await Promise.race([
+        fetch(GAS_URL + '?' + q, {redirect:'follow', cache:'no-cache'}),
+        new Promise((_,reject) => setTimeout(()=>reject(new Error('timeout')), 6000))
+      ]);
       const txt = await r.text();
-      if(txt && txt.startsWith('{')) {
+      if(txt && (txt.startsWith('{') || txt.startsWith('['))) {
         const d = JSON.parse(txt);
         if(d && d.error) throw new Error(d.error);
         return d;
       }
-      if(txt && txt.startsWith('[')) return JSON.parse(txt);
     } catch(e1) {
       console.log('fetch GET falló, intentando JSONP:', e1.message);
     }
-    // Intento 2: JSONP (funciona en iOS Safari)
+    // Intento 2: JSONP para iOS Safari
     return new Promise((resolve, reject) => {
       const cbName = '_cb' + Date.now() + Math.random().toString(36).slice(2);
+      let script = null;
       const timer = setTimeout(() => {
         delete window[cbName];
-        script && script.parentNode && script.parentNode.removeChild(script);
+        if(script && script.parentNode) script.parentNode.removeChild(script);
         reject(new Error('timeout'));
       }, 10000);
       window[cbName] = (data) => {
         clearTimeout(timer);
         delete window[cbName];
-        script && script.parentNode && script.parentNode.removeChild(script);
+        if(script && script.parentNode) script.parentNode.removeChild(script);
         if(data && data.error) reject(new Error(data.error));
         else resolve(data);
       };
-      const q2 = new URLSearchParams({action, callback:cbName, ...params});
-      const script = document.createElement('script');
+      const q2 = new URLSearchParams({action, callback:cbName, ...params}).toString();
+      script = document.createElement('script');
       script.src = GAS_URL + '?' + q2;
-      script.onerror = () => { clearTimeout(timer); delete window[cbName]; reject(new Error('script_error')); };
+      script.onerror = () => {
+        clearTimeout(timer);
+        delete window[cbName];
+        reject(new Error('script_error'));
+      };
       document.head.appendChild(script);
     });
   },
