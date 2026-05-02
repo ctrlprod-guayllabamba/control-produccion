@@ -1285,14 +1285,47 @@ const LS = {
 
 const GAS = {
   configured:()=> GAS_URL && GAS_URL!=='PEGA_AQUI_TU_URL_DE_GOOGLE_APPS_SCRIPT',
+
   get: async(action, params={})=>{
     const q=new URLSearchParams({action,...params}).toString();
-    const r=await fetch(`${GAS_URL}?${q}`);
-    const d=await r.json(); if(d.error) throw new Error(d.error); return d;
+    // Intento 1: fetch con redirect y timeout
+    try {
+      const ctrl = new AbortController();
+      const tid = setTimeout(()=>ctrl.abort(), 10000);
+      const r = await fetch(`${GAS_URL}?${q}`, {redirect:'follow', cache:'no-cache', signal:ctrl.signal});
+      clearTimeout(tid);
+      const txt = await r.text();
+      if(txt && (txt.startsWith('{')||txt.startsWith('['))) {
+        const d=JSON.parse(txt); if(d.error) throw new Error(d.error); return d;
+      }
+      throw new Error('respuesta no JSON: '+txt.slice(0,80));
+    } catch(e) {
+      // Intento 2: JSONP (funciona en redes corporativas con bloqueo CORS)
+      return new Promise((resolve,reject)=>{
+        const cb='_scb'+Date.now()+Math.random().toString(36).slice(2);
+        let sc=null;
+        const timer=setTimeout(()=>{delete window[cb];sc&&sc.remove();reject(new Error('timeout'));},12000);
+        window[cb]=(data)=>{clearTimeout(timer);delete window[cb];sc&&sc.remove();
+          if(data&&data.error)reject(new Error(data.error)); else resolve(data);};
+        sc=document.createElement('script');
+        sc.src=`${GAS_URL}?${new URLSearchParams({action,callback:cb,...params})}`;
+        sc.onerror=()=>{clearTimeout(timer);delete window[cb];reject(new Error('script_error'));};
+        document.head.appendChild(sc);
+      });
+    }
   },
+
   post: async(action,data)=>{
-    const r=await fetch(GAS_URL,{method:'POST',body:JSON.stringify({action,data})});
-    return r.json();
+    try {
+      const ctrl = new AbortController();
+      setTimeout(()=>ctrl.abort(), 10000);
+      const r=await fetch(GAS_URL,{method:'POST',redirect:'follow',
+        body:JSON.stringify({action,data}), signal:ctrl.signal});
+      const txt=await r.text();
+      if(txt&&(txt.startsWith('{')||txt.startsWith('['))) return JSON.parse(txt);
+    } catch(e) {}
+    // Fallback GET/JSONP para POST también
+    try { return await GAS.get(action,{data:JSON.stringify(data)}); } catch(e){ return null; }
   },
 };
 
@@ -1302,36 +1335,33 @@ function saveAll(){
 
 async function loadFromServer(){
   const si=document.getElementById('sync-indicator');
-  if(si) si.textContent='⏳ Cargando datos...';
+  if(si){ si.textContent='⏳ Sincronizando...'; si.style.color='var(--gm)'; }
 
   if(GAS.configured()){
     try{
-      // Load sequentially to avoid race conditions
+      // Cargar operarios
       const ops = await GAS.get('getOperarios');
-      if(ops && ops.length) { 
+      if(ops && Array.isArray(ops) && ops.length) {
         ST.ops=ops; LS.save('ops',ops);
-      } else if(ops && ops.length===0 && ST.ops.length>0) {
+      } else if(Array.isArray(ops) && ops.length===0 && ST.ops.length>0) {
         GAS.post('bulkOperarios', ST.ops).catch(()=>{});
       }
 
+      // Cargar registros — Array.isArray para distinguir [] válido de null/error
       const recs = await GAS.get('getRegistros');
-      if(recs && recs.length>=0){
+      if(Array.isArray(recs)){
         ST.cortes=[]; ST.prods=[]; ST.exec={};
         recs.forEach(r=>{
-          // Normalize fields: worker uses cj/pr, supervisor uses conjunto/parte
           r.conjunto = r.conjunto || r.cj || '';
           r.parte    = r.parte    || r.pr || '—';
           r.qty      = Number(r.qty) || 0;
           r.pesoParts= Number(r.pesoParts||r.pesoPzas) || 0;
           r.sobPeso  = Number(r.sobPeso||r.sob_peso) || 0;
           r.desperdicio = Number(r.desperdicio) || 0;
-          if(r.fase==='Corte'||r.tipo==='corte'){ 
-            r.fase = 'Corte';
-            ST.cortes.push(r); 
-            addExec(r.conjunto, r.parte, 'Corte', r.qty); 
-          } else { 
-            ST.prods.push(r); 
-            addExec(r.conjunto, r.parte, r.fase, r.qty); 
+          if(r.fase==='Corte'||r.tipo==='corte'){
+            r.fase='Corte'; ST.cortes.push(r); addExec(r.conjunto,r.parte,'Corte',r.qty);
+          } else {
+            ST.prods.push(r); addExec(r.conjunto,r.parte,r.fase,r.qty);
           }
         });
         LS.save('cortes',ST.cortes); LS.save('prods',ST.prods);
@@ -1341,7 +1371,7 @@ async function loadFromServer(){
     }catch(e){
       console.warn('GAS error:', e.message);
       _loadFromLS();
-      if(si){ si.textContent='⚠ Sin conexión a Google — datos locales'; si.style.color='var(--warnt)'; }
+      if(si){ si.textContent='🟡 Sin conexión — mostrando datos locales'; si.style.color='var(--warnt)'; }
     }
   } else {
     _loadFromLS();
@@ -2847,14 +2877,20 @@ document.addEventListener('DOMContentLoaded', async ()=>{
 
   // Auto-refresh every 30 seconds - picks up worker registros automatically
   let _refreshCnt = 0;
+  let _refreshBusy = false;
   setInterval(async () => {
+    if(_refreshBusy) return; // evitar llamadas apiladas si GAS tarda
+    _refreshBusy = true;
     _refreshCnt++;
-    await loadFromServer();
-    renderDashboard();
-    const si = document.getElementById('sync-indicator');
-    const t = new Date().toLocaleTimeString('es-EC',{hour:'2-digit',minute:'2-digit'});
-    if(si) si.textContent = `= Auto-sync ${t} (#${_refreshCnt})`;
-    si && (si.style.color = 'var(--gt)');
+    try {
+      await loadFromServer();
+      renderDashboard();
+      const si = document.getElementById('sync-indicator');
+      const t = new Date().toLocaleTimeString('es-EC',{hour:'2-digit',minute:'2-digit'});
+      if(si) si.textContent = `🟢 Auto-sync ${t} (#${_refreshCnt})`;
+      si && (si.style.color = 'var(--gt)');
+    } catch(e) {}
+    _refreshBusy = false;
   }, 30000);
 });
 </script>
