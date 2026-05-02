@@ -856,10 +856,14 @@ function selectParte(prId){
   if(!selParte)return;
   if(selFase==='Corte'){
     draft={pl:{},ct:{}};
-    document.getElementById('sb-plancha').innerHTML=stepbar(1,['Plancha','Cortes','Sobrante']);
-    document.getElementById('pl-mat').value='A588-50';
-    ['pl-esp','pl-ancho','pl-largo','pl-peso','pl-qty'].forEach(id=>sv(id,id==='pl-qty'?1:''));
-    document.getElementById('pl-resumen').style.display='none';
+    document.getElementById('sb-plancha').innerHTML=stepbar(1,['Material','Cortes','Sobrante']);
+    // Reset material type to plancha
+    const tipoSel = document.getElementById('pl-tipo');
+    if(tipoSel) tipoSel.value = 'plancha';
+    onTipoMaterialWk();
+    initPlanchasWk();
+    sv('pl-peso','');
+    window._perfilData = null;
     go('sc-plancha');
   } else {
     buildForm();go('sc-form');
