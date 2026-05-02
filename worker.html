@@ -1002,13 +1002,17 @@ function selectParte(prId){
     document.getElementById('sb-plancha').innerHTML=stepbar(1,['Material','Cortes','Sobrante']);
     const tipoSel=document.getElementById('pl-tipo');
     if(tipoSel) tipoSel.value='plancha';
-    onTipoMaterialWk();
+
+    // Asegurar que el panel plancha esté visible ANTES de manipularlo
+    const dimsPlancha = document.getElementById('wk-dims-plancha');
+    const dimsIrreg = document.getElementById('wk-dims-irreg');
+    const dimsPerfil = document.getElementById('wk-dims-perfil');
+    if(dimsPlancha) dimsPlancha.style.display='';
+    if(dimsIrreg) dimsIrreg.style.display='none';
+    if(dimsPerfil) dimsPerfil.style.display='none';
 
     const piezasHI = PIEZAS_HI[selParte.perfil];
     if(piezasHI){
-      // Para viga HI: pre-crear una fila de plancha por cada tipo de sub-pieza
-      // El operario ingresa las dimensiones COMERCIALES de cada plancha
-      // (el espesor es fijo por diseño, ancho y largo son los de la plancha real que usó)
       planchasData=[];
       document.getElementById('wk-planchas-list').innerHTML='';
       document.querySelectorAll('.hi-aviso').forEach(el=>el.remove());
@@ -1016,15 +1020,13 @@ function selectParte(prId){
       const aviso=document.createElement('div');
       aviso.className='hi-aviso';
       aviso.style.cssText='background:#fef3c7;border:1px solid #fcd34d;border-radius:10px;padding:10px 12px;font-size:12px;color:#92400e;margin-bottom:.5rem';
-      aviso.innerHTML=`
-        🏗 <strong>Viga ${selParte.perfil}</strong><br>
+      aviso.innerHTML=`🏗 <strong>Viga ${selParte.perfil}</strong><br>
         Ingresa las planchas comerciales que usaste.<br>
         <span style="font-size:10px;opacity:.8">El espesor está fijo por diseño. Completa ancho, largo y N° colada.</span>`;
-      document.getElementById('wk-dims-plancha').insertBefore(aviso,document.getElementById('wk-planchas-list'));
+      if(dimsPlancha) dimsPlancha.insertBefore(aviso, document.getElementById('wk-planchas-list'));
 
       piezasHI.forEach(pz=>{
         const idx=planchasData.length;
-        // Solo pre-llenar el espesor (fijo por diseño) — ancho/largo los ingresa el operario
         planchasData.push({esp:pz.esp, ancho:'', largo:'', qty:1, num:'', mat:'A588-50', peso:0, _pzTipo:pz.tipo, _pzDesc:pz.desc});
         addPlanchaRowHI(idx, pz);
       });
