@@ -1173,16 +1173,42 @@ global.Chart = class {
 <div class="container">
   <div class="card no-print">
     <div class="card-hdr">Generar Informe</div>
-    <div class="frow">
-      <div class="fg fix"><label>Tipo</label>
-        <select id="rpt-tipo" onchange="renderInforme()">
-          <option value="diario">Diario</option>
-          <option value="semanal">Semanal</option>
-          <option value="mensual">Mensual</option>
+    <div class="frow" style="flex-wrap:wrap;gap:.625rem;">
+      <div class="fg fix"><label>Tipo de informe</label>
+        <select id="rpt-tipo" onchange="onRptTipoChange()" style="font-weight:600;">
+          <option value="diario">📅 Diario</option>
+          <option value="semanal">📆 Semanal</option>
+          <option value="mensual">🗓 Mensual</option>
+          <option value="rango">📊 Rango personalizado</option>
+          <option value="operario">👷 Por operario</option>
+          <option value="conjunto">🔧 Por conjunto</option>
         </select>
       </div>
-      <div class="fg fix"><label>Fecha</label><input type="date" id="rpt-fecha" onchange="renderInforme()"></div>
-      <div class="fg" style="justify-content:flex-end;flex-direction:row;align-items:flex-end;">
+      <!-- Fecha simple (diario/semanal/mensual) -->
+      <div class="fg fix" id="rpt-fecha-wrap"><label>Fecha</label>
+        <input type="date" id="rpt-fecha" onchange="renderInforme()">
+      </div>
+      <!-- Rango personalizado -->
+      <div class="fg fix" id="rpt-desde-wrap" style="display:none;"><label>Desde</label>
+        <input type="date" id="rpt-desde" onchange="renderInforme()">
+      </div>
+      <div class="fg fix" id="rpt-hasta-wrap" style="display:none;"><label>Hasta</label>
+        <input type="date" id="rpt-hasta" onchange="renderInforme()">
+      </div>
+      <!-- Por operario -->
+      <div class="fg fix" id="rpt-op-wrap" style="display:none;"><label>Operario</label>
+        <select id="rpt-op" onchange="renderInforme()">
+          <option value="">Todos</option>
+        </select>
+      </div>
+      <!-- Por conjunto -->
+      <div class="fg fix" id="rpt-cj-wrap" style="display:none;"><label>Conjunto</label>
+        <select id="rpt-cj-filter" onchange="renderInforme()">
+          <option value="">Todos</option>
+        </select>
+      </div>
+      <div class="fg" style="justify-content:flex-end;flex-direction:row;align-items:flex-end;gap:6px;">
+        <button class="btn btn-g" onclick="renderInforme()">🔄 Generar</button>
         <button class="btn btn-s" onclick="window.print()">🖨 Imprimir</button>
       </div>
     </div>
@@ -2455,19 +2481,64 @@ function downloadTemplate(){
 
 // ======================= INFORMES =======================
 function setRptDate(){const el=document.getElementById('rpt-fecha');if(el&&!el.value)el.value=today();}
+function onRptTipoChange(){
+  const tipo=document.getElementById('rpt-tipo')?.value||'diario';
+  // Show/hide controls based on type
+  document.getElementById('rpt-fecha-wrap').style.display  = ['diario','semanal','mensual'].includes(tipo)?'':'none';
+  document.getElementById('rpt-desde-wrap').style.display  = tipo==='rango'?'':'none';
+  document.getElementById('rpt-hasta-wrap').style.display  = tipo==='rango'?'':'none';
+  document.getElementById('rpt-op-wrap').style.display     = tipo==='operario'?'':'none';
+  document.getElementById('rpt-cj-wrap').style.display     = tipo==='conjunto'?'':'none';
+  // Populate operario selector
+  if(tipo==='operario'){
+    const sel=document.getElementById('rpt-op');
+    sel.innerHTML='<option value="">Todos los operarios</option>'+
+      ST.ops.map(o=>`<option value="${o.id}">${o.nom} ${o.ape} — ${o.fase}</option>`).join('');
+  }
+  // Populate conjunto selector
+  if(tipo==='conjunto'){
+    const sel=document.getElementById('rpt-cj-filter');
+    sel.innerHTML='<option value="">Todos los conjuntos</option>'+
+      TEKLA.conjuntos.map(c=>`<option value="${c.conjunto}">${c.conjunto} — ${c.perfil}</option>`).join('');
+  }
+  renderInforme();
+}
+
 function renderInforme(){
   const tipo=document.getElementById('rpt-tipo')?.value||'diario';
   const fecha=document.getElementById('rpt-fecha')?.value||today();
   let filtro,lbl;
-  if(tipo==='diario'){filtro=r=>r.fecha===fecha;lbl=`Fecha: ${fecha}`;}
-  else if(tipo==='semanal'){
+
+  if(tipo==='diario'){
+    filtro=r=>r.fecha===fecha;
+    lbl=`Informe Diario — ${fecha}`;
+  } else if(tipo==='semanal'){
     const d=new Date(fecha),day=d.getDay()||7;
     const lun=new Date(d);lun.setDate(d.getDate()-day+1);
     const dom=new Date(lun);dom.setDate(lun.getDate()+6);
     const f0=lun.toISOString().split('T')[0],f1=dom.toISOString().split('T')[0];
-    filtro=r=>r.fecha>=f0&&r.fecha<=f1;lbl=`Semana: ${f0} al ${f1}`;
+    filtro=r=>r.fecha>=f0&&r.fecha<=f1;
+    lbl=`Informe Semanal — ${f0} al ${f1}`;
+  } else if(tipo==='mensual'){
+    const mes=fecha.slice(0,7);
+    filtro=r=>r.fecha.startsWith(mes);
+    lbl=`Informe Mensual — ${mes}`;
+  } else if(tipo==='rango'){
+    const desde=document.getElementById('rpt-desde')?.value||today();
+    const hasta=document.getElementById('rpt-hasta')?.value||today();
+    filtro=r=>r.fecha>=desde&&r.fecha<=hasta;
+    lbl=`Informe por Rango — ${desde} al ${hasta}`;
+  } else if(tipo==='operario'){
+    const opId=document.getElementById('rpt-op')?.value||'';
+    const op=ST.ops.find(o=>String(o.id)===opId);
+    filtro=opId ? r=>String(r.opId)===opId : r=>true;
+    lbl=opId ? `Informe por Operario — ${op?op.nom+' '+op.ape:''}` : 'Informe — Todos los operarios';
+  } else if(tipo==='conjunto'){
+    const cj=document.getElementById('rpt-cj-filter')?.value||'';
+    filtro=cj ? r=>(r.conjunto||r.cj)===cj : r=>true;
+    lbl=cj ? `Informe por Conjunto — ${cj}` : 'Informe — Todos los conjuntos';
   } else {
-    const mes=fecha.slice(0,7);filtro=r=>r.fecha.startsWith(mes);lbl=`Mes: ${mes}`;
+    filtro=r=>true; lbl='Informe General';
   }
   const cortes=ST.cortes.filter(filtro);
   const prods=ST.prods.filter(filtro);
