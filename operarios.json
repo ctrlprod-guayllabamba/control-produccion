@@ -3,80 +3,104 @@
     "id": 1,
     "nom": "Carlos",
     "ape": "Mendoza",
-    "ced": "1712345678",
     "rol": "Cortador",
-    "fase": "Corte"
+    "fase": "Corte",
+    "icon": "✂",
+    "est": "activo",
+    "ced": null,
+    "tel": null,
+    "emp": null,
+    "creado": null
   },
   {
     "id": 2,
     "nom": "Pedro",
     "ape": "Vargas",
-    "ced": "1723456789",
     "rol": "Armador",
-    "fase": "Armado"
+    "fase": "Armado",
+    "icon": "🔧",
+    "est": "activo",
+    "ced": null,
+    "tel": null,
+    "emp": null,
+    "creado": null
   },
   {
     "id": 3,
     "nom": "Luis",
     "ape": "Torres",
-    "ced": "1734567890",
     "rol": "Soldador",
-    "fase": "Soldadura"
+    "fase": "Soldadura",
+    "icon": "🔥",
+    "est": "activo",
+    "ced": null,
+    "tel": null,
+    "emp": null,
+    "creado": null
   },
   {
     "id": 4,
     "nom": "Marco",
     "ape": "Reyes",
-    "ced": "1745678901",
     "rol": "Perforador",
-    "fase": "Perforaciones"
+    "fase": "Perforaciones",
+    "icon": "🔩",
+    "est": "activo",
+    "ced": null,
+    "tel": null,
+    "emp": null,
+    "creado": null
   },
   {
     "id": 5,
     "nom": "Jorge",
     "ape": "Castillo",
-    "ced": "1756789012",
     "rol": "Ayudante",
-    "fase": "Limpieza Mecánica"
+    "fase": "Limpieza Mecánica",
+    "icon": "🧹",
+    "est": "activo",
+    "ced": null,
+    "tel": null,
+    "emp": null,
+    "creado": null
   },
   {
     "id": 6,
     "nom": "Andrés",
     "ape": "Salazar",
-    "ced": "1767890123",
     "rol": "Pintor",
-    "fase": "Pintura"
+    "fase": "Pintura",
+    "icon": "🎨",
+    "est": "activo",
+    "ced": null,
+    "tel": null,
+    "emp": null,
+    "creado": null
   },
   {
-    "id": 7,
-    "nom": "Raúl",
-    "ape": "Mora",
-    "ced": "1778901234",
-    "rol": "Operador Grúa",
-    "fase": "Soporte"
-  },
-  {
-    "id": 1777596148121,
+    "id": 1777739272570,
     "nom": "Jose Luis",
     "ape": "Loor Cevallos",
-    "ced": "0918756644",
     "rol": "Cortador",
     "fase": "Corte",
     "icon": "✂",
-    "tel": "0999955739",
+    "est": "activo",
+    "ced": 918756644,
+    "tel": 999955739,
     "emp": "GEOFORCE",
-    "est": "activo"
+    "creado": "2026-05-02T16:25:57.363Z"
   },
   {
-    "id": 1777690982765,
+    "id": 1777739313671,
     "nom": "Teresa Nathaly",
     "ape": "Loor Quiroz",
-    "ced": "1307752194",
     "rol": "Cortador",
     "fase": "Corte",
     "icon": "✂",
-    "tel": "0987223333",
+    "est": "activo",
+    "ced": 137752194,
+    "tel": 999955739,
     "emp": "GEOFORCE",
-    "est": "activo"
+    "creado": "2026-05-02T16:26:38.509Z"
   }
 ]
