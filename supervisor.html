@@ -1207,6 +1207,13 @@ global.Chart = class {
           <option value="">Todos</option>
         </select>
       </div>
+      <!-- Fecha adicional para operario/conjunto -->
+      <div class="fg fix" id="rpt-op-desde-wrap" style="display:none;"><label>Desde (opcional)</label>
+        <input type="date" id="rpt-op-desde" onchange="renderInforme()">
+      </div>
+      <div class="fg fix" id="rpt-op-hasta-wrap" style="display:none;"><label>Hasta (opcional)</label>
+        <input type="date" id="rpt-op-hasta" onchange="renderInforme()">
+      </div>
       <div class="fg" style="justify-content:flex-end;flex-direction:row;align-items:flex-end;gap:6px;">
         <button class="btn btn-g" onclick="renderInforme()">🔄 Generar</button>
         <button class="btn btn-s" onclick="window.print()">🖨 Imprimir</button>
@@ -2487,8 +2494,10 @@ function onRptTipoChange(){
   document.getElementById('rpt-fecha-wrap').style.display  = ['diario','semanal','mensual'].includes(tipo)?'':'none';
   document.getElementById('rpt-desde-wrap').style.display  = tipo==='rango'?'':'none';
   document.getElementById('rpt-hasta-wrap').style.display  = tipo==='rango'?'':'none';
-  document.getElementById('rpt-op-wrap').style.display     = tipo==='operario'?'':'none';
-  document.getElementById('rpt-cj-wrap').style.display     = tipo==='conjunto'?'':'none';
+  document.getElementById('rpt-op-wrap').style.display        = tipo==='operario'?'':'none';
+  document.getElementById('rpt-cj-wrap').style.display        = tipo==='conjunto'?'':'none';
+  document.getElementById('rpt-op-desde-wrap').style.display  = ['operario','conjunto'].includes(tipo)?'':'none';
+  document.getElementById('rpt-op-hasta-wrap').style.display  = ['operario','conjunto'].includes(tipo)?'':'none';
   // Populate operario selector
   if(tipo==='operario'){
     const sel=document.getElementById('rpt-op');
@@ -2531,12 +2540,28 @@ function renderInforme(){
   } else if(tipo==='operario'){
     const opId=document.getElementById('rpt-op')?.value||'';
     const op=ST.ops.find(o=>String(o.id)===opId);
-    filtro=opId ? r=>String(r.opId)===opId : r=>true;
-    lbl=opId ? `Informe por Operario — ${op?op.nom+' '+op.ape:''}` : 'Informe — Todos los operarios';
+    const opDesde=document.getElementById('rpt-op-desde')?.value||'';
+    const opHasta=document.getElementById('rpt-op-hasta')?.value||'';
+    filtro=r=>{
+      const matchOp = opId ? String(r.opId)===opId : true;
+      const matchDesde = opDesde ? r.fecha>=opDesde : true;
+      const matchHasta = opHasta ? r.fecha<=opHasta : true;
+      return matchOp && matchDesde && matchHasta;
+    };
+    let lblFecha = opDesde||opHasta ? ` | ${opDesde||'inicio'} → ${opHasta||'hoy'}` : '';
+    lbl=opId ? `Informe por Operario — ${op?op.nom+' '+op.ape:''}${lblFecha}` : `Informe — Todos los operarios${lblFecha}`;
   } else if(tipo==='conjunto'){
     const cj=document.getElementById('rpt-cj-filter')?.value||'';
-    filtro=cj ? r=>(r.conjunto||r.cj)===cj : r=>true;
-    lbl=cj ? `Informe por Conjunto — ${cj}` : 'Informe — Todos los conjuntos';
+    const cjDesde=document.getElementById('rpt-op-desde')?.value||'';
+    const cjHasta=document.getElementById('rpt-op-hasta')?.value||'';
+    filtro=r=>{
+      const matchCj = cj ? (r.conjunto||r.cj)===cj : true;
+      const matchDesde = cjDesde ? r.fecha>=cjDesde : true;
+      const matchHasta = cjHasta ? r.fecha<=cjHasta : true;
+      return matchCj && matchDesde && matchHasta;
+    };
+    let lblFecha2 = cjDesde||cjHasta ? ` | ${cjDesde||'inicio'} → ${cjHasta||'hoy'}` : '';
+    lbl=cj ? `Informe por Conjunto — ${cj}${lblFecha2}` : `Informe — Todos los conjuntos${lblFecha2}`;
   } else {
     filtro=r=>true; lbl='Informe General';
   }
