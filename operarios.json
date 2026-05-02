@@ -56,7 +56,7 @@
     "fase": "Soporte"
   },
   {
-    "id": 1777646393920,
+    "id": 1777596148121,
     "nom": "Jose Luis",
     "ape": "Loor Cevallos",
     "ced": "0918756644",
@@ -64,18 +64,18 @@
     "fase": "Corte",
     "icon": "✂",
     "tel": "0999955739",
-    "emp": "Geoforce",
+    "emp": "GEOFORCE",
     "est": "activo"
   },
   {
-    "id": 1777689135837,
+    "id": 1777690982765,
     "nom": "Teresa Nathaly",
-    "ape": "Quiroz Ponce",
+    "ape": "Loor Quiroz",
     "ced": "1307752194",
     "rol": "Cortador",
     "fase": "Corte",
     "icon": "✂",
-    "tel": "0987232333",
+    "tel": "0987223333",
     "emp": "GEOFORCE",
     "est": "activo"
   }
