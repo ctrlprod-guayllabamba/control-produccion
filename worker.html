@@ -681,30 +681,6 @@ async function loadAndRenderWorkers() {
   if(dbg) setTimeout(()=>dbg.style.display='none', 8000);
 }
 
-  // PASO 2: Fallback a GAS
-  if (GAS.configured()) {
-    try {
-      const ops = await GAS.get('getOperarios');
-      if (ops && ops.length) {
-        ws = ops;
-        LS.s(WORKER_OPS_KEY, ws);
-        renderWorkers(ws);
-        setSync(true, 'online');
-        const opId = new URLSearchParams(location.search).get('op');
-        if (opId && !W) { const w = ws.find(x => x.id == opId); if (w) selectWorker(w); }
-      } else {
-        // GAS respondió pero sin datos — usar caché, marcar amarillo solo si no había caché
-        if (!tieneCacheLocal) setSync(false, 'offline');
-      }
-    } catch(e) {
-      // Sin red — si tenemos caché local está bien, amarillo en lugar de rojo
-      setSync(false, tieneCacheLocal ? 'local' : 'offline');
-    }
-  } else {
-    setSync(false, 'local');
-  }
-}
-
 function renderWorkers(ws){
   document.getElementById('worker-list').innerHTML=ws.length
     ? ws.filter(w=>w.est!=='inactivo').map(w=>`
@@ -998,8 +974,6 @@ function addPlanchaRowDesdeHI(idx, pz){
 
 // ======= PLANCHA =======
 // ══════ SISTEMA MULTI-MATERIAL ══════
-
-const D=7.85e-6; // kg/mm³ acero
 
 // ══════════════════════════════════════════════════════════════
 // TABLA DE PESOS POR METRO (kg/m) — Norma ASTM / INEN
@@ -1676,7 +1650,7 @@ function buildSobBloques(){
       return `
       <div style="border:2px solid #fcd34d;border-radius:12px;padding:.875rem;margin-bottom:.875rem;background:#fffbeb">
         <div style="font-size:12px;font-weight:800;color:#92400e;margin-bottom:.375rem">
-          ${pz?.(pz.tipo==='Alma'?'🔷':'🔶'):'📋'} PLANCHA ${i+1} — ${pl.esp}mm × ${pl.ancho||'?'}×${pl.largo||'?'}mm · ${pl.mat}
+        ${pz ? (pz.tipo==='Alma' ? '🔷' : '🔶') : '📋'} PLANCHA ${i+1} — ${pl.esp}mm × ${pl.ancho||'?'}×${pl.largo||'?'}mm · ${pl.mat}
           ${pl.num?`<span style="font-weight:400;color:#6b7280"> · ${pl.num}</span>`:''}
           <span style="float:right;background:#92400e;color:#fff;border-radius:6px;padding:1px 8px;font-size:11px">${(pl.peso||0).toFixed(1)} kg</span>
         </div>
