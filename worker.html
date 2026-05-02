@@ -724,20 +724,64 @@ function selectCj(cjId){
 }
 
 // ======= PARTE LIST =======
+// Orden de fases para control de prerequisitos
+const FASE_ORDEN = ['Corte','Armado','Soldadura','Perforaciones','Limpieza Mecánica','Pintura'];
+
+function getPrevFase(fase){
+  const idx = FASE_ORDEN.indexOf(fase);
+  return idx > 0 ? FASE_ORDEN[idx-1] : null;
+}
+
 function buildParteList(){
   document.getElementById('sb-parte').innerHTML=stepbar(2,['Conjunto','Pieza (pr)','Cantidad']);
   document.getElementById('parte-sub').textContent=`${selCj.cj} — ¿Cuál pieza trabajaste?`;
+  const prevFase = getPrevFase(selFase);
+  
   document.getElementById('parte-list').innerHTML=selCj.partes.map(p=>{
-    const done=totalExec(selCj.cj,p.pr,selFase);
-    const myD=myExec(selCj.cj,p.pr,selFase);
-    const pend=Math.max(0,p.plan-done);
-    const pct=p.plan>0?Math.min(100,done/p.plan*100):0;
-    return `<div class="pt-item" onclick="selectParte('${p.pr}')">
+    const done    = totalExec(selCj.cj, p.pr, selFase);
+    const myD     = myExec(selCj.cj, p.pr, selFase);
+    const pend    = Math.max(0, p.plan - done);
+    const pct     = p.plan > 0 ? Math.min(100, done/p.plan*100) : 0;
+    
+    // Check prerequisite phase
+    const prevDone = prevFase ? totalExec(selCj.cj, p.pr, prevFase) : p.plan;
+    const hasPrereq = prevFase ? prevDone > 0 : true;
+    const prevPct   = p.plan > 0 ? Math.min(100, prevDone/p.plan*100) : 0;
+    
+    // Blocked if previous phase not started
+    if(!hasPrereq && selFase !== 'Corte'){
+      return `<div class="pt-item" style="opacity:.45;background:#f9f9f9;cursor:not-allowed" 
+        onclick="alert('⚠ Esta pieza aún no tiene ${prevFase} registrado.\nPrimero debe completarse la fase anterior.')">
+        <div style="flex:1">
+          <div style="display:flex;justify-content:space-between;margin-bottom:.25rem">
+            <span class="pr-code">${p.pr}</span>
+            <span style="background:#fee2e2;color:#991b1b;font-size:10px;padding:2px 6px;border-radius:6px;font-weight:700">🔒 Sin ${prevFase}</span>
+          </div>
+          <div class="pr-perf">${p.perfil} · ${p.long} mm</div>
+          <div class="pr-info">
+            <span>Plan: <strong>${p.plan}</strong></span>
+            <span style="color:#dc2626">${prevFase}: <strong>${prevDone}</strong></span>
+            <span>${selFase}: <strong>${done}</strong></span>
+          </div>
+          <div class="bar-w"><div class="bar-f" style="width:${prevPct.toFixed(0)}%;background:#d1d5db"></div></div>
+        </div><span style="font-size:22px;color:#ccc;flex-shrink:0">🔒</span>
+      </div>`;
+    }
+
+    // Warning if exceeding plan
+    const excede = done >= p.plan;
+    
+    return `<div class="pt-item ${excede?'':''}" onclick="selectParte('${p.pr}')" 
+      style="${excede?'border-color:#f59e0b;background:#fffbeb;':''}">
       <div style="flex:1">
         <div style="display:flex;justify-content:space-between;margin-bottom:.25rem">
-          <span class="pr-code">${p.pr}</span><span class="pr-pend">${pend} pend.</span>
+          <span class="pr-code">${p.pr}</span>
+          ${excede 
+            ? '<span style="background:#fef3c7;color:#92400e;font-size:10px;padding:2px 6px;border-radius:6px;font-weight:700">⚠ COMPLETO</span>'
+            : `<span class="pr-pend">${pend} pend.</span>`}
         </div>
         <div class="pr-perf">${p.perfil} · ${p.long} mm</div>
+        ${prevFase ? `<div style="font-size:10px;color:#166534;margin-bottom:2px">✓ ${prevFase}: ${prevDone}/${p.plan}</div>` : ''}
         <div class="pr-info">
           <span>Plan: <strong>${p.plan}</strong></span>
           <span>Hecho: <strong>${done}</strong></span>
@@ -797,6 +841,14 @@ function calcCtPeso(){
 function irASobrante(){
   const qty=parseInt(document.getElementById('ct-qty').value)||0;
   if(qty<=0){alert('Ingresa cuántas piezas cortaste');return;}
+  // Warning if exceeding plan
+  const yaHecho = totalExec(selCj.cj, selParte.pr, 'Corte');
+  const plan = selParte.plan;
+  if(yaHecho + qty > plan){
+    const exceso = (yaHecho + qty) - plan;
+    const ok = confirm(`⚠ ADVERTENCIA: Esta cantidad supera el plan Tekla.\n\nPlan: ${plan} uds\nYa cortado: ${yaHecho} uds\nEstás ingresando: ${qty} uds\nExceso: ${exceso} uds\n\n¿Deseas continuar de todas formas?`);
+    if(!ok) return;
+  }
   draft.ct={qty,cal:calidad,obs:document.getElementById('ct-obs').value.trim(),pesoPzas:qty*selParte.pu};
   document.getElementById('sb-sob').innerHTML=stepbar(3,['Plancha','Cortes','Sobrante']);
   document.getElementById('sob-plancha-txt').textContent=`📋 ${draft.pl.num} · ${draft.pl.mat} · ${draft.pl.esp}×${draft.pl.ancho}×${draft.pl.largo} mm`;
@@ -814,10 +866,40 @@ function toggleSob(){
 function calcSob(){
   const e=gv('sob-esp')||draft.pl.esp,a=gv('sob-ancho')||draft.pl.ancho,l=gv('sob-largo'),q=gv('sob-qty')||1;
   if(e&&a&&l){sv('sob-peso',(e*a*l*D*q).toFixed(2));}
-  const pl=draft.pl.peso||0,pzas=draft.ct.pesoPzas||0,sob=gv('sob-peso'),hay=document.getElementById('sob-hay').value;
-  const desp=pl>0?Math.max(0,pl-pzas-(hay==='si'?sob:0)):0;
+  const pl=draft.pl.peso||0,pzas=draft.ct.pesoPzas||0,sob=parseFloat(gv('sob-peso'))||0;
+  const hay=document.getElementById('sob-hay').value;
+  const sobReal=hay==='si'?sob:0;
+  const desp=pl>0?Math.max(0,pl-pzas-sobReal):0;
+  const pctAprov=pl>0?(pzas/pl*100):0;
+  const pctSob=pl>0?(sobReal/pl*100):0;
+  const pctDesp=pl>0?(desp/pl*100):0;
   const db=document.getElementById('sob-desp-box');
-  if(pl>0){db.style.display='';document.getElementById('sob-desp-txt').textContent=`Desperdicio estimado: ${desp.toFixed(1)} kg`;}
+  if(pl>0){
+    db.style.display='';
+    db.innerHTML=`
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:.5rem;">
+        <div style="background:#d1fae5;border-radius:8px;padding:8px;text-align:center;">
+          <div style="font-size:10px;color:#065f46;font-weight:700;">✅ APROVECHAMIENTO</div>
+          <div style="font-size:20px;font-weight:800;color:#065f46;">${pctAprov.toFixed(1)}%</div>
+          <div style="font-size:10px;color:#065f46;">${pzas.toFixed(1)} kg</div>
+        </div>
+        <div style="background:${sobReal>0?'#dbeafe':'#f3f4f6'};border-radius:8px;padding:8px;text-align:center;">
+          <div style="font-size:10px;color:#1e40af;font-weight:700;">📦 SOBRANTE</div>
+          <div style="font-size:20px;font-weight:800;color:#1e40af;">${pctSob.toFixed(1)}%</div>
+          <div style="font-size:10px;color:#1e40af;">${sobReal.toFixed(1)} kg</div>
+        </div>
+        <div style="background:${pctDesp>10?'#fee2e2':'#fef3c7'};border-radius:8px;padding:8px;text-align:center;">
+          <div style="font-size:10px;color:${pctDesp>10?'#991b1b':'#92400e'};font-weight:700;">🗑 DESPERDICIO</div>
+          <div style="font-size:20px;font-weight:800;color:${pctDesp>10?'#991b1b':'#92400e'};">${pctDesp.toFixed(1)}%</div>
+          <div style="font-size:10px;color:${pctDesp>10?'#991b1b':'#92400e'};">${desp.toFixed(1)} kg</div>
+        </div>
+      </div>
+      <div style="background:#f9fafb;border-radius:6px;padding:6px 10px;margin-top:6px;font-size:11px;color:#6b7280;text-align:center;">
+        Plancha total: <strong>${pl.toFixed(1)} kg</strong> = Piezas + Sobrante + Desperdicio
+      </div>
+      ${pctDesp>8?'<div style="background:#fee2e2;border-radius:6px;padding:6px 10px;margin-top:4px;font-size:11px;color:#991b1b;font-weight:700;text-align:center;">⚠ Desperdicio alto ('+pctDesp.toFixed(1)+'%) — revisa las dimensiones del sobrante</div>':''}
+    `;
+  }
 }
 
 function guardarCorte(){
@@ -917,6 +999,16 @@ function buildForm(){
 function guardarOtras(){
   const qty=parseInt(document.getElementById('f-qty')?.value||'0');
   if(qty<=0){alert('Ingresa cuántas piezas hiciste');return;}
+  // Warning if exceeding Tekla plan
+  if(selParte && selFase){
+    const yaHecho = totalExec(selCj.cj, selParte.pr, selFase);
+    const plan = selParte.plan;
+    if(plan > 0 && yaHecho + qty > plan){
+      const exceso = (yaHecho + qty) - plan;
+      const ok = confirm(`⚠ ADVERTENCIA: Cantidad supera el plan Tekla.\n\nPlan: ${plan} uds\nYa registrado: ${yaHecho} uds\nEstás ingresando: ${qty} uds\nExceso: +${exceso} uds\n\n¿Continuar de todas formas?`);
+      if(!ok) return;
+    }
+  }
   const isPP=POR_PARTE.includes(selFase);
   const pr=isPP&&selParte?selParte.pr:'—';
   const pu=isPP&&selParte?selParte.pu:0;

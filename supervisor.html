@@ -1306,12 +1306,20 @@ async function loadFromServer(){
       if(recs && recs.length>=0){
         ST.cortes=[]; ST.prods=[]; ST.exec={};
         recs.forEach(r=>{
+          // Normalize fields: worker uses cj/pr, supervisor uses conjunto/parte
+          r.conjunto = r.conjunto || r.cj || '';
+          r.parte    = r.parte    || r.pr || '—';
+          r.qty      = Number(r.qty) || 0;
+          r.pesoParts= Number(r.pesoParts||r.pesoPzas) || 0;
+          r.sobPeso  = Number(r.sobPeso||r.sob_peso) || 0;
+          r.desperdicio = Number(r.desperdicio) || 0;
           if(r.fase==='Corte'||r.tipo==='corte'){ 
+            r.fase = 'Corte';
             ST.cortes.push(r); 
-            addExec(r.cj||r.conjunto,r.pr||r.parte||'—','Corte',Number(r.qty)||0); 
+            addExec(r.conjunto, r.parte, 'Corte', r.qty); 
           } else { 
             ST.prods.push(r); 
-            addExec(r.cj||r.conjunto,r.pr||r.parte||'—',r.fase,Number(r.qty)||0); 
+            addExec(r.conjunto, r.parte, r.fase, r.qty); 
           }
         });
         LS.save('cortes',ST.cortes); LS.save('prods',ST.prods);
