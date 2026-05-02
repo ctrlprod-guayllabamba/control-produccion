@@ -123,6 +123,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);min-height
     <div class="tb-date" id="top-date"></div>
     <div class="sync-dot" id="sync-dot">⚪ cargando</div>
   </div>
+  <div id="dbg-panel" style="display:none;position:fixed;bottom:80px;left:8px;right:8px;background:rgba(0,0,0,.88);color:#86efac;font-size:11px;padding:10px;border-radius:10px;z-index:9999;max-height:140px;overflow-y:auto;font-family:monospace;line-height:1.6"></div>
 </div>
 
 <!-- LOGIN -->
@@ -478,13 +479,17 @@ const WORKER_OPS_KEY='prod_worker_ops';
 const WORKER_RECS_LS='prod_worker_recs_ls';
 
 const DEFAULT_WORKERS=[
-  {id:1,nom:'Carlos', ape:'Mendoza', rol:'Cortador',     fase:'Corte',             icon:'✂'},
-  {id:2,nom:'Pedro',  ape:'Vargas',  rol:'Armador',      fase:'Armado',            icon:'🔧'},
-  {id:3,nom:'Luis',   ape:'Torres',  rol:'Soldador',     fase:'Soldadura',         icon:'🔥'},
-  {id:4,nom:'Marco',  ape:'Reyes',   rol:'Perforador',   fase:'Perforaciones',     icon:'🔩'},
-  {id:5,nom:'Jorge',  ape:'Castillo',rol:'Ayudante',     fase:'Limpieza Mecánica', icon:'🧹'},
-  {id:6,nom:'Andrés', ape:'Salazar', rol:'Pintor',       fase:'Pintura',           icon:'🎨'},
-  {id:7,nom:'Raúl',   ape:'Mora',    rol:'Operador Grúa',fase:'Soporte',           icon:'🏗'},
+  // Operarios reales del proyecto (siempre visibles sin red)
+  {id:1777596148121,nom:'Jose Luis',    ape:'Loor Cevallos',rol:'Cortador',     fase:'Corte',            icon:'✂', est:'activo'},
+  {id:1777690982765,nom:'Teresa Nathaly',ape:'Loor Quiroz', rol:'Cortador',     fase:'Corte',            icon:'✂', est:'activo'},
+  // Operarios de referencia
+  {id:1,nom:'Carlos', ape:'Mendoza', rol:'Cortador',     fase:'Corte',            icon:'✂'},
+  {id:2,nom:'Pedro',  ape:'Vargas',  rol:'Armador',      fase:'Armado',           icon:'🔧'},
+  {id:3,nom:'Luis',   ape:'Torres',  rol:'Soldador',     fase:'Soldadura',        icon:'🔥'},
+  {id:4,nom:'Marco',  ape:'Reyes',   rol:'Perforador',   fase:'Perforaciones',    icon:'🔩'},
+  {id:5,nom:'Jorge',  ape:'Castillo',rol:'Ayudante',     fase:'Limpieza Mecánica',icon:'🧹'},
+  {id:6,nom:'Andrés', ape:'Salazar', rol:'Pintor',       fase:'Pintura',          icon:'🎨'},
+  {id:7,nom:'Raúl',   ape:'Mora',    rol:'Operador Grúa',fase:'Soporte',          icon:'🏗'},
 ];
 
 // == API Google Apps Script ======================
@@ -599,39 +604,82 @@ function syncPendingToGAS() {
 }
 
 async function loadAndRenderWorkers() {
-  // Mostrar caché local inmediatamente — sin tocar el sync dot si ya hay datos
+  // 1. Mostrar caché local inmediatamente
   let ws = LS.g(WORKER_OPS_KEY, null);
   const tieneCacheLocal = ws && ws.length > 0;
   if (!tieneCacheLocal) ws = DEFAULT_WORKERS;
   renderWorkers(ws);
-  // Solo mostrar "conectando" si no hay caché — si hay caché, el operario ya ve su lista
   if (!tieneCacheLocal) setSync(false, 'cargando');
 
-  // PASO 1: Cargar operarios.json desde GitHub Pages
+  // Panel de diagnóstico visible en pantalla (ayuda a detectar error en iOS)
+  const dbg = document.getElementById('dbg-panel');
+  const log = (msg) => { console.log(msg); if(dbg) dbg.innerHTML += `<div>${msg}</div>`; };
+  if(dbg) dbg.style.display = '';
+
   const OPERARIOS_URL = 'https://ctrlprod-guayllabamba.github.io/control-produccion/operarios.json';
-  const urls = [
-    OPERARIOS_URL,
-    location.origin + location.pathname.replace(/worker\.html.*$/, '') + 'operarios.json',
-  ];
-  for(const url of urls){
+
+  // Método A: fetch con cors
+  const tryFetch = async () => {
+    log('⏳ Intentando fetch...');
+    const r = await fetch(OPERARIOS_URL + '?t=' + Date.now(), {cache:'no-cache', mode:'cors'});
+    log('✅ fetch status: ' + r.status);
+    const ops = await r.json();
+    log('✅ operarios cargados: ' + ops.length);
+    return ops;
+  };
+
+  // Método B: XHR (funciona en iOS cuando fetch falla por CORS)
+  const tryXHR = () => new Promise((resolve, reject) => {
+    log('⏳ Intentando XHR...');
+    const xhr = new XMLHttpRequest();
+    xhr.open('GET', OPERARIOS_URL + '?t=' + Date.now(), true);
+    xhr.timeout = 8000;
+    xhr.onload = () => {
+      try {
+        log('✅ XHR status: ' + xhr.status);
+        const ops = JSON.parse(xhr.responseText);
+        log('✅ operarios XHR: ' + ops.length);
+        resolve(ops);
+      } catch(e) { reject(new Error('parse_error: '+e.message)); }
+    };
+    xhr.onerror = (e) => { log('❌ XHR error'); reject(new Error('xhr_error')); };
+    xhr.ontimeout = () => { log('❌ XHR timeout'); reject(new Error('timeout')); };
+    xhr.send();
+  });
+
+  // Método C: GAS como fuente alternativa de operarios
+  const tryGAS = async () => {
+    log('⏳ Intentando GAS...');
+    if(!GAS.configured()) throw new Error('GAS no configurado');
+    const ops = await GAS.get('getOperarios');
+    if(!ops || !ops.length) throw new Error('GAS vacío');
+    log('✅ operarios GAS: ' + ops.length);
+    return ops;
+  };
+
+  for(const [nombre, metodo] of [['fetch', tryFetch], ['XHR', tryXHR], ['GAS', tryGAS]]){
     try {
-      const r = await fetch(url + '?t=' + Date.now(), {cache:'no-cache'});
-      if(r.ok){
-        const ops = await r.json();
-        if(ops && ops.length){
-          ws = ops;
-          LS.s(WORKER_OPS_KEY, ws);
-          renderWorkers(ws);
-          setSync(true, 'online');
-          const opId = new URLSearchParams(location.search).get('op');
-          if(opId && !W){ const w=ws.find(x=>x.id==opId); if(w) selectWorker(w); }
-          return;
-        }
+      const ops = await metodo();
+      if(ops && ops.length){
+        ws = ops;
+        LS.s(WORKER_OPS_KEY, ws);
+        renderWorkers(ws);
+        setSync(true, 'online');
+        if(dbg) setTimeout(()=>dbg.style.display='none', 5000); // ocultar panel tras 5s
+        const opId = new URLSearchParams(location.search).get('op');
+        if(opId && !W){ const w=ws.find(x=>x.id==opId); if(w) selectWorker(w); }
+        return;
       }
-    } catch(e){
-      console.log('operarios.json fallo en', url, e.message);
+    } catch(e) {
+      log(`❌ ${nombre} falló: ${e.message}`);
     }
   }
+
+  // Todos fallaron — usar caché o DEFAULT
+  log('⚠ Usando caché/default');
+  setSync(false, tieneCacheLocal ? 'local' : 'offline');
+  if(dbg) setTimeout(()=>dbg.style.display='none', 8000);
+}
 
   // PASO 2: Fallback a GAS
   if (GAS.configured()) {
