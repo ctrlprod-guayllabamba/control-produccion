@@ -607,24 +607,30 @@ async function loadAndRenderWorkers() {
   // Solo mostrar "conectando" si no hay caché — si hay caché, el operario ya ve su lista
   if (!tieneCacheLocal) setSync(false, 'cargando');
 
-  // PASO 1: Cargar operarios.json desde GitHub Pages (mismo dominio = sin CORS)
-  try {
-    const base = location.origin + location.pathname.replace('worker.html','');
-    const r = await fetch(base + 'operarios.json?t=' + Date.now(), {cache:'no-cache'});
-    if (r.ok) {
-      const ops = await r.json();
-      if (ops && ops.length) {
-        ws = ops;
-        LS.s(WORKER_OPS_KEY, ws);
-        renderWorkers(ws);
-        setSync(true, 'online');
-        const opId = new URLSearchParams(location.search).get('op');
-        if (opId && !W) { const w = ws.find(x => x.id == opId); if (w) selectWorker(w); }
-        return;
+  // PASO 1: Cargar operarios.json desde GitHub Pages
+  const OPERARIOS_URL = 'https://ctrlprod-guayllabamba.github.io/control-produccion/operarios.json';
+  const urls = [
+    OPERARIOS_URL,
+    location.origin + location.pathname.replace(/worker\.html.*$/, '') + 'operarios.json',
+  ];
+  for(const url of urls){
+    try {
+      const r = await fetch(url + '?t=' + Date.now(), {cache:'no-cache'});
+      if(r.ok){
+        const ops = await r.json();
+        if(ops && ops.length){
+          ws = ops;
+          LS.s(WORKER_OPS_KEY, ws);
+          renderWorkers(ws);
+          setSync(true, 'online');
+          const opId = new URLSearchParams(location.search).get('op');
+          if(opId && !W){ const w=ws.find(x=>x.id==opId); if(w) selectWorker(w); }
+          return;
+        }
       }
+    } catch(e){
+      console.log('operarios.json fallo en', url, e.message);
     }
-  } catch(e) {
-    console.log('operarios.json no disponible, intentando GAS:', e.message);
   }
 
   // PASO 2: Fallback a GAS
