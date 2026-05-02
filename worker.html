@@ -885,20 +885,22 @@ function selectParte(prId){
 }
 
 function addPlanchaRowDesdeHI(idx, pz){
-  // Versión especial que pre-llena los campos con los datos de la sub-pieza
   const div=document.createElement('div');
   div.id=`pl-row-${idx}`;
   div.style.cssText='border:1px solid #bfdbfe;border-radius:10px;padding:.75rem;margin-bottom:.5rem;background:#f8faff';
   div.innerHTML=`
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.375rem">
       <span style="font-size:12px;font-weight:700;color:#1e40af">
-        ${pz.tipo === 'Alma' ? '🔷' : '🔶'} ${pz.desc} 
-        <span style="background:#1e40af;color:#fff;border-radius:6px;padding:1px 6px;font-size:10px;margin-left:4px">${pz.qty} ud${pz.qty>1?'s':''}</span>
+        ${pz.tipo==='Alma'?'🔷':'🔶'} ${pz.desc}
+        <span style="background:#1e40af;color:#fff;border-radius:6px;padding:1px 6px;font-size:10px;margin-left:4px">${pz.qty} ud${pz.qty>1?'s':''} por viga</span>
       </span>
+    </div>
+    <div style="font-size:11px;color:#6b7280;margin-bottom:.5rem">
+      Ingresa las medidas de la <strong>plancha comercial</strong> que usaste para cortar ${pz.qty===1?'el':'los'} ${pz.tipo.toLowerCase()}${pz.qty>1?'es':''}
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
       <div><label style="font-size:11px;color:#6b7280">N° Colada</label>
-        <input type="text" id="pl-num-${idx}" placeholder="Ej: PL-2024-001" style="width:100%;padding:6px;border:1px solid #d1d5db;border-radius:6px;font-size:13px" oninput="updatePlancha(${idx})"></div>
+        <input type="text" id="pl-num-${idx}" placeholder="000000-000013" style="width:100%;padding:6px;border:1px solid #d1d5db;border-radius:6px;font-size:13px" oninput="updatePlancha(${idx})"></div>
       <div><label style="font-size:11px;color:#6b7280">Material</label>
         <select id="pl-mat-${idx}" style="width:100%;padding:6px;border:1px solid #d1d5db;border-radius:6px;font-size:13px" onchange="updatePlancha(${idx})">
           <option value="A588-50">A588-50</option><option value="A572-50">A572-50</option>
@@ -906,16 +908,36 @@ function addPlanchaRowDesdeHI(idx, pz){
         </select></div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px">
-      <div><label style="font-size:11px;color:#6b7280">Esp (mm)</label>
-        <input type="number" id="pl-esp-${idx}" inputmode="numeric" value="${pz.esp}" style="width:100%;padding:6px;border:1.5px solid #fbbf24;border-radius:6px;font-size:13px;background:#fffbeb" oninput="updatePlancha(${idx})"></div>
-      <div><label style="font-size:11px;color:#6b7280">Ancho (mm)</label>
-        <input type="number" id="pl-ancho-${idx}" inputmode="numeric" value="${pz.ancho}" style="width:100%;padding:6px;border:1.5px solid #fbbf24;border-radius:6px;font-size:13px;background:#fffbeb" oninput="updatePlancha(${idx})"></div>
-      <div><label style="font-size:11px;color:#6b7280">Largo (mm)</label>
-        <input type="number" id="pl-largo-${idx}" inputmode="numeric" value="${selParte.long}" style="width:100%;padding:6px;border:1px solid #d1d5db;border-radius:6px;font-size:13px" oninput="updatePlancha(${idx})"></div>
-      <div><label style="font-size:11px;color:#6b7280">Cant.</label>
-        <input type="number" id="pl-qty-${idx}" value="${pz.qty}" min="1" style="width:100%;padding:6px;border:1px solid #d1d5db;border-radius:6px;font-size:13px" oninput="updatePlancha(${idx})"></div>
+      <div>
+        <label style="font-size:11px;color:#065f46;font-weight:700">Esp (mm) ✓</label>
+        <input type="number" id="pl-esp-${idx}" inputmode="numeric" value="${pz.esp}"
+          style="width:100%;padding:6px;border:2px solid #86efac;border-radius:6px;font-size:13px;background:#f0fdf4;font-weight:700"
+          oninput="updatePlancha(${idx})">
+        <div style="font-size:9px;color:#065f46;margin-top:1px">fijo por diseño</div>
+      </div>
+      <div>
+        <label style="font-size:11px;color:#92400e;font-weight:700">Ancho (mm)</label>
+        <input type="number" id="pl-ancho-${idx}" inputmode="numeric" placeholder="ej: 2500"
+          style="width:100%;padding:6px;border:2px solid #fcd34d;border-radius:6px;font-size:13px;background:#fffbeb"
+          oninput="updatePlancha(${idx})">
+        <div style="font-size:9px;color:#92400e;margin-top:1px">plancha real</div>
+      </div>
+      <div>
+        <label style="font-size:11px;color:#92400e;font-weight:700">Largo (mm)</label>
+        <input type="number" id="pl-largo-${idx}" inputmode="numeric" placeholder="ej: 12000"
+          style="width:100%;padding:6px;border:2px solid #fcd34d;border-radius:6px;font-size:13px;background:#fffbeb"
+          oninput="updatePlancha(${idx})">
+        <div style="font-size:9px;color:#92400e;margin-top:1px">plancha real</div>
+      </div>
+      <div>
+        <label style="font-size:11px;color:#6b7280">Cant.</label>
+        <input type="number" id="pl-qty-${idx}" value="${pz.qty}" min="1"
+          style="width:100%;padding:6px;border:1px solid #d1d5db;border-radius:6px;font-size:13px"
+          oninput="updatePlancha(${idx})">
+        <div style="font-size:9px;color:#6b7280;margin-top:1px">planchas</div>
+      </div>
     </div>
-    <div id="pl-peso-txt-${idx}" style="font-size:12px;color:#065f46;font-weight:700;margin-top:4px;text-align:right"></div>`;
+    <div id="pl-peso-txt-${idx}" style="font-size:12px;color:#065f46;font-weight:700;margin-top:6px;text-align:right"></div>`;
   document.getElementById('wk-planchas-list').appendChild(div);
   updatePlancha(idx);
 }
@@ -923,22 +945,123 @@ function addPlanchaRowDesdeHI(idx, pz){
 // ======= PLANCHA =======
 // ══════ SISTEMA MULTI-MATERIAL ══════
 
-// Peso por metro (kg/m) de perfiles comunes — tabla estándar
-const PM = {
-  // Vigas I / HI
-  'HI200': 35.4, 'HI250': 50.2, 'HI300': 69.2, 'HI350': 97.1,
-  'IPE200': 22.4, 'IPE240': 30.7, 'IPE270': 36.1, 'IPE300': 42.2,
-  'HEB200': 61.3, 'HEB240': 83.2, 'HEB300': 117,
-  // Ángulos
-  'L50x5': 3.77, 'L60x6': 5.42, 'L65x6': 5.9, 'L70x7': 7.38,
-  'L75x8': 9.0, 'L80x8': 9.66, 'L100x10': 15.1,
-  // Canal U
-  'U80': 8.64, 'U100': 10.6, 'U120': 13.4, 'U140': 16.0, 'U160': 18.8,
-  // Correa G (por peso/m típico)
-  'G120x60x15': 3.5, 'G140x60x15': 4.1, 'G160x65x15': 4.7, 'G200x75x20': 6.8,
-  // Correa Z
-  'Z120x60': 3.6, 'Z140x60': 4.2, 'Z160x65': 4.9, 'Z200x75': 7.0,
+const D=7.85e-6; // kg/mm³ acero
+
+// ══════════════════════════════════════════════════════════════
+// TABLA DE PESOS POR METRO (kg/m) — Norma ASTM / INEN
+// Fuente: catálogos ANDEC, NOVACERO, IPAC Ecuador
+// Formato: 'clave': kg/m
+// ══════════════════════════════════════════════════════════════
+const TABLA_PESOS = {
+  // ── Vigas I laminadas (ASTM A36 / A572) ─────────────────────
+  // IPE (norma europea, disponible IPAC)
+  'IPE80':  6.0,  'IPE100': 8.1,  'IPE120': 10.4, 'IPE140': 12.9,
+  'IPE160': 15.8, 'IPE180': 18.8, 'IPE200': 22.4, 'IPE220': 26.2,
+  'IPE240': 30.7, 'IPE270': 36.1, 'IPE300': 42.2, 'IPE330': 49.1,
+  'IPE360': 57.1, 'IPE400': 66.3, 'IPE450': 77.6, 'IPE500': 90.7,
+  // HEB (norma europea, disponible IPAC)
+  'HEB100': 20.4, 'HEB120': 26.7, 'HEB140': 33.7, 'HEB160': 42.6,
+  'HEB180': 51.2, 'HEB200': 61.3, 'HEB220': 71.5, 'HEB240': 83.2,
+  'HEB260': 93.0, 'HEB280':103.0, 'HEB300':117.0, 'HEB320':127.0,
+  'HEB340':134.0, 'HEB360':142.0, 'HEB400':155.0, 'HEB450':171.0,
+  // W (ASTM, disponible NOVACERO/ANDEC)
+  'W4x13':  19.0, 'W5x16':  23.8, 'W6x15':  22.3, 'W6x20':  29.8,
+  'W8x18':  26.8, 'W8x24':  35.7, 'W8x31':  46.1, 'W10x22': 32.7,
+  'W10x33': 49.1, 'W10x45': 66.9, 'W12x26': 38.7, 'W12x40': 59.5,
+  'W12x53': 78.8, 'W14x22': 32.7, 'W14x38': 56.6, 'W14x53': 78.8,
+
+  // ── Ángulos de lados iguales (ASTM A36 / INEN) ──────────────
+  // ANDEC / NOVACERO
+  'L20x3':  0.88,  'L25x3':  1.12, 'L30x3':  1.36, 'L30x4':  1.78,
+  'L35x4':  2.10,  'L38x5':  2.87, 'L40x4':  2.42, 'L40x5':  2.97,
+  'L45x5':  3.38,  'L50x5':  3.77, 'L50x6':  4.47, 'L50x8':  5.82,
+  'L60x5':  4.57,  'L60x6':  5.42, 'L60x8':  7.09, 'L65x6':  5.91,
+  'L65x8':  7.73,  'L70x6':  6.38, 'L70x7':  7.38, 'L70x8':  8.36,
+  'L75x6':  6.85,  'L75x8':  9.03, 'L75x10':11.10, 'L80x6':  7.34,
+  'L80x8':  9.66,  'L80x10':11.90, 'L90x8': 10.90, 'L90x10':13.40,
+  'L100x8':12.20,  'L100x10':15.10,'L100x12':17.80,'L120x10':18.20,
+  'L120x12':21.60, 'L150x10':23.00,'L150x12':27.30,'L150x15':33.80,
+
+  // ── Ángulos de lados desiguales ──────────────────────────────
+  'L60x40x5':3.72, 'L65x50x6':5.16, 'L75x50x6':5.65, 'L75x50x8':7.39,
+  'L80x60x6':6.39, 'L100x65x7':8.77,'L100x75x8':11.70,
+
+  // ── Canal U / UPN (ASTM A36 / INEN) ─────────────────────────
+  // NOVACERO / ANDEC
+  'U50':   3.86, 'U65':  5.07, 'U80':  8.64, 'U100':10.60,
+  'U120': 13.40, 'U140':16.00, 'U160':18.80, 'U180':22.00,
+  'U200': 25.30, 'U220':29.40, 'U240':33.20, 'U260':37.90,
+  'U280': 41.80, 'U300':46.20, 'U320':59.50, 'U350':60.60,
+  'U380': 63.10, 'U400':71.80,
+
+  // ── Correa G (Canal laminado en frío ASTM A653 / INEN 2415) ─
+  // IPAC / NOVACERO
+  'G100x50x15x2':2.31, 'G100x50x15x3':3.40, 'G120x50x15x2':2.54,
+  'G120x50x15x3':3.76, 'G120x60x15x2':2.66, 'G120x60x15x3':3.94,
+  'G140x50x15x2':2.77, 'G140x60x15x2':2.89, 'G140x60x15x3':4.29,
+  'G160x60x15x2':3.01, 'G160x65x15x2':3.13, 'G160x65x15x3':4.64,
+  'G180x65x15x2':3.24, 'G200x65x15x2':3.47, 'G200x75x20x2':3.77,
+  'G200x75x20x3':5.58, 'G230x75x20x3':6.10, 'G250x75x25x3':6.50,
+
+  // ── Correa Z (ASTM A653 / INEN 2415) ─────────────────────────
+  'Z100x50x15x2':2.31, 'Z120x50x15x2':2.54, 'Z140x60x15x2':2.89,
+  'Z160x65x15x2':3.13, 'Z180x65x20x2':3.36, 'Z200x75x20x2':3.77,
+  'Z200x75x20x3':5.58, 'Z230x75x20x3':6.10, 'Z250x80x25x3':6.65,
+
+  // ── Tubo rectangular (ASTM A500 / INEN 2415) ─────────────────
+  // NOVACERO / ANDEC / IPAC
+  'TR40x20x2':1.73, 'TR40x20x3':2.50, 'TR50x25x2':2.17, 'TR50x25x3':3.16,
+  'TR50x30x2':2.30, 'TR60x30x2':2.60, 'TR60x30x3':3.81, 'TR60x40x2':2.89,
+  'TR60x40x3':4.25, 'TR70x50x3':4.75, 'TR80x40x3':4.43, 'TR80x40x4':5.82,
+  'TR80x60x3':5.17, 'TR80x60x4':6.81, 'TR100x50x3':5.49,'TR100x50x4':7.24,
+  'TR100x60x3':5.81,'TR100x60x4':7.66,'TR100x80x4':9.08,'TR120x60x3':6.45,
+  'TR120x60x4':8.51,'TR120x80x4':9.94,'TR150x100x5':18.6,'TR200x100x6':26.4,
+
+  // ── Tubo cuadrado (ASTM A500 / INEN 2415) ────────────────────
+  'TC20x2': 1.12, 'TC25x2': 1.43, 'TC30x2': 1.74, 'TC40x2': 2.36,
+  'TC40x3': 3.45, 'TC50x2': 2.98, 'TC50x3': 4.39, 'TC60x2': 3.61,
+  'TC60x3': 5.32, 'TC60x4': 6.97, 'TC70x3': 6.24, 'TC80x3': 7.17,
+  'TC80x4': 9.43, 'TC100x3': 9.02,'TC100x4':11.90,'TC100x5':14.70,
+  'TC120x4':14.40,'TC120x5':17.80,'TC150x5':22.50,'TC200x6':36.10,
+
+  // ── Tubo circular / PHS (ASTM A53 / INEN 1590) ───────────────
+  // NOVACERO (diámetro exterior mm × espesor mm)
+  'TU21x2': 0.89, 'TU26x2': 1.13, 'TU33x2': 1.46, 'TU42x2': 1.88,
+  'TU48x2': 2.17, 'TU48x3': 3.17, 'TU60x2': 2.74, 'TU60x3': 4.02,
+  'TU76x2': 3.50, 'TU76x3': 5.17, 'TU76x4': 6.79, 'TU89x3': 6.13,
+  'TU89x4': 8.06, 'TU102x3':7.09, 'TU102x4':9.38, 'TU114x3':8.00,
+  'TU114x4':10.5, 'TU140x4':13.1, 'TU168x5':20.1, 'TU219x6':31.5,
+
+  // ── Barra redonda (ASTM A36 / INEN) ─────────────────────────
+  'BR12':0.888,'BR16':1.578,'BR19':2.226,'BR22':2.984,'BR25':3.853,
+  'BR28':4.834,'BR32':6.313,'BR38':8.903,'BR44':11.95,'BR50':15.41,
+
+  // ── Barra cuadrada (ASTM A36 / INEN) ────────────────────────
+  'BC10':0.785,'BC12':1.130,'BC16':2.010,'BC20':3.140,'BC25':4.910,
+  'BC30':7.070,'BC35':9.620,'BC40':12.60,'BC50':19.60,
+
+  // ── Barra plana / platina (ASTM A36 / INEN) ─────────────────
+  // formato: BPanchoxesp
+  'BP20x3':0.47,'BP25x3':0.59,'BP30x3':0.71,'BP38x3':0.89,'BP40x4':1.26,
+  'BP50x4':1.57,'BP50x5':1.96,'BP60x5':2.36,'BP65x6':3.06,'BP75x6':3.53,
+  'BP80x6':3.77,'BP100x6':4.71,'BP100x8':6.28,'BP100x10':7.85,
+  'BP120x8':7.54,'BP120x10':9.42,'BP150x10':11.80,'BP200x10':15.70,
 };
+
+// Función helper: buscar peso/m de un perfil por nombre aproximado
+function buscarPesoM(nombre){
+  if(!nombre) return null;
+  const clave = nombre.replace(/\s/g,'').toUpperCase();
+  // Búsqueda exacta
+  for(const k of Object.keys(TABLA_PESOS)){
+    if(k.toUpperCase()===clave) return TABLA_PESOS[k];
+  }
+  // Búsqueda parcial (prefijo)
+  for(const k of Object.keys(TABLA_PESOS)){
+    if(clave.startsWith(k.toUpperCase())||k.toUpperCase().startsWith(clave)) return TABLA_PESOS[k];
+  }
+  return null;
+}
 
 let planchasData = []; // array of plancha objects
 
@@ -1021,8 +1144,7 @@ function updateTotalPlancha(){
   sv('pl-peso', total.toFixed(2));
 }
 
-// ── Perfiles: pesos por metro según dimensiones ──
-const DENS = 7.85e-6; // kg/mm³
+// ── Perfiles: calcPerfilWk usa D (kg/mm³) ya definido arriba ──
 
 function calcPerfilWk(){
   const tipo = document.getElementById('pl-tipo').value;
@@ -1031,83 +1153,84 @@ function calcPerfilWk(){
     ? (parseFloat(document.getElementById('pl-long-custom').value)||0)
     : parseFloat(longCom);
   const qty = parseFloat(document.getElementById('pl-qty-perfil').value)||1;
-
-  // Show/hide custom length
   document.getElementById('pl-long-custom-wrap').style.display = longCom==='custom'?'':'none';
 
-  let kgM = 0; // kg/m
-  let desc = '';
-
   const dims = document.getElementById('wk-perfil-dims');
+  let kgM = 0, desc = '', fuentePeso = '';
 
-  if(tipo==='viga_i'){
-    const h=parseFloat(dims.querySelector('#pd-h')?.value)||0;
-    const b=parseFloat(dims.querySelector('#pd-b')?.value)||0;
-    const tw=parseFloat(dims.querySelector('#pd-tw')?.value)||0;
-    const tf=parseFloat(dims.querySelector('#pd-tf')?.value)||0;
-    if(h&&b&&tw&&tf){
-      const area = 2*b*tf + (h-2*tf)*tw;
-      kgM = area*DENS*1000; // kg/m
-      desc = `H=${h} B=${b} tw=${tw} tf=${tf} mm`;
+  // 1️⃣ Primero: buscar en TABLA_PESOS por nombre nominal del perfil
+  const nominalEl = document.getElementById('pd-nominal');
+  const nominal = nominalEl?.value?.trim() || '';
+  if(nominal){
+    const kgMTabla = buscarPesoM(nominal);
+    if(kgMTabla){
+      kgM = kgMTabla;
+      desc = nominal;
+      fuentePeso = `📋 Tabla proveedor (ANDEC/NOVACERO/IPAC) — ${kgM.toFixed(3)} kg/m`;
     }
-  } else if(tipo==='angulo'){
-    const a1=parseFloat(dims.querySelector('#pd-a1')?.value)||0;
-    const a2=parseFloat(dims.querySelector('#pd-a2')?.value)||a1;
-    const t=parseFloat(dims.querySelector('#pd-t')?.value)||0;
-    if(a1&&t){ const area=(a1+a2-t)*t; kgM=area*DENS*1000; desc=`L${a1}x${a2}x${t}mm`; }
-  } else if(tipo==='canal_u'){
-    const h=parseFloat(dims.querySelector('#pd-h')?.value)||0;
-    const b=parseFloat(dims.querySelector('#pd-b')?.value)||0;
-    const t=parseFloat(dims.querySelector('#pd-t')?.value)||0;
-    if(h&&b&&t){ const area=(h-2*t)*t+2*b*t; kgM=area*DENS*1000; desc=`U${h}x${b}x${t}mm`; }
-  } else if(tipo==='correa_g'||tipo==='correa_z'){
-    const h=parseFloat(dims.querySelector('#pd-h')?.value)||0;
-    const b=parseFloat(dims.querySelector('#pd-b')?.value)||0;
-    const t=parseFloat(dims.querySelector('#pd-t')?.value)||0;
-    const c=parseFloat(dims.querySelector('#pd-c')?.value)||0;
-    if(h&&b&&t){
-      // Perimeter approx: H + 2B + 2C lips
-      const perim = h + 2*b + 2*(c||0);
-      kgM = perim*t*DENS*1000;
-      desc = `${tipo==='correa_g'?'G':'Z'}${h}x${b}x${t}mm`;
+  }
+
+  // 2️⃣ Segundo: calcular por fórmula geométrica con las dimensiones ingresadas
+  if(!kgM){
+    if(tipo==='viga_i'){
+      const h=parseFloat(dims.querySelector('#pd-h')?.value)||0;
+      const b=parseFloat(dims.querySelector('#pd-b')?.value)||0;
+      const tw=parseFloat(dims.querySelector('#pd-tw')?.value)||0;
+      const tf=parseFloat(dims.querySelector('#pd-tf')?.value)||0;
+      if(h&&b&&tw&&tf){ const area=2*b*tf+(h-2*tf)*tw; kgM=area*D*1000; desc=`H${h}×B${b} tw${tw} tf${tf}`; }
+    } else if(tipo==='angulo'){
+      const a1=parseFloat(dims.querySelector('#pd-a1')?.value)||0;
+      const a2=parseFloat(dims.querySelector('#pd-a2')?.value)||a1;
+      const t=parseFloat(dims.querySelector('#pd-t')?.value)||0;
+      if(a1&&t){ kgM=(a1+a2-t)*t*D*1000; desc=`L${a1}x${a2}x${t}`; }
+    } else if(tipo==='canal_u'){
+      const h=parseFloat(dims.querySelector('#pd-h')?.value)||0;
+      const b=parseFloat(dims.querySelector('#pd-b')?.value)||0;
+      const t=parseFloat(dims.querySelector('#pd-t')?.value)||0;
+      if(h&&b&&t){ kgM=((h-2*t)*t+2*b*t)*D*1000; desc=`U${h}x${b}x${t}`; }
+    } else if(tipo==='correa_g'||tipo==='correa_z'){
+      const h=parseFloat(dims.querySelector('#pd-h')?.value)||0;
+      const b=parseFloat(dims.querySelector('#pd-b')?.value)||0;
+      const c=parseFloat(dims.querySelector('#pd-c')?.value)||0;
+      const t=parseFloat(dims.querySelector('#pd-t')?.value)||0;
+      if(h&&b&&t){ kgM=(h+2*b+2*c)*t*D*1000; desc=`${tipo==='correa_g'?'G':'Z'}${h}x${b}x${t}`; }
+    } else if(tipo==='tubo_rect'){
+      const an=parseFloat(dims.querySelector('#pd-an')?.value)||0;
+      const al=parseFloat(dims.querySelector('#pd-al')?.value)||0;
+      const t=parseFloat(dims.querySelector('#pd-t')?.value)||0;
+      if(an&&al&&t){ kgM=(an*al-(an-2*t)*(al-2*t))*D*1000; desc=`TR${an}x${al}x${t}`; }
+    } else if(tipo==='tubo_cuad'){
+      const lado=parseFloat(dims.querySelector('#pd-lado')?.value)||0;
+      const t=parseFloat(dims.querySelector('#pd-t')?.value)||0;
+      if(lado&&t){ kgM=(lado*lado-(lado-2*t)*(lado-2*t))*D*1000; desc=`TC${lado}x${t}`; }
+    } else if(tipo==='tubo_circ'){
+      const d=parseFloat(dims.querySelector('#pd-d')?.value)||0;
+      const t=parseFloat(dims.querySelector('#pd-t')?.value)||0;
+      if(d&&t){ kgM=Math.PI*((d/2)**2-((d/2)-t)**2)*D*1000; desc=`TU${d}x${t}`; }
+    } else if(tipo==='barra_red'){
+      const d=parseFloat(dims.querySelector('#pd-d')?.value)||0;
+      if(d){ kgM=Math.PI*(d/2)**2*D*1000; desc=`BR${d}`; }
+    } else if(tipo==='barra_cuad'){
+      const lado=parseFloat(dims.querySelector('#pd-lado')?.value)||0;
+      if(lado){ kgM=lado*lado*D*1000; desc=`BC${lado}`; }
+    } else if(tipo==='barra_plana'){
+      const ancho=parseFloat(dims.querySelector('#pd-ancho')?.value)||0;
+      const esp=parseFloat(dims.querySelector('#pd-esp')?.value)||0;
+      if(ancho&&esp){ kgM=ancho*esp*D*1000; desc=`BP${ancho}x${esp}`; }
     }
-  } else if(tipo==='tubo_rect'){
-    const an=parseFloat(dims.querySelector('#pd-an')?.value)||0;
-    const al=parseFloat(dims.querySelector('#pd-al')?.value)||0;
-    const t=parseFloat(dims.querySelector('#pd-t')?.value)||0;
-    if(an&&al&&t){ const area=an*al-(an-2*t)*(al-2*t); kgM=area*DENS*1000; desc=`${an}x${al}x${t}mm`; }
-  } else if(tipo==='tubo_cuad'){
-    const lado=parseFloat(dims.querySelector('#pd-lado')?.value)||0;
-    const t=parseFloat(dims.querySelector('#pd-t')?.value)||0;
-    if(lado&&t){ const area=lado*lado-(lado-2*t)*(lado-2*t); kgM=area*DENS*1000; desc=`${lado}x${t}mm`; }
-  } else if(tipo==='tubo_circ'){
-    const d=parseFloat(dims.querySelector('#pd-d')?.value)||0;
-    const t=parseFloat(dims.querySelector('#pd-t')?.value)||0;
-    if(d&&t){ const area=Math.PI*((d/2)**2-((d/2)-t)**2); kgM=area*DENS*1000; desc=`D${d}x${t}mm`; }
-  } else if(tipo==='barra_red'){
-    const d=parseFloat(dims.querySelector('#pd-d')?.value)||0;
-    if(d){ kgM=Math.PI*(d/2)**2*DENS*1000; desc=`D${d}mm`; }
-  } else if(tipo==='barra_cuad'){
-    const lado=parseFloat(dims.querySelector('#pd-lado')?.value)||0;
-    if(lado){ kgM=lado*lado*DENS*1000; desc=`${lado}x${lado}mm`; }
-  } else if(tipo==='barra_plana'){
-    const ancho=parseFloat(dims.querySelector('#pd-ancho')?.value)||0;
-    const esp=parseFloat(dims.querySelector('#pd-esp')?.value)||0;
-    if(ancho&&esp){ kgM=ancho*esp*DENS*1000; desc=`${ancho}x${esp}mm`; }
+    if(kgM) fuentePeso = `📐 Calculado por fórmula geométrica — ${kgM.toFixed(3)} kg/m`;
   }
 
   const longM = longReal/1000;
   const pesoTotal = kgM * longM * qty;
-
   const res = document.getElementById('wk-perfil-resumen');
   const txt = document.getElementById('wk-perfil-peso-txt');
   const det = document.getElementById('wk-perfil-detalle');
   if(kgM>0 && longReal>0){
     res.style.display='';
     txt.textContent = `${pesoTotal.toFixed(2)} kg`;
-    det.textContent = `${kgM.toFixed(3)} kg/m × ${longM.toFixed(1)} m × ${qty} uds`;
+    det.innerHTML = `${fuentePeso}<br>${kgM.toFixed(3)} kg/m × ${longM.toFixed(1)} m × ${qty} uds`;
     sv('pl-peso', pesoTotal.toFixed(2));
-    // Store for irACortes
     window._perfilData = {kgM, longReal, qty, desc, pesoTotal};
   } else {
     res.style.display='none';
@@ -1123,28 +1246,63 @@ function onTipoMaterialWk(){
   document.getElementById('wk-dims-perfil').style.display = isPlancha ? 'none' : '';
 
   if(!isPlancha){
-    // Build dimension fields based on type
     const dims = document.getElementById('wk-perfil-dims');
-    const fields = {
-      viga_i:    [{id:'pd-h',lbl:'Altura H (mm)'},{id:'pd-b',lbl:'Ala B (mm)'},{id:'pd-tw',lbl:'Alma tw (mm)'},{id:'pd-tf',lbl:'Ala tf (mm)'}],
-      angulo:    [{id:'pd-a1',lbl:'Ala 1 (mm)'},{id:'pd-a2',lbl:'Ala 2 (mm)'},{id:'pd-t',lbl:'Espesor (mm)'}],
-      canal_u:   [{id:'pd-h',lbl:'Altura H (mm)'},{id:'pd-b',lbl:'Ala B (mm)'},{id:'pd-t',lbl:'Espesor (mm)'}],
-      correa_g:  [{id:'pd-h',lbl:'Altura H (mm)'},{id:'pd-b',lbl:'Ala B (mm)'},{id:'pd-c',lbl:'Labio C (mm)'},{id:'pd-t',lbl:'Esp. (mm)'}],
-      correa_z:  [{id:'pd-h',lbl:'Altura H (mm)'},{id:'pd-b',lbl:'Ala B (mm)'},{id:'pd-c',lbl:'Labio C (mm)'},{id:'pd-t',lbl:'Esp. (mm)'}],
-      tubo_rect: [{id:'pd-an',lbl:'Ancho (mm)'},{id:'pd-al',lbl:'Alto (mm)'},{id:'pd-t',lbl:'Espesor (mm)'}],
-      tubo_cuad: [{id:'pd-lado',lbl:'Lado (mm)'},{id:'pd-t',lbl:'Espesor (mm)'}],
-      tubo_circ: [{id:'pd-d',lbl:'Diámetro (mm)'},{id:'pd-t',lbl:'Espesor (mm)'}],
-      barra_red: [{id:'pd-d',lbl:'Diámetro (mm)'}],
-      barra_cuad:[{id:'pd-lado',lbl:'Lado (mm)'}],
-      barra_plana:[{id:'pd-ancho',lbl:'Ancho (mm)'},{id:'pd-esp',lbl:'Espesor (mm)'}],
+
+    // Prefijos y ejemplos de la tabla por tipo
+    const tablaInfo = {
+      viga_i:    {prefix:['IPE','HEB','W'],    ej:'IPE200, HEB300, W8x24'},
+      angulo:    {prefix:['L'],                ej:'L75x8, L100x10, L50x5'},
+      canal_u:   {prefix:['U'],                ej:'U100, U160, U200'},
+      correa_g:  {prefix:['G'],                ej:'G160x65x15x2, G200x75x20x3'},
+      correa_z:  {prefix:['Z'],                ej:'Z160x65x15x2, Z200x75x20x3'},
+      tubo_rect: {prefix:['TR'],               ej:'TR100x60x4, TR80x40x3'},
+      tubo_cuad: {prefix:['TC'],               ej:'TC80x4, TC100x5'},
+      tubo_circ: {prefix:['TU'],               ej:'TU76x3, TU114x4'},
+      barra_red: {prefix:['BR'],               ej:'BR25, BR32, BR50'},
+      barra_cuad:{prefix:['BC'],               ej:'BC20, BC30, BC40'},
+      barra_plana:{prefix:['BP'],              ej:'BP100x8, BP150x10'},
     };
-    const flds = fields[tipo]||[];
-    dims.innerHTML = flds.map(f=>`
-      <div class="field">
-        <label>${f.lbl}</label>
-        <input type="number" id="${f.id}" inputmode="numeric" placeholder="0" 
-          style="font-size:14px" oninput="calcPerfilWk()">
-      </div>`).join('');
+    const info = tablaInfo[tipo] || {prefix:[],ej:''};
+
+    // Opciones de la tabla filtradas por tipo
+    const opcionesFiltradas = Object.keys(TABLA_PESOS).filter(k=>
+      info.prefix.some(p=>k.startsWith(p))
+    );
+
+    const dimFields = {
+      viga_i:    [{id:'pd-h',lbl:'Altura H (mm)',ph:'300'},{id:'pd-b',lbl:'Ala B (mm)',ph:'150'},{id:'pd-tw',lbl:'Alma tw (mm)',ph:'7'},{id:'pd-tf',lbl:'Ala tf (mm)',ph:'10'}],
+      angulo:    [{id:'pd-a1',lbl:'Ala 1 (mm)',ph:'75'},{id:'pd-a2',lbl:'Ala 2 (mm)',ph:'75'},{id:'pd-t',lbl:'Espesor (mm)',ph:'8'}],
+      canal_u:   [{id:'pd-h',lbl:'Altura H (mm)',ph:'160'},{id:'pd-b',lbl:'Ala B (mm)',ph:'65'},{id:'pd-t',lbl:'Esp. (mm)',ph:'7'}],
+      correa_g:  [{id:'pd-h',lbl:'Altura H (mm)',ph:'160'},{id:'pd-b',lbl:'Ala B (mm)',ph:'65'},{id:'pd-c',lbl:'Labio C (mm)',ph:'15'},{id:'pd-t',lbl:'Esp. (mm)',ph:'2'}],
+      correa_z:  [{id:'pd-h',lbl:'Altura H (mm)',ph:'160'},{id:'pd-b',lbl:'Ala B (mm)',ph:'65'},{id:'pd-c',lbl:'Labio C (mm)',ph:'15'},{id:'pd-t',lbl:'Esp. (mm)',ph:'2'}],
+      tubo_rect: [{id:'pd-an',lbl:'Ancho (mm)',ph:'100'},{id:'pd-al',lbl:'Alto (mm)',ph:'60'},{id:'pd-t',lbl:'Espesor (mm)',ph:'4'}],
+      tubo_cuad: [{id:'pd-lado',lbl:'Lado (mm)',ph:'80'},{id:'pd-t',lbl:'Espesor (mm)',ph:'4'}],
+      tubo_circ: [{id:'pd-d',lbl:'Diámetro ext (mm)',ph:'76'},{id:'pd-t',lbl:'Espesor (mm)',ph:'3'}],
+      barra_red: [{id:'pd-d',lbl:'Diámetro (mm)',ph:'25'}],
+      barra_cuad:[{id:'pd-lado',lbl:'Lado (mm)',ph:'25'}],
+      barra_plana:[{id:'pd-ancho',lbl:'Ancho (mm)',ph:'100'},{id:'pd-esp',lbl:'Espesor (mm)',ph:'8'}],
+    };
+    const flds = dimFields[tipo]||[];
+
+    dims.innerHTML = `
+      <div class="field" style="grid-column:1/-1">
+        <label>Perfil nominal <span style="color:#6b7280;font-weight:400">(buscar en tabla ANDEC/NOVACERO/IPAC)</span></label>
+        <input type="text" id="pd-nominal" placeholder="${info.ej}"
+          list="pd-nominal-list" style="font-size:14px;font-weight:700;border-color:#1e40af"
+          oninput="calcPerfilWk()">
+        <datalist id="pd-nominal-list">
+          ${opcionesFiltradas.map(k=>`<option value="${k}">${k} — ${TABLA_PESOS[k]} kg/m</option>`).join('')}
+        </datalist>
+        <div style="font-size:10px;color:#6b7280;margin-top:2px">
+          O ingresa las dimensiones abajo para calcular por fórmula
+        </div>
+      </div>
+      ${flds.map(f=>`
+        <div class="field">
+          <label>${f.lbl}</label>
+          <input type="number" id="${f.id}" inputmode="numeric" placeholder="${f.ph||'0'}"
+            style="font-size:14px" oninput="calcPerfilWk()">
+        </div>`).join('')}`;
     calcPerfilWk();
   } else {
     if(planchasData.length===0) initPlanchasWk();
@@ -1214,10 +1372,65 @@ function buildCtPorPlancha(){
   const cont = document.getElementById('ct-por-plancha');
   const totalBox = document.getElementById('ct-total-box');
   const planchas = draft.pl.planchas || [];
+  const piezasHI = PIEZAS_HI[selParte?.perfil];
+  const esHI = piezasHI && planchas.length > 1 && draft.pl.tipo === 'plancha';
   const esSoloUna = planchas.length <= 1 || draft.pl.tipo !== 'plancha';
 
-  if(esSoloUna){
-    // Modo simple: un solo campo de cantidad
+  if(esHI){
+    // ── Modo viga HI: un campo "vigas completas" + desglose por sub-pieza ──
+    totalBox.style.display = '';
+    // Un campo único: cuántas vigas completas se cortaron
+    cont.innerHTML = `
+      <div style="background:#eef4ff;border:1.5px solid #bfdbfe;border-radius:10px;padding:.875rem;margin-bottom:.75rem">
+        <div style="font-size:12px;font-weight:700;color:#1e40af;margin-bottom:.625rem">
+          🏗 ¿Cuántas vigas <span style="color:var(--o)">${selParte.pr}</span> cortaste completas?
+          <div style="font-size:10px;font-weight:400;color:#6b7280;margin-top:2px">
+            Cada viga = ${piezasHI.map(p=>`${p.qty} ${p.tipo.toLowerCase()}${p.qty>1?'es':''}`).join(' + ')}
+          </div>
+        </div>
+        <input type="number" class="num-big" id="ct-qty-vigas" inputmode="numeric" min="0" placeholder="0"
+          oninput="recalcCtTotal()" style="margin-bottom:.5rem">
+        <div class="num-ctrl">
+          <button class="nbtn" onclick="adjCtVigas(-10)">−10</button>
+          <button class="nbtn" onclick="adjCtVigas(-1)">−1</button>
+          <button class="nbtn" onclick="adjCtVigas(1)">+1</button>
+          <button class="nbtn" onclick="adjCtVigas(10)">+10</button>
+        </div>
+      </div>
+      <div id="ct-desglose-hi" style="display:none">
+        <div style="font-size:11px;font-weight:700;color:#374151;margin-bottom:.5rem;text-transform:uppercase;letter-spacing:.05em">
+          Desglose de piezas cortadas
+        </div>
+        ${planchas.map((pl, i) => {
+          const pz = piezasHI[i] || piezasHI[piezasHI.length-1];
+          return `
+          <div style="border:1.5px solid ${i===0?'#a5f3fc':'#fde68a'};border-radius:10px;padding:.75rem;margin-bottom:.5rem;background:${i===0?'#f0fdfe':'#fffbeb'}">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.375rem">
+              <span style="font-size:12px;font-weight:700;color:${i===0?'#0e7490':'#92400e'}">
+                ${pz.tipo==='Alma'?'🔷':'🔶'} ${pz.desc}
+              </span>
+              <span style="font-size:11px;color:#6b7280">Plancha ${pl.esp}mm · ${pl.num||'—'}</span>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;font-size:11px;color:#374151;margin-bottom:.375rem">
+              <div style="background:#fff;border-radius:6px;padding:4px 6px;text-align:center">
+                <div style="font-size:9px;color:#6b7280;font-weight:700">ESP</div>
+                <div style="font-weight:700">${pz.esp} mm</div>
+              </div>
+              <div style="background:#fff;border-radius:6px;padding:4px 6px;text-align:center">
+                <div style="font-size:9px;color:#6b7280;font-weight:700">ANCHO CORTE</div>
+                <div style="font-weight:700">${pz.ancho} mm</div>
+              </div>
+              <div style="background:#fff;border-radius:6px;padding:4px 6px;text-align:center">
+                <div style="font-size:9px;color:#6b7280;font-weight:700">LARGO CORTE</div>
+                <div style="font-weight:700">${selParte.long} mm</div>
+              </div>
+            </div>
+            <div id="ct-desglose-${i}" style="font-size:12px;font-weight:700;color:#065f46;text-align:right">—</div>
+          </div>`;
+        }).join('')}
+      </div>`;
+
+  } else if(esSoloUna){
     totalBox.style.display = 'none';
     cont.innerHTML = `
       <div class="field"><label>¿Cuántas piezas cortaste?</label>
@@ -1233,15 +1446,13 @@ function buildCtPorPlancha(){
         Peso piezas: <span id="ct-peso-txt-0">—</span>
       </div>`;
   } else {
-    // Modo multi-plancha: un bloque por cada plancha
+    // Multi-plancha genérica (no HI)
     totalBox.style.display = '';
-    cont.innerHTML = planchas.map((p, i) => {
-      const kgPieza = selParte?.pu || 0;
-      return `
+    cont.innerHTML = planchas.map((p, i) => `
       <div style="border:1.5px solid #bfdbfe;border-radius:10px;padding:.75rem;margin-bottom:.625rem;background:#f8faff">
         <div style="font-size:12px;font-weight:700;color:#1e40af;margin-bottom:.5rem">
           📋 Plancha ${i+1} — ${p.esp}mm × ${p.ancho}×${p.largo}mm · ${p.mat} · ${p.peso.toFixed(1)} kg
-          ${p.num ? `<span style="color:#6b7280;font-weight:400"> · ${p.num}</span>` : ''}
+          ${p.num?`<span style="color:#6b7280;font-weight:400"> · ${p.num}</span>`:''}
         </div>
         <div class="field" style="margin-bottom:.375rem"><label style="font-size:10px">Piezas cortadas de esta plancha</label>
           <input type="number" class="num-big" id="ct-qty-${i}" inputmode="numeric" min="0" placeholder="0"
@@ -1256,9 +1467,13 @@ function buildCtPorPlancha(){
         <div id="ct-peso-row-${i}" style="background:#f0fdf4;border-radius:6px;padding:4px 8px;font-size:12px;font-weight:700;color:#065f46;display:none">
           Peso: <span id="ct-peso-txt-${i}">—</span>
         </div>
-      </div>`;
-    }).join('');
+      </div>`).join('');
   }
+}
+
+function adjCtVigas(n){
+  const el=document.getElementById('ct-qty-vigas');
+  if(el){ el.value=Math.max(0,(parseInt(el.value||'0')+n)); recalcCtTotal(); }
 }
 
 function adjCt(idx, n){
@@ -1268,28 +1483,51 @@ function adjCt(idx, n){
 
 function recalcCtTotal(){
   const planchas = draft.pl.planchas || [];
+  const piezasHI = PIEZAS_HI[selParte?.perfil];
+  const esHI = piezasHI && planchas.length > 1 && draft.pl.tipo === 'plancha';
   const esSoloUna = planchas.length <= 1 || draft.pl.tipo !== 'plancha';
-  const kgPieza = selParte?.pu || 0;
-  let totalQty = 0, totalPeso = 0;
+  const kgViga = selParte?.pu || 0;
 
-  if(esSoloUna){
+  if(esHI){
+    const vigas = parseInt(document.getElementById('ct-qty-vigas')?.value)||0;
+    const desglose = document.getElementById('ct-desglose-hi');
+    if(desglose) desglose.style.display = vigas>0 ? '' : 'none';
+
+    // Mostrar desglose por sub-pieza
+    planchas.forEach((pl, i) => {
+      const pz = piezasHI[i] || piezasHI[piezasHI.length-1];
+      const totalPzas = vigas * pz.qty;
+      const pesoPzas = totalPzas * pz.esp * pz.ancho * selParte.long * D;
+      const el = document.getElementById(`ct-desglose-${i}`);
+      if(el) el.textContent = vigas>0
+        ? `${totalPzas} piezas · ${pesoPzas.toFixed(1)} kg (${pz.qty} × ${vigas} vigas)`
+        : '—';
+    });
+
+    // Total acumulado
+    document.getElementById('ct-total-qty').textContent = `${vigas} vigas completas`;
+    document.getElementById('ct-total-peso').textContent = `${(vigas*kgViga).toFixed(1)} kg`;
+
+    // Guardar cortesPorPlancha en draft para irASobrante
+    draft._vigasQt = vigas;
+
+  } else if(esSoloUna){
     const q = parseInt(document.getElementById('ct-qty-0')?.value)||0;
-    totalQty = q;
-    totalPeso = q * kgPieza;
     const pr = document.getElementById('ct-peso-row-0');
     const pt = document.getElementById('ct-peso-txt-0');
-    if(pr && pt){ pr.style.display = q>0?'':'none'; pt.textContent = `${totalPeso.toFixed(1)} kg`; }
+    if(pr&&pt){ pr.style.display=q>0?'':'none'; pt.textContent=`${(q*kgViga).toFixed(1)} kg`; }
   } else {
-    planchas.forEach((p, i) => {
-      const q = parseInt(document.getElementById(`ct-qty-${i}`)?.value)||0;
-      const pesoI = q * kgPieza;
-      totalQty += q; totalPeso += pesoI;
-      const pr = document.getElementById(`ct-peso-row-${i}`);
-      const pt = document.getElementById(`ct-peso-txt-${i}`);
-      if(pr && pt){ pr.style.display = q>0?'':'none'; pt.textContent = `${q} pzas × ${kgPieza} kg/ud = ${pesoI.toFixed(1)} kg`; }
+    let totalQty=0, totalPeso=0;
+    planchas.forEach((p,i)=>{
+      const q=parseInt(document.getElementById(`ct-qty-${i}`)?.value)||0;
+      const pesoI=q*kgViga;
+      totalQty+=q; totalPeso+=pesoI;
+      const pr=document.getElementById(`ct-peso-row-${i}`);
+      const pt=document.getElementById(`ct-peso-txt-${i}`);
+      if(pr&&pt){ pr.style.display=q>0?'':'none'; pt.textContent=`${q} pzas × ${kgViga} kg/ud = ${pesoI.toFixed(1)} kg`; }
     });
-    document.getElementById('ct-total-qty').textContent = `${totalQty} piezas`;
-    document.getElementById('ct-total-peso').textContent = `${totalPeso.toFixed(1)} kg`;
+    document.getElementById('ct-total-qty').textContent=`${totalQty} piezas`;
+    document.getElementById('ct-total-peso').textContent=`${totalPeso.toFixed(1)} kg`;
   }
 }
 
@@ -1298,40 +1536,52 @@ function calcCtPeso(){ recalcCtTotal(); }
 
 function irASobrante(){
   const planchas = draft.pl.planchas || [];
+  const piezasHI = PIEZAS_HI[selParte?.perfil];
+  const esHI = piezasHI && planchas.length > 1 && draft.pl.tipo === 'plancha';
   const esSoloUna = planchas.length <= 1 || draft.pl.tipo !== 'plancha';
   let totalQty = 0;
   const cortesPorPlancha = [];
 
-  if(esSoloUna){
+  if(esHI){
+    const vigas = parseInt(document.getElementById('ct-qty-vigas')?.value)||0;
+    if(vigas <= 0){ alert('Ingresa cuántas vigas cortaste'); return; }
+    totalQty = vigas;
+    // Por cada plancha/sub-pieza, la cantidad de piezas cortadas = vigas × pz.qty
+    planchas.forEach((pl, i) => {
+      const pz = piezasHI[i] || piezasHI[piezasHI.length-1];
+      cortesPorPlancha.push({planchaIdx:i, qty: vigas * pz.qty, vigas, piezaTipo: pz.tipo, piezaDesc: pz.desc});
+    });
+  } else if(esSoloUna){
     totalQty = parseInt(document.getElementById('ct-qty-0')?.value)||0;
-    if(planchas.length === 1) cortesPorPlancha.push({planchaIdx:0, qty:totalQty});
+    if(planchas.length===1) cortesPorPlancha.push({planchaIdx:0, qty:totalQty});
   } else {
-    planchas.forEach((p, i) => {
-      const q = parseInt(document.getElementById(`ct-qty-${i}`)?.value)||0;
-      totalQty += q;
+    planchas.forEach((p,i)=>{
+      const q=parseInt(document.getElementById(`ct-qty-${i}`)?.value)||0;
+      totalQty+=q;
       cortesPorPlancha.push({planchaIdx:i, qty:q});
     });
   }
 
-  if(totalQty <= 0){alert('Ingresa cuántas piezas cortaste (al menos 1 en total)');return;}
+  if(totalQty<=0){ alert('Ingresa cuántas piezas cortaste (al menos 1 en total)'); return; }
 
-  const yaHecho = totalExec(selCj.cj, selParte.pr, 'Corte');
-  const plan = selParte.plan;
-  if(yaHecho + totalQty > plan){
-    const exceso = (yaHecho + totalQty) - plan;
-    const ok = confirm(`⚠ ADVERTENCIA: Esta cantidad supera el plan Tekla.\n\nPlan: ${plan} uds\nYa cortado: ${yaHecho} uds\nEstás ingresando: ${totalQty} uds\nExceso: ${exceso} uds\n\n¿Deseas continuar de todas formas?`);
+  const yaHecho=totalExec(selCj.cj, selParte.pr, 'Corte');
+  const plan=selParte.plan;
+  if(yaHecho+totalQty>plan){
+    const exceso=(yaHecho+totalQty)-plan;
+    const ok=confirm(`⚠ ADVERTENCIA: Esta cantidad supera el plan Tekla.\n\nPlan: ${plan} uds\nYa cortado: ${yaHecho} uds\nEstás ingresando: ${totalQty} uds\nExceso: ${exceso} uds\n\n¿Deseas continuar de todas formas?`);
     if(!ok) return;
   }
 
-  draft.ct = {
+  draft.ct={
     qty: totalQty,
     cal: calidad,
     obs: document.getElementById('ct-obs').value.trim(),
     pesoPzas: totalQty * selParte.pu,
-    cortesPorPlancha
+    cortesPorPlancha,
+    esHI: !!esHI,
   };
 
-  document.getElementById('sb-sob').innerHTML = stepbar(3,['Material','Cortes','Sobrante']);
+  document.getElementById('sb-sob').innerHTML=stepbar(3,['Material','Cortes','Sobrante']);
   buildSobBloques();
   go('sc-sob');
 }
@@ -1359,19 +1609,24 @@ function buildSobBloques(){
       ${sobFormHTML(0, pl, qtyCortado)}`;
   } else {
     resGlobal.style.display = '';
+    const piezasHI = PIEZAS_HI[selParte?.perfil];
     cont.innerHTML = planchas.map((pl, i) => {
-      const qtyCortado = draft.ct.cortesPorPlancha?.[i]?.qty || 0;
+      const cpp = draft.ct.cortesPorPlancha?.[i] || {};
+      const qtyCortado = cpp.qty || 0;
+      const pz = piezasHI?.[i];
+      // Para HI: mostrar sub-pieza y dimensiones de corte
+      const infoCorte = pz
+        ? `✂ <strong>${pz.desc}</strong> — ${qtyCortado} piezas cortadas
+           <span style="font-size:10px;color:#6b7280">(${pz.esp}×${pz.ancho}×${selParte.long}mm · ${(qtyCortado*pz.esp*pz.ancho*selParte.long*D).toFixed(1)} kg)</span>`
+        : `✂ Piezas cortadas: <strong>${qtyCortado}</strong>`;
       return `
       <div style="border:2px solid #fcd34d;border-radius:12px;padding:.875rem;margin-bottom:.875rem;background:#fffbeb">
-        <div style="font-size:12px;font-weight:800;color:#92400e;margin-bottom:.625rem">
-          📋 PLANCHA ${i+1} — ${pl.esp}mm × ${pl.ancho}×${pl.largo}mm · ${pl.mat}
+        <div style="font-size:12px;font-weight:800;color:#92400e;margin-bottom:.375rem">
+          ${pz?.(pz.tipo==='Alma'?'🔷':'🔶'):'📋'} PLANCHA ${i+1} — ${pl.esp}mm × ${pl.ancho||'?'}×${pl.largo||'?'}mm · ${pl.mat}
           ${pl.num?`<span style="font-weight:400;color:#6b7280"> · ${pl.num}</span>`:''}
           <span style="float:right;background:#92400e;color:#fff;border-radius:6px;padding:1px 8px;font-size:11px">${(pl.peso||0).toFixed(1)} kg</span>
         </div>
-        <div style="font-size:11px;color:#92400e;margin-bottom:.5rem">
-          ✂ Piezas cortadas de esta plancha: <strong>${qtyCortado}</strong> 
-          (${(qtyCortado * selParte.pu).toFixed(1)} kg en piezas)
-        </div>
+        <div style="font-size:11px;color:#92400e;margin-bottom:.625rem">${infoCorte}</div>
         ${sobFormHTML(i, pl, qtyCortado)}
       </div>`;
     }).join('');
@@ -1439,8 +1694,11 @@ function calcSobPlancha(idx){
     document.getElementById(`sob-peso-${idx}`).value = sobPeso>0 ? sobPeso.toFixed(2) : '';
 
   // Desperdicio de esta plancha
-  const qtyCortado = draft.ct.cortesPorPlancha?.[idx]?.qty || 0;
-  const pesoPzas = qtyCortado * selParte.pu;
+  const cpp = draft.ct.cortesPorPlancha?.[idx];
+  const qtyCortado = cpp?.qty || 0;
+  const pesoPzas = draft.ct.esHI
+    ? (() => { const pz=PIEZAS_HI[selParte?.perfil]?.[idx]; return pz ? qtyCortado*pz.esp*pz.ancho*selParte.long*D : 0; })()
+    : qtyCortado * selParte.pu;
   const plPeso = pl.peso || 0;
   const sobReal = hay==='si' ? sobPeso : 0;
   const desp = plPeso > 0 ? Math.max(0, plPeso - pesoPzas - sobReal) : 0;
