@@ -1143,7 +1143,18 @@ function irACortes(){
     };
   }
   document.getElementById('sb-cortes').innerHTML=stepbar(2,['Material','Cortes','Sobrante']);
-  document.getElementById('plancha-txt').textContent=`📋 ${draft.pl.num} · ${draft.pl.mat} · ${e}×${a}×${l} mm · ${draft.pl.peso.toFixed(1)} kg`;
+  
+  // Build material summary for display
+  let matResumen = '';
+  if(draft.pl.tipo==='plancha'){
+    matResumen = draft.pl.planchas.map((p,i)=>
+      `📋 Plancha ${i+1}: ${p.num||'—'} · ${p.mat} · ${p.esp}×${p.ancho}×${p.largo}mm · ${p.peso.toFixed(1)}kg`
+    ).join('<br>');
+    matResumen += `<br><strong>Total: ${draft.pl.peso.toFixed(1)} kg</strong>`;
+  } else {
+    matResumen = `🔩 ${draft.pl.tipo} · ${draft.pl.desc} · ${(draft.pl.longReal/1000).toFixed(1)}m × ${draft.pl.qty} uds · ${draft.pl.peso.toFixed(1)} kg`;
+  }
+  document.getElementById('plancha-txt').innerHTML = matResumen;
   document.getElementById('corte-pr-lbl').textContent=`${selParte.pr} (${selParte.perfil})`;
   document.getElementById('ct-peso-row').style.display='';
   sv('ct-qty','');sv('ct-peso-pzas','');
@@ -1225,17 +1236,29 @@ function guardarCorte(){
   const hay=document.getElementById('sob-hay').value;
   const sobPeso=hay==='si'?gv('sob-peso'):0;
   const desp=Math.max(0,(draft.pl.peso||0)-draft.ct.pesoPzas-(hay==='si'?sobPeso:0));
+  // Build plancha summary for record
+  const pl0 = draft.pl.planchas?.[0] || draft.pl;
   const rec={
     id:Date.now(),tipo:'corte',fecha:todayISO(),hora:timeNow(),
     opId:W.id,opNom:`${W.nom} ${W.ape}`,opRol:W.rol,
     fase:'Corte',cj:selCj.cj,pr:selParte.pr,perfil:selParte.perfil,
     qty:draft.ct.qty,pesoPzas:draft.ct.pesoPzas,calidad:draft.ct.cal,obs:draft.ct.obs,
-    pl_num:draft.pl.num,pl_mat:draft.pl.mat,pl_esp:draft.pl.esp,
-    pl_ancho:draft.pl.ancho,pl_largo:draft.pl.largo,pl_qty:draft.pl.qty,pl_peso:draft.pl.peso,
+    pl_num:pl0.num||draft.pl.num||'—',
+    pl_mat:pl0.mat||draft.pl.mat||'—',
+    pl_esp:pl0.esp||draft.pl.esp||0,
+    pl_ancho:pl0.ancho||draft.pl.ancho||0,
+    pl_largo:pl0.largo||draft.pl.largo||0,
+    pl_qty:draft.pl.qty||1,
+    pl_peso:draft.pl.peso||0,
+    pl_tipo:draft.pl.tipo||'plancha',
+    pl_planchas: draft.pl.planchas ? JSON.stringify(draft.pl.planchas) : '',
+    pl_kgM: draft.pl.kgM||0,
     sob_hay:hay,sob_peso:sobPeso,
-    sob_esp:gv('sob-esp')||draft.pl.esp,sob_ancho:gv('sob-ancho')||draft.pl.ancho,
+    sob_esp:gv('sob-esp')||pl0.esp||0,
+    sob_ancho:gv('sob-ancho')||pl0.ancho||0,
     sob_largo:gv('sob-largo'),sob_qty:gv('sob-qty')||1,
-    sob_colada:draft.pl.num,sob_mat:draft.pl.mat,
+    sob_colada:pl0.num||draft.pl.num||'—',
+    sob_mat:pl0.mat||draft.pl.mat||'—',
     sob_dest:document.getElementById('sob-dest').value,
     sob_ref:document.getElementById('sob-ref').value.trim(),
     desperdicio:parseFloat(desp.toFixed(2)),
