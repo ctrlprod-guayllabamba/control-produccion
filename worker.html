@@ -193,6 +193,9 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);min-height
     <div class="card-t">🗃 Tipo de material a cortar</div>
     <div class="field"><label>Tipo de perfil / material</label>
       <select id="pl-tipo" onchange="onTipoMaterialWk()" style="font-size:15px;font-weight:700">
+        <optgroup label="── Figura irregular ──">
+          <option value="figura_irreg">✏️ Figura irregular / forma especial</option>
+        </optgroup>
         <optgroup label="── Planchas ──">
           <option value="plancha">📋 Plancha / Placa</option>
         </optgroup>
@@ -221,7 +224,129 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);min-height
       <div id="wk-planchas-list"></div>
       <button onclick="addPlanchaRow()" style="width:100%;padding:.5rem;background:#eef4ff;color:#1e40af;border:1px dashed #93c5fd;border-radius:8px;font-size:13px;cursor:pointer;margin-top:.25rem">+ Agregar otra plancha</button>
     </div>
-    <div id="wk-dims-perfil" style="display:none">
+    <div id="wk-dims-irreg" style="display:none">
+      <div style="font-size:11px;font-weight:700;color:#7c3aed;margin:.5rem 0 .375rem">✏️ FIGURA IRREGULAR</div>
+
+      <!-- Fuente del peso -->
+      <div style="background:#f5f3ff;border:1px solid #ddd6fe;border-radius:10px;padding:.75rem;margin-bottom:.75rem">
+        <div style="font-size:12px;font-weight:700;color:#5b21b6;margin-bottom:.5rem">Fuente del peso unitario</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:.5rem">
+          <button id="btn-src-tekla" onclick="setIrregSrc('tekla')"
+            style="padding:.625rem;border-radius:8px;border:2px solid #7c3aed;background:#7c3aed;color:#fff;font-size:12px;font-weight:700;cursor:pointer">
+            📐 Dato de Tekla
+          </button>
+          <button id="btn-src-formula" onclick="setIrregSrc('formula')"
+            style="padding:.625rem;border-radius:8px;border:2px solid #d1d5db;background:#fff;color:#374151;font-size:12px;font-weight:700;cursor:pointer">
+            📏 Calcular por forma
+          </button>
+        </div>
+
+        <!-- Fuente: Tekla -->
+        <div id="irreg-src-tekla">
+          <div class="field">
+            <label>Peso unitario según Tekla (kg/pieza)</label>
+            <input type="number" id="irreg-pu-tekla" inputmode="decimal" placeholder="Ej: 45.32"
+              style="font-size:20px;font-weight:700;border-color:#7c3aed" oninput="calcIrreg()">
+          </div>
+          <div class="field" style="margin-top:-.25rem">
+            <label>Cantidad de piezas a cortar</label>
+            <input type="number" id="irreg-qty-tekla" value="1" min="1" inputmode="numeric"
+              style="font-size:16px" oninput="calcIrreg()">
+          </div>
+        </div>
+
+        <!-- Fuente: Fórmula por forma -->
+        <div id="irreg-src-formula" style="display:none">
+          <div class="field">
+            <label>Tipo de figura</label>
+            <select id="irreg-forma" onchange="onIrregForma()" style="font-size:14px;font-weight:700">
+              <option value="">— Selecciona la forma —</option>
+              <optgroup label="── Formas básicas ──">
+                <option value="triangulo">🔺 Triángulo / Cuña</option>
+                <option value="trapecio">⬟ Trapecio / Rigidizador diagonal</option>
+                <option value="rombo">◆ Rombo / Paralelogramo</option>
+                <option value="circulo">⬤ Círculo / Disco</option>
+                <option value="arco">🌙 Sector circular / Arco</option>
+              </optgroup>
+              <optgroup label="── Formas compuestas ──">
+                <option value="forma_l">⌐ Forma en L</option>
+                <option value="forma_t">⊤ Forma en T</option>
+                <option value="rect_agujeros">▣ Rectángulo con agujeros</option>
+                <option value="irreg_libre">✏️ Área libre (mido el rectángulo envolvente)</option>
+              </optgroup>
+            </select>
+          </div>
+          <div id="irreg-dims" class="frow"></div>
+          <div class="field">
+            <label>Espesor de la plancha (mm)</label>
+            <input type="number" id="irreg-esp" inputmode="numeric" placeholder="12"
+              style="border-color:#7c3aed" oninput="calcIrreg()">
+          </div>
+          <div class="field">
+            <label>Cantidad de piezas a cortar</label>
+            <input type="number" id="irreg-qty" value="1" min="1" inputmode="numeric"
+              style="font-size:16px" oninput="calcIrreg()">
+          </div>
+        </div>
+
+        <!-- Resultado -->
+        <div id="irreg-resultado" style="display:none;background:#ede9fe;border-radius:8px;padding:.625rem .875rem;margin-top:.5rem">
+          <div style="font-size:10px;color:#5b21b6;font-weight:700">PESO CALCULADO</div>
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div id="irreg-peso-txt" style="font-size:22px;font-weight:800;color:#5b21b6">—</div>
+            <div id="irreg-detalle-txt" style="font-size:10px;color:#7c3aed;text-align:right;max-width:55%">—</div>
+          </div>
+        </div>
+
+        <!-- Corrección por pesada real -->
+        <div style="margin-top:.5rem">
+          <label style="font-size:11px;color:#6b7280;display:flex;align-items:center;gap:6px;cursor:pointer">
+            <input type="checkbox" id="irreg-pesada-check" onchange="togglePesadaReal()">
+            Corregir con peso real de balanza
+          </label>
+          <div id="irreg-pesada-wrap" style="display:none;margin-top:.375rem">
+            <input type="number" id="irreg-peso-real" inputmode="decimal"
+              placeholder="Peso real en balanza (kg total)"
+              style="width:100%;padding:8px;border:2px solid #f59e0b;border-radius:8px;font-size:14px"
+              oninput="calcIrreg()">
+          </div>
+        </div>
+      </div>
+
+      <!-- Plancha origen -->
+      <div style="font-size:11px;font-weight:700;color:#1e40af;margin:.5rem 0 .25rem">📋 PLANCHA ORIGEN</div>
+      <div style="border:1px solid #bfdbfe;border-radius:10px;padding:.75rem;background:#f8faff">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
+          <div><label style="font-size:11px;color:#6b7280">N° Colada</label>
+            <input type="text" id="irreg-pl-num" placeholder="000000-000013"
+              style="width:100%;padding:6px;border:1px solid #d1d5db;border-radius:6px;font-size:13px"></div>
+          <div><label style="font-size:11px;color:#6b7280">Material</label>
+            <select id="irreg-pl-mat" style="width:100%;padding:6px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+              <option value="A588-50">A588-50</option><option value="A572-50">A572-50</option>
+              <option value="A36">A36</option><option value="otro">Otro</option>
+            </select></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px">
+          <div><label style="font-size:11px;color:#6b7280">Esp (mm)</label>
+            <input type="number" id="irreg-pl-esp" inputmode="numeric" placeholder="12"
+              style="width:100%;padding:6px;border:1px solid #d1d5db;border-radius:6px;font-size:13px"
+              oninput="calcIrreg()"></div>
+          <div><label style="font-size:11px;color:#6b7280">Ancho (mm)</label>
+            <input type="number" id="irreg-pl-ancho" inputmode="numeric" placeholder="2500"
+              style="width:100%;padding:6px;border:1px solid #d1d5db;border-radius:6px;font-size:13px"
+              oninput="calcIrreg()"></div>
+          <div><label style="font-size:11px;color:#6b7280">Largo (mm)</label>
+            <input type="number" id="irreg-pl-largo" inputmode="numeric" placeholder="12000"
+              style="width:100%;padding:6px;border:1px solid #d1d5db;border-radius:6px;font-size:13px"
+              oninput="calcIrreg()"></div>
+          <div><label style="font-size:11px;color:#6b7280">Cant.</label>
+            <input type="number" id="irreg-pl-qty" value="1" min="1"
+              style="width:100%;padding:6px;border:1px solid #d1d5db;border-radius:6px;font-size:13px"
+              oninput="calcIrreg()"></div>
+        </div>
+        <div id="irreg-pl-peso-txt" style="font-size:12px;color:#065f46;font-weight:700;margin-top:6px;text-align:right"></div>
+      </div>
+    </div>
       <div style="font-size:11px;font-weight:700;color:#065f46;margin:.5rem 0 .25rem">📐 DIMENSIONES DEL PERFIL</div>
       <div class="frow" id="wk-perfil-dims"></div>
       <div class="frow">
@@ -879,29 +1004,30 @@ function selectParte(prId){
     if(tipoSel) tipoSel.value='plancha';
     onTipoMaterialWk();
 
-    // Si la parte es una viga HI compuesta, pre-cargar sus sub-piezas como planchas
     const piezasHI = PIEZAS_HI[selParte.perfil];
     if(piezasHI){
-      // Limpiar y construir una plancha por sub-pieza
+      // Para viga HI: pre-crear una fila de plancha por cada tipo de sub-pieza
+      // El operario ingresa las dimensiones COMERCIALES de cada plancha
+      // (el espesor es fijo por diseño, ancho y largo son los de la plancha real que usó)
       planchasData=[];
       document.getElementById('wk-planchas-list').innerHTML='';
-      // Agrupar: alma (1 fila) + patines (1 fila, qty=2)
-      const grupos = [];
-      piezasHI.forEach(pz=>{
-        const existe = grupos.find(g=>g.esp===pz.esp&&g.ancho===pz.ancho&&g.tipo===pz.tipo);
-        if(!existe) grupos.push({...pz});
-      });
-      grupos.forEach(pz=>{
-        const idx=planchasData.length;
-        planchasData.push({esp:pz.esp,ancho:pz.ancho,largo:selParte.long,qty:pz.qty,num:'',mat:'A588-50',peso:0});
-        addPlanchaRowDesdeHI(idx, pz);
-      });
-      // Mostrar aviso
+      document.querySelectorAll('.hi-aviso').forEach(el=>el.remove());
+
       const aviso=document.createElement('div');
-      aviso.style.cssText='background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:8px 12px;font-size:12px;color:#92400e;margin-bottom:.5rem';
-      aviso.innerHTML=`🏗 <strong>Viga ${selParte.perfil}</strong> — pre-cargada con sus sub-piezas.<br>
-        Verifica dimensiones y agrega N° colada de cada plancha.`;
+      aviso.className='hi-aviso';
+      aviso.style.cssText='background:#fef3c7;border:1px solid #fcd34d;border-radius:10px;padding:10px 12px;font-size:12px;color:#92400e;margin-bottom:.5rem';
+      aviso.innerHTML=`
+        🏗 <strong>Viga ${selParte.perfil}</strong><br>
+        Ingresa las planchas comerciales que usaste.<br>
+        <span style="font-size:10px;opacity:.8">El espesor está fijo por diseño. Completa ancho, largo y N° colada.</span>`;
       document.getElementById('wk-dims-plancha').insertBefore(aviso,document.getElementById('wk-planchas-list'));
+
+      piezasHI.forEach(pz=>{
+        const idx=planchasData.length;
+        // Solo pre-llenar el espesor (fijo por diseño) — ancho/largo los ingresa el operario
+        planchasData.push({esp:pz.esp, ancho:'', largo:'', qty:1, num:'', mat:'A588-50', peso:0, _pzTipo:pz.tipo, _pzDesc:pz.desc});
+        addPlanchaRowHI(idx, pz);
+      });
     } else {
       initPlanchasWk();
     }
@@ -912,6 +1038,61 @@ function selectParte(prId){
   } else {
     buildForm();go('sc-form');
   }
+}
+
+function addPlanchaRowHI(idx, pz){
+  // Paso 1: plancha comercial con espesor fijo y ancho/largo libres
+  const div=document.createElement('div');
+  div.id=`pl-row-${idx}`;
+  div.style.cssText=`border:2px solid ${pz.tipo==='Alma'?'#a5f3fc':'#fde68a'};border-radius:10px;padding:.75rem;margin-bottom:.625rem;background:${pz.tipo==='Alma'?'#f0fdfe':'#fffbeb'}`;
+  div.innerHTML=`
+    <div style="font-size:12px;font-weight:700;color:${pz.tipo==='Alma'?'#0e7490':'#92400e'};margin-bottom:.5rem">
+      ${pz.tipo==='Alma'?'🔷':'🔶'} ${pz.tipo} — Plancha ${pz.esp}mm
+      <span style="font-size:10px;font-weight:400;color:#6b7280;margin-left:4px">(para cortar ${pz.desc})</span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
+      <div><label style="font-size:11px;color:#6b7280">N° Colada / Lote</label>
+        <input type="text" id="pl-num-${idx}" placeholder="000000-000013"
+          style="width:100%;padding:6px;border:1px solid #d1d5db;border-radius:6px;font-size:13px"
+          oninput="updatePlancha(${idx})"></div>
+      <div><label style="font-size:11px;color:#6b7280">Material</label>
+        <select id="pl-mat-${idx}" style="width:100%;padding:6px;border:1px solid #d1d5db;border-radius:6px;font-size:13px" onchange="updatePlancha(${idx})">
+          <option value="A588-50">A588-50</option><option value="A572-50">A572-50</option>
+          <option value="A36">A36</option><option value="otro">Otro</option>
+        </select></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px">
+      <div>
+        <label style="font-size:11px;color:#065f46;font-weight:700">Esp (mm)</label>
+        <input type="number" id="pl-esp-${idx}" value="${pz.esp}" readonly
+          style="width:100%;padding:6px;border:2px solid #86efac;border-radius:6px;font-size:13px;background:#f0fdf4;font-weight:700">
+        <div style="font-size:9px;color:#065f46;margin-top:1px;text-align:center">fijo diseño</div>
+      </div>
+      <div>
+        <label style="font-size:11px;color:#92400e;font-weight:700">Ancho (mm)</label>
+        <input type="number" id="pl-ancho-${idx}" inputmode="numeric" placeholder="2500"
+          style="width:100%;padding:6px;border:2px solid #fcd34d;border-radius:6px;font-size:13px;background:#fffbeb"
+          oninput="updatePlancha(${idx})">
+        <div style="font-size:9px;color:#92400e;margin-top:1px;text-align:center">plancha real</div>
+      </div>
+      <div>
+        <label style="font-size:11px;color:#92400e;font-weight:700">Largo (mm)</label>
+        <input type="number" id="pl-largo-${idx}" inputmode="numeric" placeholder="12000"
+          style="width:100%;padding:6px;border:2px solid #fcd34d;border-radius:6px;font-size:13px;background:#fffbeb"
+          oninput="updatePlancha(${idx})">
+        <div style="font-size:9px;color:#92400e;margin-top:1px;text-align:center">plancha real</div>
+      </div>
+      <div>
+        <label style="font-size:11px;color:#6b7280">Cant.</label>
+        <input type="number" id="pl-qty-${idx}" value="1" min="1"
+          style="width:100%;padding:6px;border:1px solid #d1d5db;border-radius:6px;font-size:13px"
+          oninput="updatePlancha(${idx})">
+        <div style="font-size:9px;color:#6b7280;margin-top:1px;text-align:center">planchas</div>
+      </div>
+    </div>
+    <div id="pl-peso-txt-${idx}" style="font-size:12px;color:#065f46;font-weight:700;margin-top:6px;text-align:right"></div>`;
+  document.getElementById('wk-planchas-list').appendChild(div);
+  updatePlancha(idx);
 }
 
 function addPlanchaRowDesdeHI(idx, pz){
@@ -1091,7 +1272,138 @@ function buscarPesoM(nombre){
   return null;
 }
 
-let planchasData = []; // array of plancha objects
+// ======= FIGURA IRREGULAR =======
+let _irregSrc = 'tekla'; // 'tekla' | 'formula'
+
+function setIrregSrc(src){
+  _irregSrc = src;
+  document.getElementById('irreg-src-tekla').style.display = src==='tekla' ? '' : 'none';
+  document.getElementById('irreg-src-formula').style.display = src==='formula' ? '' : 'none';
+  document.getElementById('btn-src-tekla').style.cssText =
+    src==='tekla' ? 'padding:.625rem;border-radius:8px;border:2px solid #7c3aed;background:#7c3aed;color:#fff;font-size:12px;font-weight:700;cursor:pointer'
+                  : 'padding:.625rem;border-radius:8px;border:2px solid #d1d5db;background:#fff;color:#374151;font-size:12px;font-weight:700;cursor:pointer';
+  document.getElementById('btn-src-formula').style.cssText =
+    src==='formula' ? 'padding:.625rem;border-radius:8px;border:2px solid #7c3aed;background:#7c3aed;color:#fff;font-size:12px;font-weight:700;cursor:pointer'
+                    : 'padding:.625rem;border-radius:8px;border:2px solid #d1d5db;background:#fff;color:#374151;font-size:12px;font-weight:700;cursor:pointer';
+  calcIrreg();
+}
+
+function togglePesadaReal(){
+  const on = document.getElementById('irreg-pesada-check').checked;
+  document.getElementById('irreg-pesada-wrap').style.display = on ? '' : 'none';
+  calcIrreg();
+}
+
+function onIrregForma(){
+  const forma = document.getElementById('irreg-forma').value;
+  const dims = document.getElementById('irreg-dims');
+  const campos = {
+    triangulo:    [{id:'id-b',lbl:'Base (mm)',ph:'400'},{id:'id-h',lbl:'Altura (mm)',ph:'300'}],
+    trapecio:     [{id:'id-b1',lbl:'Base mayor (mm)',ph:'500'},{id:'id-b2',lbl:'Base menor (mm)',ph:'200'},{id:'id-h',lbl:'Altura (mm)',ph:'300'}],
+    rombo:        [{id:'id-d1',lbl:'Diagonal mayor (mm)',ph:'600'},{id:'id-d2',lbl:'Diagonal menor (mm)',ph:'300'}],
+    circulo:      [{id:'id-d',lbl:'Diámetro (mm)',ph:'400'}],
+    arco:         [{id:'id-r',lbl:'Radio (mm)',ph:'300'},{id:'id-ang',lbl:'Ángulo (°)',ph:'90'},{id:'id-ri',lbl:'Radio interior (mm, 0 si es sólido)',ph:'0'}],
+    forma_l:      [{id:'id-a1',lbl:'Largo brazo 1 (mm)',ph:'500'},{id:'id-a2',lbl:'Largo brazo 2 (mm)',ph:'300'},{id:'id-w1',lbl:'Ancho brazo 1 (mm)',ph:'100'},{id:'id-w2',lbl:'Ancho brazo 2 (mm)',ph:'80'}],
+    forma_t:      [{id:'id-bt',lbl:'Ancho ala (mm)',ph:'300'},{id:'id-hw',lbl:'Alto alma (mm)',ph:'200'},{id:'id-wt',lbl:'Espesor ala (mm)',ph:'20'},{id:'id-ww',lbl:'Espesor alma (mm)',ph:'15'}],
+    rect_agujeros:[{id:'id-b',lbl:'Ancho rect. (mm)',ph:'400'},{id:'id-h',lbl:'Alto rect. (mm)',ph:'300'},{id:'id-da',lbl:'Diám. agujero (mm)',ph:'22'},{id:'id-na',lbl:'N° agujeros',ph:'4'}],
+    irreg_libre:  [{id:'id-b',lbl:'Ancho envolvente (mm)',ph:'500'},{id:'id-h',lbl:'Alto envolvente (mm)',ph:'400'},{id:'id-aprov',lbl:'% aprovechamiento del rectángulo',ph:'70'}],
+  };
+  dims.innerHTML = (campos[forma]||[]).map(f=>`
+    <div class="field">
+      <label>${f.lbl}</label>
+      <input type="number" id="${f.id}" inputmode="decimal" placeholder="${f.ph}"
+        style="font-size:14px;border-color:#7c3aed" oninput="calcIrreg()">
+    </div>`).join('');
+  calcIrreg();
+}
+
+function calcAreaIrreg(){
+  const forma = document.getElementById('irreg-forma')?.value || '';
+  const g = id => parseFloat(document.getElementById(id)?.value)||0;
+  let area = 0, desc = '';
+  switch(forma){
+    case 'triangulo':
+      { const b=g('id-b'),h=g('id-h'); area=0.5*b*h; desc=`△ base=${b} h=${h} mm`; break; }
+    case 'trapecio':
+      { const b1=g('id-b1'),b2=g('id-b2'),h=g('id-h'); area=0.5*(b1+b2)*h; desc=`⬟ b1=${b1} b2=${b2} h=${h} mm`; break; }
+    case 'rombo':
+      { const d1=g('id-d1'),d2=g('id-d2'); area=0.5*d1*d2; desc=`◆ d1=${d1} d2=${d2} mm`; break; }
+    case 'circulo':
+      { const d=g('id-d'); area=Math.PI*(d/2)**2; desc=`⬤ D=${d} mm`; break; }
+    case 'arco':
+      { const r=g('id-r'),ang=g('id-ang'),ri=g('id-ri');
+        area=(ang/360)*Math.PI*(r**2-ri**2); desc=`🌙 R=${r} ri=${ri} ${ang}°`; break; }
+    case 'forma_l':
+      { const a1=g('id-a1'),a2=g('id-a2'),w1=g('id-w1'),w2=g('id-w2');
+        area=a1*w1+(a2-w1)*w2; desc=`⌐ L: ${a1}×${w1} + ${a2}×${w2} mm`; break; }
+    case 'forma_t':
+      { const bt=g('id-bt'),hw=g('id-hw'),wt=g('id-wt'),ww=g('id-ww');
+        area=bt*wt+hw*ww; desc=`⊤ T: ala=${bt}×${wt} alma=${hw}×${ww} mm`; break; }
+    case 'rect_agujeros':
+      { const b=g('id-b'),h=g('id-h'),da=g('id-da'),na=g('id-na');
+        area=b*h - na*Math.PI*(da/2)**2; desc=`▣ ${b}×${h} - ${na} ag.D${da} mm`; break; }
+    case 'irreg_libre':
+      { const b=g('id-b'),h=g('id-h'),aprov=g('id-aprov')||100;
+        area=b*h*(aprov/100); desc=`✏️ env.${b}×${h} × ${aprov}% aprovech.`; break; }
+  }
+  return {area, desc};
+}
+
+function calcIrreg(){
+  // Peso de la plancha origen
+  const plEsp=parseFloat(document.getElementById('irreg-pl-esp')?.value)||0;
+  const plAncho=parseFloat(document.getElementById('irreg-pl-ancho')?.value)||0;
+  const plLargo=parseFloat(document.getElementById('irreg-pl-largo')?.value)||0;
+  const plQty=parseFloat(document.getElementById('irreg-pl-qty')?.value)||1;
+  const plPeso = plEsp&&plAncho&&plLargo ? plEsp*plAncho*plLargo*D*plQty : 0;
+  const plPesoTxt = document.getElementById('irreg-pl-peso-txt');
+  if(plPesoTxt) plPesoTxt.textContent = plPeso>0 ? `→ ${plPeso.toFixed(1)} kg` : '';
+
+  // Peso de las piezas
+  let pesoTotal=0, pesoUnit=0, detalle='', qty=1;
+
+  if(_irregSrc==='tekla'){
+    pesoUnit = parseFloat(document.getElementById('irreg-pu-tekla')?.value)||0;
+    qty = parseFloat(document.getElementById('irreg-qty-tekla')?.value)||1;
+    pesoTotal = pesoUnit * qty;
+    detalle = `📐 Tekla: ${pesoUnit} kg/ud × ${qty} pzas`;
+  } else {
+    const esp = parseFloat(document.getElementById('irreg-esp')?.value)||0;
+    qty = parseFloat(document.getElementById('irreg-qty')?.value)||1;
+    const {area, desc} = calcAreaIrreg();
+    if(esp && area>0){
+      pesoUnit = area * esp * D;
+      pesoTotal = pesoUnit * qty;
+      detalle = `${desc}\n${pesoUnit.toFixed(3)} kg/ud × ${qty} pzas`;
+    }
+  }
+
+  // Corrección por pesada real
+  const pesadaOn = document.getElementById('irreg-pesada-check')?.checked;
+  const pesoReal = parseFloat(document.getElementById('irreg-peso-real')?.value)||0;
+  if(pesadaOn && pesoReal>0){
+    pesoTotal = pesoReal;
+    detalle += `\n⚖ Corregido por balanza: ${pesoReal} kg`;
+  }
+
+  const res = document.getElementById('irreg-resultado');
+  const txt = document.getElementById('irreg-peso-txt');
+  const det = document.getElementById('irreg-detalle-txt');
+  if(pesoTotal>0){
+    res.style.display='';
+    txt.textContent = `${pesoTotal.toFixed(2)} kg`;
+    det.innerHTML = detalle.replace(/\n/g,'<br>');
+    sv('pl-peso', pesoTotal.toFixed(2));
+    window._irregData = {pesoTotal, pesoUnit, qty, detalle,
+      plano:{esp:plEsp,ancho:plAncho,largo:plLargo,qty:plQty,peso:plPeso,
+             num:document.getElementById('irreg-pl-num')?.value||'',
+             mat:document.getElementById('irreg-pl-mat')?.value||'A588-50'}};
+  } else {
+    res.style.display='none';
+    sv('pl-peso','');
+    window._irregData = null;
+  }
+}
 
 function initPlanchasWk(){
   planchasData = [];
@@ -1270,8 +1582,10 @@ function calcPerfilWk(){
 function onTipoMaterialWk(){
   const tipo = document.getElementById('pl-tipo').value;
   const isPlancha = tipo==='plancha';
+  const isIrreg = tipo==='figura_irreg';
   document.getElementById('wk-dims-plancha').style.display = isPlancha ? '' : 'none';
-  document.getElementById('wk-dims-perfil').style.display = isPlancha ? 'none' : '';
+  document.getElementById('wk-dims-perfil').style.display = (!isPlancha&&!isIrreg) ? '' : 'none';
+  document.getElementById('wk-dims-irreg').style.display = isIrreg ? '' : 'none';
 
   if(!isPlancha){
     const dims = document.getElementById('wk-perfil-dims');
@@ -1360,8 +1674,25 @@ function irACortes(){
       qty: planchasData.reduce((s,p)=>s+(p.qty||1),0),
       peso: total
     };
+  } else if(tipo === 'figura_irreg'){
+    if(!window._irregData){ alert('Ingresa las dimensiones de la figura y el peso'); return; }
+    const id = window._irregData;
+    draft.pl={
+      tipo:'figura_irreg',
+      planchas:[],
+      num: id.plano.num||'—',
+      mat: id.plano.mat||'A588-50',
+      esp: id.plano.esp||0,
+      ancho: id.plano.ancho||0,
+      largo: id.plano.largo||0,
+      qty: id.plano.qty||1,
+      peso: id.plano.peso||0,
+      pesoUnit: id.pesoUnit,
+      pesoTotal: id.pesoTotal,
+      detalle: id.detalle,
+      _irregQty: id.qty,
+    };
   } else {
-    if(!window._perfilData){alert('Ingresa las dimensiones del perfil y la longitud');return;}
     const pd = window._perfilData;
     const num = document.getElementById('pl-num-perfil').value.trim()||'—';
     const mat = document.getElementById('pl-mat-perfil').value;
@@ -1405,16 +1736,14 @@ function buildCtPorPlancha(){
   const esSoloUna = planchas.length <= 1 || draft.pl.tipo !== 'plancha';
 
   if(esHI){
-    // ── Modo viga HI: un campo "vigas completas" + desglose por sub-pieza ──
     totalBox.style.display = '';
-    // Un campo único: cuántas vigas completas se cortaron
     cont.innerHTML = `
       <div style="background:#eef4ff;border:1.5px solid #bfdbfe;border-radius:10px;padding:.875rem;margin-bottom:.75rem">
-        <div style="font-size:12px;font-weight:700;color:#1e40af;margin-bottom:.625rem">
+        <div style="font-size:12px;font-weight:700;color:#1e40af;margin-bottom:.25rem">
           🏗 ¿Cuántas vigas <span style="color:var(--o)">${selParte.pr}</span> cortaste completas?
-          <div style="font-size:10px;font-weight:400;color:#6b7280;margin-top:2px">
-            Cada viga = ${piezasHI.map(p=>`${p.qty} ${p.tipo.toLowerCase()}${p.qty>1?'es':''}`).join(' + ')}
-          </div>
+        </div>
+        <div style="font-size:10px;color:#6b7280;margin-bottom:.625rem">
+          1 viga = ${piezasHI.map(p=>`${p.qty} ${p.tipo.toLowerCase()}${p.qty>1?'es':''} (${p.desc})`).join(' + ')}
         </div>
         <input type="number" class="num-big" id="ct-qty-vigas" inputmode="numeric" min="0" placeholder="0"
           oninput="recalcCtTotal()" style="margin-bottom:.5rem">
@@ -1427,33 +1756,42 @@ function buildCtPorPlancha(){
       </div>
       <div id="ct-desglose-hi" style="display:none">
         <div style="font-size:11px;font-weight:700;color:#374151;margin-bottom:.5rem;text-transform:uppercase;letter-spacing:.05em">
-          Desglose de piezas cortadas
+          Piezas que se cortan por viga
         </div>
         ${planchas.map((pl, i) => {
-          const pz = piezasHI[i] || piezasHI[piezasHI.length-1];
+          const pz = piezasHI[i];
+          if(!pz) return '';
           return `
-          <div style="border:1.5px solid ${i===0?'#a5f3fc':'#fde68a'};border-radius:10px;padding:.75rem;margin-bottom:.5rem;background:${i===0?'#f0fdfe':'#fffbeb'}">
+          <div style="border:1.5px solid ${pz.tipo==='Alma'?'#a5f3fc':'#fde68a'};border-radius:10px;padding:.75rem;margin-bottom:.5rem;background:${pz.tipo==='Alma'?'#f0fdfe':'#fffbeb'}">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.375rem">
-              <span style="font-size:12px;font-weight:700;color:${i===0?'#0e7490':'#92400e'}">
+              <span style="font-size:12px;font-weight:700;color:${pz.tipo==='Alma'?'#0e7490':'#92400e'}">
                 ${pz.tipo==='Alma'?'🔷':'🔶'} ${pz.desc}
               </span>
-              <span style="font-size:11px;color:#6b7280">Plancha ${pl.esp}mm · ${pl.num||'—'}</span>
+              <span style="font-size:10px;color:#6b7280">De plancha ${pl.esp}mm · ${pl.num||'—'}</span>
             </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;font-size:11px;color:#374151;margin-bottom:.375rem">
-              <div style="background:#fff;border-radius:6px;padding:4px 6px;text-align:center">
-                <div style="font-size:9px;color:#6b7280;font-weight:700">ESP</div>
-                <div style="font-weight:700">${pz.esp} mm</div>
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-bottom:.375rem">
+              <div style="background:#fff;border-radius:6px;padding:4px;text-align:center;border:1px solid #e5e7eb">
+                <div style="font-size:8px;color:#6b7280;font-weight:700">ESP</div>
+                <div style="font-size:13px;font-weight:700">${pz.esp}</div>
+                <div style="font-size:8px;color:#9ca3af">mm</div>
               </div>
-              <div style="background:#fff;border-radius:6px;padding:4px 6px;text-align:center">
-                <div style="font-size:9px;color:#6b7280;font-weight:700">ANCHO CORTE</div>
-                <div style="font-weight:700">${pz.ancho} mm</div>
+              <div style="background:#fff;border-radius:6px;padding:4px;text-align:center;border:1px solid #e5e7eb">
+                <div style="font-size:8px;color:#6b7280;font-weight:700">ANCHO</div>
+                <div style="font-size:13px;font-weight:700">${pz.ancho}</div>
+                <div style="font-size:8px;color:#9ca3af">mm</div>
               </div>
-              <div style="background:#fff;border-radius:6px;padding:4px 6px;text-align:center">
-                <div style="font-size:9px;color:#6b7280;font-weight:700">LARGO CORTE</div>
-                <div style="font-weight:700">${selParte.long} mm</div>
+              <div style="background:#fff;border-radius:6px;padding:4px;text-align:center;border:1px solid #e5e7eb">
+                <div style="font-size:8px;color:#6b7280;font-weight:700">LARGO</div>
+                <div style="font-size:13px;font-weight:700">${selParte.long}</div>
+                <div style="font-size:8px;color:#9ca3af">mm</div>
+              </div>
+              <div style="background:#fff;border-radius:6px;padding:4px;text-align:center;border:1px solid #e5e7eb">
+                <div style="font-size:8px;color:#6b7280;font-weight:700">×VIGA</div>
+                <div style="font-size:13px;font-weight:700">${pz.qty}</div>
+                <div style="font-size:8px;color:#9ca3af">pzas</div>
               </div>
             </div>
-            <div id="ct-desglose-${i}" style="font-size:12px;font-weight:700;color:#065f46;text-align:right">—</div>
+            <div id="ct-desglose-${i}" style="font-size:11px;font-weight:700;color:#065f46;text-align:right;min-height:16px"></div>
           </div>`;
         }).join('')}
       </div>`;
@@ -1850,9 +2188,9 @@ function guardarCorte(){
     });
   }
 
-  // Build record — usar plancha 1 como referencia para campos legacy
   const pl0 = planchas[0] || draft.pl;
   const sob0 = sobrantesPorPlancha[0] || {};
+  const esIrreg = draft.pl.tipo === 'figura_irreg';
   const rec={
     id:Date.now(),tipo:'corte',fecha:todayISO(),hora:timeNow(),
     opId:W.id,opNom:`${W.nom} ${W.ape}`,opRol:W.rol,
@@ -1869,6 +2207,11 @@ function guardarCorte(){
     pl_planchas: draft.pl.planchas ? JSON.stringify(draft.pl.planchas) : '',
     pl_cortes_por_plancha: draft.ct.cortesPorPlancha ? JSON.stringify(draft.ct.cortesPorPlancha) : '',
     pl_kgM: draft.pl.kgM||0,
+    // Campos figura irregular
+    pl_irreg: esIrreg ? 1 : 0,
+    pl_irreg_detalle: draft.pl.detalle||'',
+    pl_irreg_pesoUnit: draft.pl.pesoUnit||0,
+    pl_irreg_qty: draft.pl._irregQty||0,
     // Sobrante resumen (plancha 1 para compat)
     sob_hay:sob0.hay||'no',sob_peso:sob0.sobPeso||0,
     sob_esp:sob0.esp||0,
@@ -1879,7 +2222,6 @@ function guardarCorte(){
     sob_dest:sob0.dest||'stock',
     sob_ref:sob0.ref||'',
     desperdicio:parseFloat(totalDesp.toFixed(2)),
-    // Detalle completo multi-plancha
     sob_por_plancha: JSON.stringify(sobrantesPorPlancha),
   };
   saveRec(rec);

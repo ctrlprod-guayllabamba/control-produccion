@@ -1358,6 +1358,10 @@ async function loadFromServer(){
           r.pesoParts= Number(r.pesoParts||r.pesoPzas) || 0;
           r.sobPeso  = Number(r.sobPeso||r.sob_peso) || 0;
           r.desperdicio = Number(r.desperdicio) || 0;
+          // Tipo de material y figura irregular
+          r.plTipo   = r.pl_tipo || 'plancha';
+          r.esIrreg  = r.pl_irreg == 1 || r.pl_tipo === 'figura_irreg';
+          r.irregDetalle = r.pl_irreg_detalle || '';
           if(r.fase==='Corte'||r.tipo==='corte'){
             r.fase='Corte'; ST.cortes.push(r); addExec(r.conjunto,r.parte,'Corte',r.qty);
           } else {
