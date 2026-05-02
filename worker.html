@@ -546,23 +546,43 @@ function syncPendingToGAS() {
 }
 
 async function loadAndRenderWorkers() {
-  // Mostrar operarios por defecto inmediatamente (sin esperar)
+  // Mostrar caché local inmediatamente
   let ws = LS.g(WORKER_OPS_KEY, null) || DEFAULT_WORKERS;
-  try{sessionStorage.setItem('workers', JSON.stringify(ws));}catch(e){}
   renderWorkers(ws);
   setSync(false, 'cargando');
 
-  // Intentar cargar desde Google
+  // PASO 1: Cargar operarios.json desde GitHub Pages (mismo dominio = sin CORS)
+  try {
+    const base = location.origin + location.pathname.replace('worker.html','');
+    const r = await fetch(base + 'operarios.json?t=' + Date.now(), {cache:'no-cache'});
+    if (r.ok) {
+      const ops = await r.json();
+      if (ops && ops.length) {
+        ws = ops;
+        LS.s(WORKER_OPS_KEY, ws);
+        renderWorkers(ws);
+        setSync(true, 'online');
+        const opId = new URLSearchParams(location.search).get('op');
+        if (opId && !W) {
+          const w = ws.find(x => x.id == opId);
+          if (w) selectWorker(w);
+        }
+        return; // operarios.json loaded successfully
+      }
+    }
+  } catch(e) {
+    console.log('operarios.json no disponible, intentando GAS:', e.message);
+  }
+
+  // PASO 2: Fallback a GAS si operarios.json no está disponible
   if (GAS.configured()) {
     try {
       const ops = await GAS.get('getOperarios');
       if (ops && ops.length) {
         ws = ops;
         LS.s(WORKER_OPS_KEY, ws);
-        try{sessionStorage.setItem('workers', JSON.stringify(ws));}catch(e){}
         renderWorkers(ws);
         setSync(true, 'online');
-        // Check URL param again after loading
         const opId = new URLSearchParams(location.search).get('op');
         if (opId && !W) {
           const w = ws.find(x => x.id == opId);
@@ -571,8 +591,6 @@ async function loadAndRenderWorkers() {
       }
     } catch(e) {
       setSync(false, 'offline');
-      console.warn('GAS no disponible:', e.message);
-      // Workers already shown from DEFAULT_WORKERS above - no action needed
     }
   } else {
     setSync(false, 'local');

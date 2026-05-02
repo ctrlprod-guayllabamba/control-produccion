@@ -1052,7 +1052,10 @@ global.Chart = class {
   <div id="op-tab-manual">
   <div class="g2">
     <div class="card">
-      <div class="card-hdr">Registrar Operario</div>
+      <div class="card-hdr" style="display:flex;justify-content:space-between;align-items:center;">
+      <span>Registrar Operario</span>
+      <button class="btn btn-g btn-sm" onclick="exportarOperariosJSON()" title="Descarga operarios.json para subir a GitHub">📥 Exportar lista</button>
+    </div>
       <div class="frow">
         <div class="fg"><label>Nombre</label><input type="text" id="op-nom" placeholder="Nombre"></div>
         <div class="fg"><label>Apellido</label><input type="text" id="op-ape" placeholder="Apellido"></div>
@@ -1226,7 +1229,7 @@ global.Chart = class {
 // ================================================
 // CONFIGURACIÓN — PEGA AQUÍ TU URL DE GOOGLE
 // ================================================
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbwSZ2-SnX9jvX9GX__4SY3wz4H78rg_TT3BX-8lOfv5Q56polOd6w1faqS06a2QDaA/exec';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbwlzDI5gkgp2PjF3MI3fdaYUfprOx4yAyHeFkTKlA5bVib5ZAH-QEfJwTOEFJiQXzzM/exec';
 // Ejemplo: 'https://script.google.com/macros/s/AKfycb.../exec'
 // ================================================
 
@@ -1300,6 +1303,16 @@ function _loadFromLS(){
 // ============================================================
 
 // =========== EXPORTAR / IMPORTAR DATOS ===========
+function exportarOperariosJSON() {
+  // Exports operarios.json for uploading to GitHub
+  const blob = new Blob([JSON.stringify(ST.ops, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'operarios.json';
+  a.click();
+  toast('✓ operarios.json descargado — sube este archivo a GitHub');
+}
+
 function exportarTodosDatos() {
   const data = {
     version: 2,
@@ -2349,7 +2362,7 @@ function addOp(){
       .catch(()=>toast(`✓ Operario guardado localmente: ${nom} ${ape}`));
   }
   clearOp();renderOps();initCorteSelects();initProdSelects();
-  toast(`✓ Operario registrado: ${nom} ${ape}`);
+  toast(`✓ Operario registrado: ${nom} ${ape} — Exporta la lista y sube operarios.json a GitHub`);
 }
 
 

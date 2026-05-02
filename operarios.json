@@ -1,0 +1,98 @@
+[
+  {
+    "id": 1,
+    "nom": "Carlos",
+    "ape": "Mendoza",
+    "rol": "Cortador",
+    "fase": "Corte",
+    "icon": "✂",
+    "est": "activo",
+    "ced": "",
+    "tel": "",
+    "emp": ""
+  },
+  {
+    "id": 2,
+    "nom": "Pedro",
+    "ape": "Vargas",
+    "rol": "Armador",
+    "fase": "Armado",
+    "icon": "🔧",
+    "est": "activo",
+    "ced": "",
+    "tel": "",
+    "emp": ""
+  },
+  {
+    "id": 3,
+    "nom": "Luis",
+    "ape": "Torres",
+    "rol": "Soldador",
+    "fase": "Soldadura",
+    "icon": "🔥",
+    "est": "activo",
+    "ced": "",
+    "tel": "",
+    "emp": ""
+  },
+  {
+    "id": 4,
+    "nom": "Marco",
+    "ape": "Reyes",
+    "rol": "Perforador",
+    "fase": "Perforaciones",
+    "icon": "🔩",
+    "est": "activo",
+    "ced": "",
+    "tel": "",
+    "emp": ""
+  },
+  {
+    "id": 5,
+    "nom": "Jorge",
+    "ape": "Castillo",
+    "rol": "Ayudante",
+    "fase": "Limpieza Mecánica",
+    "icon": "🧹",
+    "est": "activo",
+    "ced": "",
+    "tel": "",
+    "emp": ""
+  },
+  {
+    "id": 6,
+    "nom": "Andrés",
+    "ape": "Salazar",
+    "rol": "Pintor",
+    "fase": "Pintura",
+    "icon": "🎨",
+    "est": "activo",
+    "ced": "",
+    "tel": "",
+    "emp": ""
+  },
+  {
+    "id": 7,
+    "nom": "Raúl",
+    "ape": "Mora",
+    "rol": "Operador Grúa",
+    "fase": "Soporte",
+    "icon": "🏗",
+    "est": "activo",
+    "ced": "",
+    "tel": "",
+    "emp": ""
+  },
+  {
+    "id": 8,
+    "nom": "Jose Luis",
+    "ape": "Loor Cevallos",
+    "rol": "Cortador",
+    "fase": "Corte",
+    "icon": "✂",
+    "est": "activo",
+    "ced": "0918756644",
+    "tel": "0999955739",
+    "emp": "GEOFORCE"
+  }
+]
