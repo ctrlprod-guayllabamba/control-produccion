@@ -1262,7 +1262,7 @@ global.Chart = class {
 // ================================================
 // CONFIGURACIÓN — PEGA AQUÍ TU URL DE GOOGLE
 // ================================================
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbwlzDI5gkgp2PjF3MI3fdaYUfprOx4yAyHeFkTKlA5bVib5ZAH-QEfJwTOEFJiQXzzM/exec';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbxGAjW8ZwoqNlc4104aqnk-1LNwyk7NPUeDDvzqxHwXdRBjABZ-n8MG6R1gRKipnFp3/exec';
 // Ejemplo: 'https://script.google.com/macros/s/AKfycb.../exec'
 // ================================================
 
@@ -1294,30 +1294,32 @@ async function loadFromServer(){
 
   if(GAS.configured()){
     try{
-      const [ops, recs] = await Promise.all([
-        GAS.get('getOperarios'),
-        GAS.get('getRegistros'),
-      ]);
+      // Load sequentially to avoid race conditions
+      const ops = await GAS.get('getOperarios');
       if(ops && ops.length) { 
         ST.ops=ops; LS.save('ops',ops);
-      } else if(ops && ops.length===0) {
-        // GAS sheet empty - push local operarios to GAS
-        if(ST.ops.length>0){
-          GAS.post('bulkOperarios', ST.ops).catch(()=>{});
-        }
+      } else if(ops && ops.length===0 && ST.ops.length>0) {
+        GAS.post('bulkOperarios', ST.ops).catch(()=>{});
       }
-      if(recs){
+
+      const recs = await GAS.get('getRegistros');
+      if(recs && recs.length>=0){
         ST.cortes=[]; ST.prods=[]; ST.exec={};
         recs.forEach(r=>{
-          if(r.fase==='Corte'||r.tipo==='corte'){ ST.cortes.push(r); addExec(r.cj||r.conjunto,r.pr||r.parte||'—','Corte',r.qty); }
-          else{ ST.prods.push(r); addExec(r.cj||r.conjunto,r.pr||r.parte||'—',r.fase,r.qty); }
+          if(r.fase==='Corte'||r.tipo==='corte'){ 
+            ST.cortes.push(r); 
+            addExec(r.cj||r.conjunto,r.pr||r.parte||'—','Corte',Number(r.qty)||0); 
+          } else { 
+            ST.prods.push(r); 
+            addExec(r.cj||r.conjunto,r.pr||r.parte||'—',r.fase,Number(r.qty)||0); 
+          }
         });
         LS.save('cortes',ST.cortes); LS.save('prods',ST.prods);
       }
       const tot=ST.cortes.length+ST.prods.length;
       if(si){ si.textContent=`🟢 Google conectado — ${tot} registros`; si.style.color='var(--gt)'; }
     }catch(e){
-      // Fallback to localStorage
+      console.warn('GAS error:', e.message);
       _loadFromLS();
       if(si){ si.textContent='⚠ Sin conexión a Google — datos locales'; si.style.color='var(--warnt)'; }
     }
