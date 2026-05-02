@@ -362,6 +362,28 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);min-height
 
 <script>
 // ======= DATOS TEKLA =======
+// Nota: partes con perfil HI*-esp_alma-esp_patín*ancho tienen piezas[] que describe su composición
+// piezas[]: sub-piezas que forman 1 unidad — alma (1 ud) + patines (2 uds)
+// Esto permite registrar cortes por sub-pieza y plancha correspondiente
+const PIEZAS_HI = {
+  // perfil → sub-piezas que forman 1 unidad de viga
+  'HI300-10-12*300': [
+    {tipo:'Alma',  esp:10, ancho:276, desc:'Alma PL10×276',  qty:1},
+    {tipo:'Patín', esp:12, ancho:300, desc:'Patín PL12×300', qty:2},
+  ],
+  'HI250-10-20*300': [
+    {tipo:'Alma',  esp:10, ancho:210, desc:'Alma PL10×210',  qty:1},
+    {tipo:'Patín', esp:20, ancho:300, desc:'Patín PL20×300', qty:2},
+  ],
+  'HI250-10-20*250': [
+    {tipo:'Alma',  esp:10, ancho:210, desc:'Alma PL10×210',  qty:1},
+    {tipo:'Patín', esp:20, ancho:250, desc:'Patín PL20×250', qty:2},
+  ],
+  'HI234-8-12*180': [
+    {tipo:'Alma',  esp:8,  ancho:210, desc:'Alma PL8×210',   qty:1},
+    {tipo:'Patín', esp:12, ancho:180, desc:'Patín PL12×180', qty:2},
+  ],
+};
 const TEKLA=[{cj:'E-T-1',desc:'Viga HI300 — 113 uds',partes:[{pr:'pr64',perfil:'HI300-10-12*300',long:3000,plan:113,pu:234.56},{pr:'pr65',perfil:'PL12*300',long:300,plan:226,pu:8.48},{pr:'pr98',perfil:'PL8*100',long:100,plan:452,pu:0.61}]},{cj:'E-T-2',desc:'Viga HI300 — 2 uds',partes:[{pr:'pr65',perfil:'PL12*300',long:300,plan:4,pu:8.48},{pr:'pr73',perfil:'HI300-10-12*300',long:3000,plan:2,pu:234.56},{pr:'pr86',perfil:'PL10*205',long:800,plan:2,pu:12.43}]},{cj:'E-T-3',desc:'Viga HI300 — 111 uds',partes:[{pr:'pr65',perfil:'PL12*300',long:300,plan:222,pu:8.48},{pr:'pr73',perfil:'HI300-10-12*300',long:3000,plan:111,pu:234.56},{pr:'pr115',perfil:'PL10*205',long:800,plan:111,pu:12.43}]},{cj:'E-T-4',desc:'Viga HI250 — 1 ud',partes:[{pr:'pr65',perfil:'PL12*300',long:300,plan:6,pu:8.48},{pr:'pr68',perfil:'HI250-10-20*300',long:7827,plan:1,pu:865.9},{pr:'pr72',perfil:'HI300-10-12*300',long:349,plan:6,pu:27.29},{pr:'pr80',perfil:'PL20*235',long:520,plan:3,pu:16.92},{pr:'pr84',perfil:'PL10*145',long:206,plan:18,pu:2.27},{pr:'pr85',perfil:'PL10*206',long:350,plan:6,pu:4.41},{pr:'pr119',perfil:'HI250-10-20*250',long:1686,plan:2,pu:137.15}]},{cj:'E-T-6',desc:'Viga HI250 — 54 uds (L=6m)',partes:[{pr:'pr63',perfil:'HI250-10-20*300',long:6000,plan:54,pu:664.11},{pr:'pr65',perfil:'PL12*300',long:300,plan:216,pu:8.48},{pr:'pr72',perfil:'HI300-10-12*300',long:349,plan:216,pu:27.29},{pr:'pr80',perfil:'PL20*235',long:520,plan:108,pu:16.92},{pr:'pr84',perfil:'PL10*145',long:206,plan:648,pu:2.27},{pr:'pr85',perfil:'PL10*206',long:350,plan:216,pu:4.41},{pr:'pr119',perfil:'HI250-10-20*250',long:1686,plan:108,pu:137.15}]},{cj:'E-T-7',desc:'Viga HI250 — 54 uds (L=6m)',partes:[{pr:'pr63',perfil:'HI250-10-20*300',long:6000,plan:54,pu:664.11},{pr:'pr65',perfil:'PL12*300',long:300,plan:216,pu:8.48},{pr:'pr72',perfil:'HI300-10-12*300',long:349,plan:216,pu:27.29},{pr:'pr84',perfil:'PL10*145',long:206,plan:648,pu:2.27},{pr:'pr85',perfil:'PL10*206',long:350,plan:216,pu:4.41},{pr:'pr119',perfil:'HI250-10-20*250',long:1686,plan:108,pu:137.15}]},{cj:'E-T-10',desc:'Ángulo L80×8 — 112 uds',partes:[{pr:'pr105',perfil:'L80*8',long:4400,plan:112,pu:42.0}]},{cj:'E-T-11',desc:'Ángulo L80×8 — 224 uds',partes:[{pr:'pr106',perfil:'L80*8',long:2050,plan:224,pu:19.57}]},{cj:'E-T-12',desc:'Placa PL12×200 — 111 uds',partes:[{pr:'pr104',perfil:'PL12*200',long:600,plan:111,pu:11.3}]},{cj:'E-T-13',desc:'Ángulo L75×8 — 110 uds',partes:[{pr:'pr102',perfil:'L75*8',long:4400,plan:110,pu:39.24}]},{cj:'E-T-21',desc:'Ángulo L75×8 — 444 uds',partes:[{pr:'pr100',perfil:'L75*8',long:1980,plan:444,pu:17.66}]},{cj:'E-T-23',desc:'Viga HI234 — 106 uds',partes:[{pr:'pr101',perfil:'HI234-8-12*180',long:2310,plan:106,pu:108.81},{pr:'pr112',perfil:'PL10*220',long:254,plan:212,pu:4.39}]},{cj:'E-T-40',desc:'Placas tablero — varias',partes:[{pr:'pr155',perfil:'PL15*135',long:506,plan:440,pu:8.04},{pr:'pr154',perfil:'PL15*300',long:506,plan:220,pu:17.87},{pr:'pr151',perfil:'PL12*160',long:456,plan:220,pu:6.87},{pr:'pr152',perfil:'PL15*300',long:504,plan:220,pu:17.81},{pr:'pr153',perfil:'PL15*135',long:504,plan:440,pu:8.01},{pr:'pr150',perfil:'PL12*160',long:454,plan:220,pu:6.84}]}];
 
 const FASES=[{id:'Corte',icon:'✂',cls:'fc',desc:'Cortar piezas'},{id:'Armado',icon:'🔧',cls:'fa',desc:'Armar piezas'},{id:'Soldadura',icon:'🔥',cls:'fsold',desc:'Soldar + metrado'},{id:'Perforaciones',icon:'🔩',cls:'fperf',desc:'Perforar piezas'},{id:'Limpieza Mecánica',icon:'🧹',cls:'flim',desc:'Limpiar piezas'},{id:'Pintura',icon:'🎨',cls:'fpin',desc:'Por conjunto'}];
@@ -384,10 +406,11 @@ function setSync(ok, mode) {
   const el = document.getElementById('sync-dot');
   if (!el) return;
   const msgs = {
-    online:  { text:'🟢 Google conectado', color:'rgba(134,239,172,.9)' },
-    offline: { text:'🔴 sin red — guardado local', color:'rgba(252,165,165,.9)' },
-    local:   { text:'⚫ modo local — configura URL', color:'rgba(200,200,200,.7)' },
-    cargando:{ text:'⏳ cargando...', color:'rgba(200,200,200,.7)' },
+    online:   { text:'🟢 Google conectado',        color:'rgba(134,239,172,.9)' },
+    offline:  { text:'🟡 sin red — guardado local', color:'rgba(253,224,71,.9)' },
+    local:    { text:'🟡 modo local — guardado',    color:'rgba(253,224,71,.9)' },
+    cargando: { text:'⚪ conectando...',             color:'rgba(200,200,200,.7)' },
+    ok:       { text:'🟢 Google conectado',         color:'rgba(134,239,172,.9)' },
   };
   const m = msgs[mode] || (ok ? msgs.online : msgs.offline);
   el.textContent = m.text;
@@ -424,21 +447,21 @@ document.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('home-date').textContent=todayStr();
   // Init plancha rows
   initPlanchasWk();
-  // Show default workers IMMEDIATELY so app never gets stuck loading
-  renderWorkers(DEFAULT_WORKERS);
-  setSync(false,'cargando');
-  // Then load from GAS in background
+  // Show workers from cache immediately — never blank screen
+  const cachedOps = LS.g(WORKER_OPS_KEY, null);
+  renderWorkers(cachedOps || DEFAULT_WORKERS);
+  // Sync dot: solo "conectando" si no hay caché previo
+  setSync(false, cachedOps ? 'local' : 'cargando');
+  // Load fresh list in background
   loadAndRenderWorkers();
   // Sync pending records
   setTimeout(syncPendingToGAS, 5000);
   setInterval(syncPendingToGAS, 60000);
   // Retry loading operarios after 3 seconds (JSONP may need extra time on iOS)
   setTimeout(loadAndRenderWorkers, 3000);
-  // Refresh worker list every 60 seconds (picks up new operarios added by supervisor)
-  setInterval(()=>{
-    if(GAS.configured()) loadAndRenderWorkers();
-  }, 60000);
-  // Check if any correction was approved for this worker (every 30 seconds)
+  // Refresh worker list every 60 seconds
+  setInterval(()=>{ if(GAS.configured()) loadAndRenderWorkers(); }, 60000);
+  // Check if any correction was approved (every 30 seconds)
   setInterval(checkCorreccionesAprobadas, 30000);
   const opId=new URLSearchParams(location.search).get('op');
   if(opId){const ws=JSON.parse((()=>{try{return sessionStorage.getItem('workers');}catch(e){return null;}})() ||'[]');const w=ws.find(x=>x.id==opId);if(w){selectWorker(w);return;}}
@@ -556,22 +579,33 @@ function saveRecLocal(rec) {
 }
 
 function syncPendingToGAS() {
+  if(!GAS.configured()) return;
+  // Sync registros pendientes
   const pending = LS.g('prod_pending_sync', []);
-  if (!pending.length || !GAS.configured()) return;
-  GAS.post('bulkRegistros', {registros: pending})
-    .then(r => {
-      if (r && r.ok) {
-        LS.s('prod_pending_sync', []);
-        console.log('Sync OK:', r.added, 'registros enviados');
-      }
-    }).catch(()=>{});
+  if(pending.length){
+    GAS.post('bulkRegistros', {registros: pending})
+      .then(r => { if(r&&r.ok){ LS.s('prod_pending_sync',[]); } })
+      .catch(()=>{});
+  }
+  // Sync correcciones pendientes
+  const pendCorr = LS.g('prod_pending_corr', []);
+  if(pendCorr.length){
+    Promise.all(pendCorr.map(c=>GAS.post('addCorreccion',c).catch(()=>null)))
+      .then(res=>{
+        const fallidos=pendCorr.filter((_,i)=>!res[i]?.ok);
+        LS.s('prod_pending_corr', fallidos);
+      });
+  }
 }
 
 async function loadAndRenderWorkers() {
-  // Mostrar caché local inmediatamente
-  let ws = LS.g(WORKER_OPS_KEY, null) || DEFAULT_WORKERS;
+  // Mostrar caché local inmediatamente — sin tocar el sync dot si ya hay datos
+  let ws = LS.g(WORKER_OPS_KEY, null);
+  const tieneCacheLocal = ws && ws.length > 0;
+  if (!tieneCacheLocal) ws = DEFAULT_WORKERS;
   renderWorkers(ws);
-  setSync(false, 'cargando');
+  // Solo mostrar "conectando" si no hay caché — si hay caché, el operario ya ve su lista
+  if (!tieneCacheLocal) setSync(false, 'cargando');
 
   // PASO 1: Cargar operarios.json desde GitHub Pages (mismo dominio = sin CORS)
   try {
@@ -585,18 +619,15 @@ async function loadAndRenderWorkers() {
         renderWorkers(ws);
         setSync(true, 'online');
         const opId = new URLSearchParams(location.search).get('op');
-        if (opId && !W) {
-          const w = ws.find(x => x.id == opId);
-          if (w) selectWorker(w);
-        }
-        return; // operarios.json loaded successfully
+        if (opId && !W) { const w = ws.find(x => x.id == opId); if (w) selectWorker(w); }
+        return;
       }
     }
   } catch(e) {
     console.log('operarios.json no disponible, intentando GAS:', e.message);
   }
 
-  // PASO 2: Fallback a GAS si operarios.json no está disponible
+  // PASO 2: Fallback a GAS
   if (GAS.configured()) {
     try {
       const ops = await GAS.get('getOperarios');
@@ -606,13 +637,14 @@ async function loadAndRenderWorkers() {
         renderWorkers(ws);
         setSync(true, 'online');
         const opId = new URLSearchParams(location.search).get('op');
-        if (opId && !W) {
-          const w = ws.find(x => x.id == opId);
-          if (w) selectWorker(w);
-        }
+        if (opId && !W) { const w = ws.find(x => x.id == opId); if (w) selectWorker(w); }
+      } else {
+        // GAS respondió pero sin datos — usar caché, marcar amarillo solo si no había caché
+        if (!tieneCacheLocal) setSync(false, 'offline');
       }
     } catch(e) {
-      setSync(false, 'offline');
+      // Sin red — si tenemos caché local está bien, amarillo en lugar de rojo
+      setSync(false, tieneCacheLocal ? 'local' : 'offline');
     }
   } else {
     setSync(false, 'local');
@@ -664,7 +696,7 @@ async function loadMyRecs(){
 }
 
 function saveRec(rec) {
-  // Always save locally first
+  // Always save locally first — dato SIEMPRE seguro
   saveRecLocal(rec);
   _cache = LS.g(WORKER_RECS_LS, []).filter(r => r.opId == W?.id);
   // Try to send to GAS
@@ -674,20 +706,16 @@ function saveRec(rec) {
         if (r && r.ok) {
           setSync(true, 'online');
         } else {
-          // Queue for later
+          // Guardado local OK, pendiente de sync — amarillo
           const pending = LS.g('prod_pending_sync', []);
-          if (!pending.find(p => p.id === rec.id)) {
-            pending.push(rec);
-            LS.s('prod_pending_sync', pending);
-          }
+          if (!pending.find(p => p.id === rec.id)) { pending.push(rec); LS.s('prod_pending_sync', pending); }
+          setSync(false, 'local');
         }
       })
       .catch(() => {
+        // Sin red — dato guardado localmente igual
         const pending = LS.g('prod_pending_sync', []);
-        if (!pending.find(p => p.id === rec.id)) {
-          pending.push(rec);
-          LS.s('prod_pending_sync', pending);
-        }
+        if (!pending.find(p => p.id === rec.id)) { pending.push(rec); LS.s('prod_pending_sync', pending); }
         setSync(false, 'offline');
       });
   }
@@ -817,17 +845,79 @@ function selectParte(prId){
   if(selFase==='Corte'){
     draft={pl:{},ct:{}};
     document.getElementById('sb-plancha').innerHTML=stepbar(1,['Material','Cortes','Sobrante']);
-    // Reset material type to plancha
-    const tipoSel = document.getElementById('pl-tipo');
-    if(tipoSel) tipoSel.value = 'plancha';
+    const tipoSel=document.getElementById('pl-tipo');
+    if(tipoSel) tipoSel.value='plancha';
     onTipoMaterialWk();
-    initPlanchasWk();
+
+    // Si la parte es una viga HI compuesta, pre-cargar sus sub-piezas como planchas
+    const piezasHI = PIEZAS_HI[selParte.perfil];
+    if(piezasHI){
+      // Limpiar y construir una plancha por sub-pieza
+      planchasData=[];
+      document.getElementById('wk-planchas-list').innerHTML='';
+      // Agrupar: alma (1 fila) + patines (1 fila, qty=2)
+      const grupos = [];
+      piezasHI.forEach(pz=>{
+        const existe = grupos.find(g=>g.esp===pz.esp&&g.ancho===pz.ancho&&g.tipo===pz.tipo);
+        if(!existe) grupos.push({...pz});
+      });
+      grupos.forEach(pz=>{
+        const idx=planchasData.length;
+        planchasData.push({esp:pz.esp,ancho:pz.ancho,largo:selParte.long,qty:pz.qty,num:'',mat:'A588-50',peso:0});
+        addPlanchaRowDesdeHI(idx, pz);
+      });
+      // Mostrar aviso
+      const aviso=document.createElement('div');
+      aviso.style.cssText='background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:8px 12px;font-size:12px;color:#92400e;margin-bottom:.5rem';
+      aviso.innerHTML=`🏗 <strong>Viga ${selParte.perfil}</strong> — pre-cargada con sus sub-piezas.<br>
+        Verifica dimensiones y agrega N° colada de cada plancha.`;
+      document.getElementById('wk-dims-plancha').insertBefore(aviso,document.getElementById('wk-planchas-list'));
+    } else {
+      initPlanchasWk();
+    }
+
     sv('pl-peso','');
-    window._perfilData = null;
+    window._perfilData=null;
     go('sc-plancha');
   } else {
     buildForm();go('sc-form');
   }
+}
+
+function addPlanchaRowDesdeHI(idx, pz){
+  // Versión especial que pre-llena los campos con los datos de la sub-pieza
+  const div=document.createElement('div');
+  div.id=`pl-row-${idx}`;
+  div.style.cssText='border:1px solid #bfdbfe;border-radius:10px;padding:.75rem;margin-bottom:.5rem;background:#f8faff';
+  div.innerHTML=`
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
+      <span style="font-size:12px;font-weight:700;color:#1e40af">
+        ${pz.tipo === 'Alma' ? '🔷' : '🔶'} ${pz.desc} 
+        <span style="background:#1e40af;color:#fff;border-radius:6px;padding:1px 6px;font-size:10px;margin-left:4px">${pz.qty} ud${pz.qty>1?'s':''}</span>
+      </span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
+      <div><label style="font-size:11px;color:#6b7280">N° Colada</label>
+        <input type="text" id="pl-num-${idx}" placeholder="Ej: PL-2024-001" style="width:100%;padding:6px;border:1px solid #d1d5db;border-radius:6px;font-size:13px" oninput="updatePlancha(${idx})"></div>
+      <div><label style="font-size:11px;color:#6b7280">Material</label>
+        <select id="pl-mat-${idx}" style="width:100%;padding:6px;border:1px solid #d1d5db;border-radius:6px;font-size:13px" onchange="updatePlancha(${idx})">
+          <option value="A588-50">A588-50</option><option value="A572-50">A572-50</option>
+          <option value="A36">A36</option><option value="otro">Otro</option>
+        </select></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px">
+      <div><label style="font-size:11px;color:#6b7280">Esp (mm)</label>
+        <input type="number" id="pl-esp-${idx}" inputmode="numeric" value="${pz.esp}" style="width:100%;padding:6px;border:1.5px solid #fbbf24;border-radius:6px;font-size:13px;background:#fffbeb" oninput="updatePlancha(${idx})"></div>
+      <div><label style="font-size:11px;color:#6b7280">Ancho (mm)</label>
+        <input type="number" id="pl-ancho-${idx}" inputmode="numeric" value="${pz.ancho}" style="width:100%;padding:6px;border:1.5px solid #fbbf24;border-radius:6px;font-size:13px;background:#fffbeb" oninput="updatePlancha(${idx})"></div>
+      <div><label style="font-size:11px;color:#6b7280">Largo (mm)</label>
+        <input type="number" id="pl-largo-${idx}" inputmode="numeric" value="${selParte.long}" style="width:100%;padding:6px;border:1px solid #d1d5db;border-radius:6px;font-size:13px" oninput="updatePlancha(${idx})"></div>
+      <div><label style="font-size:11px;color:#6b7280">Cant.</label>
+        <input type="number" id="pl-qty-${idx}" value="${pz.qty}" min="1" style="width:100%;padding:6px;border:1px solid #d1d5db;border-radius:6px;font-size:13px" oninput="updatePlancha(${idx})"></div>
+    </div>
+    <div id="pl-peso-txt-${idx}" style="font-size:12px;color:#065f46;font-weight:700;margin-top:4px;text-align:right"></div>`;
+  document.getElementById('wk-planchas-list').appendChild(div);
+  updatePlancha(idx);
 }
 
 // ======= PLANCHA =======
@@ -1666,6 +1756,131 @@ function renderHistItems(recs){
 function renderHomeHist(){
   if(!W)return;
   document.getElementById('home-hist').innerHTML=renderHistItems(_cache.filter(r=>r.fecha===todayISO()));
+}
+
+function renderHistorial(){
+  if(!W){ go('sc-login'); return; }
+  loadMyRecs().then(()=>{
+    const hoy = _cache.filter(r=>r.fecha===todayISO());
+    if(!hoy.length){
+      document.getElementById('hist-list').innerHTML=
+        '<div style="text-align:center;color:var(--gr);font-size:13px;padding:2rem">Sin registros hoy.</div>';
+      return;
+    }
+    document.getElementById('hist-list').innerHTML=[...hoy].reverse().map(r=>{
+      const calIcon=r.calidad==='ok'?'✅':r.calidad==='rep'?'⚠️':'❌';
+      const faseCls=FCLS[r.fase]||'fc';
+      const faseIco=FICON[r.fase]||'';
+      let detalle='';
+      if(r.tipo==='corte'){
+        detalle+=`<div style="font-size:11px;color:#92400e;margin-top:3px">📋 ${r.pl_num||'—'} · ${r.pl_esp||'?'}×${r.pl_ancho||'?'}×${r.pl_largo||'?'} mm</div>`;
+        if(r.sob_hay==='si'&&r.sob_peso) detalle+=`<div style="font-size:11px;color:var(--g)">📦 Sob: ${r.sob_peso} kg</div>`;
+        if(r.desperdicio) detalle+=`<div style="font-size:11px;color:var(--r)">🗑 Desp: ${r.desperdicio} kg</div>`;
+      }
+      if(r.sold_ml) detalle+=`<div style="font-size:11px;color:#1e40af">🔥 ${r.sold_ml} ml · ${r.sold_tipo||''}</div>`;
+      if(r.obs) detalle+=`<div style="font-size:11px;color:var(--b)">📝 ${r.obs}</div>`;
+
+      // Estado de corrección pendiente
+      const corrKey = 'corr_solicitada_'+r.id;
+      const yaSolicitada = LS.g(corrKey, false);
+      const btnCorr = yaSolicitada
+        ? `<div style="font-size:11px;color:#92400e;font-weight:700;margin-top:.5rem">⏳ Corrección enviada — esperando supervisor</div>`
+        : `<button onclick="solicitarCorreccion('${r.id}')" 
+            style="margin-top:.5rem;width:100%;padding:.5rem;background:#fef3c7;color:#92400e;border:1px solid #fcd34d;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">
+            ✏️ Solicitar corrección
+          </button>`;
+
+      return`<div class="hist-item" style="margin-bottom:.75rem">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.375rem">
+          <span class="hi-badge ${faseCls}">${faseIco} ${r.fase}</span>
+          <span style="font-size:11px;color:var(--gr)">${r.hora||''}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div style="flex:1">
+            <div style="font-size:13px;font-weight:700;color:var(--b)">${r.cj||'—'}${r.pr&&r.pr!=='—'?' · <span style=color:var(--o)>'+r.pr+'</span>':''}</div>
+            <div style="font-size:12px;color:var(--gr);margin-top:1px">${calIcon} ${r.calidad==='ok'?'Aprobado':r.calidad==='rep'?'Reproceso':'Rechazo'}</div>
+            ${detalle}
+          </div>
+          <div style="font-size:22px;font-weight:700;color:var(--o);flex-shrink:0;margin-left:8px">${r.qty} uds</div>
+        </div>
+        ${btnCorr}
+      </div>`;
+    }).join('');
+  });
+}
+
+function solicitarCorreccion(recId){
+  const rec = _cache.find(r=>String(r.id)===String(recId));
+  if(!rec){ alert('Registro no encontrado'); return; }
+
+  // Modal de motivo
+  const modal=document.createElement('div');
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem';
+  modal.innerHTML=`
+    <div style="background:#fff;border-radius:16px;padding:1.5rem;max-width:340px;width:100%">
+      <div style="font-size:16px;font-weight:800;color:#1a2b4a;margin-bottom:.25rem">✏️ Solicitar corrección</div>
+      <div style="font-size:12px;color:#6b7280;margin-bottom:1rem">
+        ${rec.fase} — ${rec.cj}/${rec.pr} — <strong>${rec.qty} uds</strong> · ${rec.hora||''}
+      </div>
+      <div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:.375rem">¿Por qué necesitas corregir este registro?</div>
+      <textarea id="corr-motivo" placeholder="Ej: Ingresé 10 pero fueron 8, error al tipear..." 
+        style="width:100%;padding:.75rem;border:1.5px solid #d1d5db;border-radius:8px;font-size:14px;min-height:80px;font-family:inherit;resize:none"></textarea>
+      <button onclick="enviarCorreccion('${recId}',this)" 
+        style="width:100%;margin-top:.75rem;padding:.875rem;background:#e8631a;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer">
+        📤 Enviar solicitud al supervisor
+      </button>
+      <button onclick="this.closest('div[style]').remove()"
+        style="width:100%;margin-top:.375rem;padding:.625rem;background:#f3f4f6;color:#374151;border:none;border-radius:10px;font-size:13px;cursor:pointer">
+        Cancelar
+      </button>
+    </div>`;
+  document.body.appendChild(modal);
+  setTimeout(()=>document.getElementById('corr-motivo')?.focus(), 100);
+}
+
+async function enviarCorreccion(recId, btn){
+  const motivo=document.getElementById('corr-motivo')?.value.trim();
+  if(!motivo){ alert('Escribe el motivo de la corrección'); return; }
+  const rec=_cache.find(r=>String(r.id)===String(recId));
+  if(!rec) return;
+
+  btn.disabled=true; btn.textContent='Enviando...';
+
+  const corr={
+    id: Date.now(),
+    recId: recId,
+    fecha: todayISO(),
+    hora: timeNow(),
+    opId: W.id,
+    opNom: `${W.nom} ${W.ape}`,
+    cj: rec.cj||'—',
+    pr: rec.pr||'—',
+    qty: rec.qty,
+    fase: rec.fase,
+    motivo: motivo,
+    estado: 'pendiente',
+  };
+
+  let enviado=false;
+  if(GAS.configured()){
+    try {
+      const r=await GAS.post('addCorreccion', corr);
+      if(r&&r.ok) enviado=true;
+    } catch(e){}
+  }
+
+  // Guardar localmente aunque no haya red
+  const pendCorr=LS.g('prod_pending_corr',[]);
+  pendCorr.push(corr);
+  LS.s('prod_pending_corr', pendCorr);
+  // Marcar como solicitada para no mostrar el botón de nuevo
+  LS.s('corr_solicitada_'+recId, true);
+
+  btn.closest('div[style*="fixed"]').remove();
+  renderHistorial();
+  alert(enviado
+    ? '✅ Solicitud enviada al supervisor. Te notificará cuando la apruebe.'
+    : '✅ Solicitud guardada localmente. Se enviará cuando haya conexión.');
 }
 
 // ======= PENDIENTES =======
