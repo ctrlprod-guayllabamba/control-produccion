@@ -1025,9 +1025,7 @@ function selectParte(prId){
     if(dimsPlancha) dimsPlancha.style.display='';
     if(dimsIrreg)   dimsIrreg.style.display='none';
     if(dimsPerfil)  dimsPerfil.style.display='none';
-    // Limpiar avisos anteriores
-    document.querySelectorAll('.hi-aviso').forEach(el=>el.remove());
-    // Iniciar con una plancha vacía
+    // Iniciar con planchas vacías (sin aviso de sub-piezas)
     initPlanchasWk();
     sv('pl-peso','');
     window._perfilData=null;
@@ -1038,14 +1036,12 @@ function selectParte(prId){
 }
 
 function addPlanchaRowHI(idx, pz){
-  // Paso 1: plancha comercial con espesor fijo y ancho/largo libres
   const div=document.createElement('div');
   div.id=`pl-row-${idx}`;
-  div.style.cssText=`border:2px solid ${pz.tipo==='Alma'?'#a5f3fc':'#fde68a'};border-radius:10px;padding:.75rem;margin-bottom:.625rem;background:${pz.tipo==='Alma'?'#f0fdfe':'#fffbeb'}`;
+  div.style.cssText='border:1.5px solid #bfdbfe;border-radius:10px;padding:.75rem;margin-bottom:.625rem;background:#f8faff';
   div.innerHTML=`
-    <div style="font-size:12px;font-weight:700;color:${pz.tipo==='Alma'?'#0e7490':'#92400e'};margin-bottom:.5rem">
-      ${pz.tipo==='Alma'?'🔷':'🔶'} ${pz.tipo} — Plancha ${pz.esp}mm
-      <span style="font-size:10px;font-weight:400;color:#6b7280;margin-left:4px">(para cortar ${pz.desc})</span>
+    <div style="font-size:12px;font-weight:700;color:#1e40af;margin-bottom:.5rem">
+      📋 Plancha ${idx+1} — Espesor ${pz.esp}mm
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
       <div><label style="font-size:11px;color:#6b7280">N° Colada / Lote</label>
@@ -1085,64 +1081,6 @@ function addPlanchaRowHI(idx, pz){
           style="width:100%;padding:6px;border:1px solid #d1d5db;border-radius:6px;font-size:13px"
           oninput="updatePlancha(${idx})">
         <div style="font-size:9px;color:#6b7280;margin-top:1px;text-align:center">planchas</div>
-      </div>
-    </div>
-    <div id="pl-peso-txt-${idx}" style="font-size:12px;color:#065f46;font-weight:700;margin-top:6px;text-align:right"></div>`;
-  document.getElementById('wk-planchas-list').appendChild(div);
-  updatePlancha(idx);
-}
-
-function addPlanchaRowDesdeHI(idx, pz){
-  const div=document.createElement('div');
-  div.id=`pl-row-${idx}`;
-  div.style.cssText='border:1px solid #bfdbfe;border-radius:10px;padding:.75rem;margin-bottom:.5rem;background:#f8faff';
-  div.innerHTML=`
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.375rem">
-      <span style="font-size:12px;font-weight:700;color:#1e40af">
-        ${pz.tipo==='Alma'?'🔷':'🔶'} ${pz.desc}
-        <span style="background:#1e40af;color:#fff;border-radius:6px;padding:1px 6px;font-size:10px;margin-left:4px">${pz.qty} ud${pz.qty>1?'s':''} por viga</span>
-      </span>
-    </div>
-    <div style="font-size:11px;color:#6b7280;margin-bottom:.5rem">
-      Ingresa las medidas de la <strong>plancha comercial</strong> que usaste para cortar ${pz.qty===1?'el':'los'} ${pz.tipo.toLowerCase()}${pz.qty>1?'es':''}
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
-      <div><label style="font-size:11px;color:#6b7280">N° Colada</label>
-        <input type="text" id="pl-num-${idx}" placeholder="000000-000013" style="width:100%;padding:6px;border:1px solid #d1d5db;border-radius:6px;font-size:13px" oninput="updatePlancha(${idx})"></div>
-      <div><label style="font-size:11px;color:#6b7280">Material</label>
-        <select id="pl-mat-${idx}" style="width:100%;padding:6px;border:1px solid #d1d5db;border-radius:6px;font-size:13px" onchange="updatePlancha(${idx})">
-          <option value="A588-50">A588-50</option><option value="A572-50">A572-50</option>
-          <option value="A36">A36</option><option value="otro">Otro</option>
-        </select></div>
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px">
-      <div>
-        <label style="font-size:11px;color:#065f46;font-weight:700">Esp (mm) ✓</label>
-        <input type="number" id="pl-esp-${idx}" inputmode="numeric" value="${pz.esp}"
-          style="width:100%;padding:6px;border:2px solid #86efac;border-radius:6px;font-size:13px;background:#f0fdf4;font-weight:700"
-          oninput="updatePlancha(${idx})">
-        <div style="font-size:9px;color:#065f46;margin-top:1px">fijo por diseño</div>
-      </div>
-      <div>
-        <label style="font-size:11px;color:#92400e;font-weight:700">Ancho (mm)</label>
-        <input type="number" id="pl-ancho-${idx}" inputmode="numeric" placeholder="ej: 2500"
-          style="width:100%;padding:6px;border:2px solid #fcd34d;border-radius:6px;font-size:13px;background:#fffbeb"
-          oninput="updatePlancha(${idx})">
-        <div style="font-size:9px;color:#92400e;margin-top:1px">plancha real</div>
-      </div>
-      <div>
-        <label style="font-size:11px;color:#92400e;font-weight:700">Largo (mm)</label>
-        <input type="number" id="pl-largo-${idx}" inputmode="numeric" placeholder="ej: 12000"
-          style="width:100%;padding:6px;border:2px solid #fcd34d;border-radius:6px;font-size:13px;background:#fffbeb"
-          oninput="updatePlancha(${idx})">
-        <div style="font-size:9px;color:#92400e;margin-top:1px">plancha real</div>
-      </div>
-      <div>
-        <label style="font-size:11px;color:#6b7280">Cant.</label>
-        <input type="number" id="pl-qty-${idx}" value="${pz.qty}" min="1"
-          style="width:100%;padding:6px;border:1px solid #d1d5db;border-radius:6px;font-size:13px"
-          oninput="updatePlancha(${idx})">
-        <div style="font-size:9px;color:#6b7280;margin-top:1px">planchas</div>
       </div>
     </div>
     <div id="pl-peso-txt-${idx}" style="font-size:12px;color:#065f46;font-weight:700;margin-top:6px;text-align:right"></div>`;
@@ -1942,130 +1880,6 @@ function removeCtPieza(idx){
   ctPiezas.splice(idx, 1);
   renderCtPiezas();
 }
-
-function renderCtPiezas(){
-  const cont = document.getElementById('ct-piezas-list');
-  if(!cont) return;
-
-  cont.innerHTML = ctPiezas.map((pz, i) => {
-    const isHI = pz.esHI;
-    const color = isHI ? (pz.tipo==='Alma' ? '#0e7490' : '#92400e') : '#1e40af';
-    const bg    = isHI ? (pz.tipo==='Alma' ? '#f0fdfe' : '#fffbeb') : '#f8faff';
-    const border= isHI ? (pz.tipo==='Alma' ? '#a5f3fc' : '#fcd34d') : '#bfdbfe';
-    const icon  = isHI ? (pz.tipo==='Alma' ? '🔷' : '🔶') : '✂';
-
-    return `
-    <div id="ct-pieza-${i}" style="border:2px solid ${border};border-radius:12px;padding:.875rem;margin-bottom:.75rem;background:${bg}">
-
-      <!-- Encabezado -->
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.625rem">
-        <div style="font-size:13px;font-weight:700;color:${color}">${icon} ${pz.desc}
-          ${pz.planchaNum&&pz.planchaNum!=='—'?`<span style="font-size:10px;font-weight:400;color:#6b7280;margin-left:4px">· ${pz.planchaNum}</span>`:''}
-        </div>
-        ${ctPiezas.length>1&&!isHI?`<button onclick="removeCtPieza(${i})" style="background:#fee2e2;color:#991b1b;border:none;border-radius:6px;padding:2px 8px;font-size:12px;cursor:pointer">✕</button>`:''}
-      </div>
-
-      <!-- Descripción del corte si es HI -->
-      ${isHI?`<div style="font-size:11px;color:${color};background:rgba(0,0,0,.04);border-radius:6px;padding:4px 8px;margin-bottom:.5rem">
-        ${pz.pzQtyPorViga} pieza${pz.pzQtyPorViga>1?'s':''} por viga · ${pz.esp}×${pz.ancho}×${pz.largo} mm
-      </div>`:''}
-
-      <!-- Dimensiones del corte -->
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:.5rem">
-        <div>
-          <label style="font-size:10px;color:#6b7280;font-weight:700">ESP (mm)</label>
-          <input type="number" id="ct-esp-${i}" value="${pz.esp||''}" inputmode="numeric"
-            ${isHI?'readonly style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:6px;width:100%;padding:6px;font-size:13px;font-weight:700"':'style="border:1px solid #d1d5db;border-radius:6px;width:100%;padding:6px;font-size:13px"'}
-            oninput="updateCtPieza(${i})">
-        </div>
-        <div>
-          <label style="font-size:10px;color:#6b7280;font-weight:700">ANCHO (mm)</label>
-          <input type="number" id="ct-ancho-${i}" value="${pz.ancho||''}" inputmode="numeric"
-            ${isHI?'readonly style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:6px;width:100%;padding:6px;font-size:13px;font-weight:700"':'style="border:1px solid #d1d5db;border-radius:6px;width:100%;padding:6px;font-size:13px"'}
-            oninput="updateCtPieza(${i})">
-        </div>
-        <div>
-          <label style="font-size:10px;color:#6b7280;font-weight:700">LARGO (mm)</label>
-          <input type="number" id="ct-largo-${i}" value="${pz.largo||''}" inputmode="numeric"
-            style="border:1px solid #d1d5db;border-radius:6px;width:100%;padding:6px;font-size:13px"
-            oninput="updateCtPieza(${i})">
-        </div>
-      </div>
-
-      <!-- Cantidad -->
-      <div style="margin-bottom:.5rem">
-        <label style="font-size:10px;color:#6b7280;font-weight:700">CANTIDAD CORTADA</label>
-        <div style="display:flex;gap:6px;align-items:center;margin-top:2px">
-          <button onclick="adjCtPieza(${i},-1)" style="width:40px;height:40px;border-radius:8px;border:1px solid #d1d5db;background:#f9fafb;font-size:18px;cursor:pointer;flex-shrink:0">−</button>
-          <input type="number" id="ct-qty-${i}" value="${pz.qty||0}" inputmode="numeric" min="0"
-            style="flex:1;text-align:center;font-size:28px;font-weight:800;border:2px solid #bfdbfe;border-radius:8px;padding:.25rem;color:#1e40af"
-            oninput="updateCtPieza(${i})">
-          <button onclick="adjCtPieza(${i},1)" style="width:40px;height:40px;border-radius:8px;border:1px solid #d1d5db;background:#f9fafb;font-size:18px;cursor:pointer;flex-shrink:0">+</button>
-        </div>
-        <div style="display:flex;gap:4px;margin-top:4px">
-          ${[5,10,25,50].map(n=>`<button onclick="adjCtPieza(${i},${n})" style="flex:1;padding:3px;background:#eef4ff;color:#1e40af;border:1px solid #bfdbfe;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer">+${n}</button>`).join('')}
-        </div>
-      </div>
-
-      <!-- Peso calculado -->
-      <div id="ct-peso-box-${i}" style="display:none;background:#f0fdf4;border-radius:8px;padding:6px 10px;font-size:12px;font-weight:700;color:#065f46">
-        Peso: <span id="ct-peso-txt-${i}">—</span>
-      </div>
-    </div>`;
-  }).join('');
-
-  recalcCtTotal();
-}
-
-function adjCtPieza(idx, n){
-  const el = document.getElementById(`ct-qty-${idx}`);
-  if(!el) return;
-  const v = Math.max(0, (parseInt(el.value||'0') + n));
-  el.value = v;
-  updateCtPieza(idx);
-}
-
-function updateCtPieza(idx){
-  const esp   = parseFloat(document.getElementById(`ct-esp-${idx}`)?.value)||0;
-  const ancho = parseFloat(document.getElementById(`ct-ancho-${idx}`)?.value)||0;
-  const largo = parseFloat(document.getElementById(`ct-largo-${idx}`)?.value)||0;
-  const qty   = parseInt(document.getElementById(`ct-qty-${idx}`)?.value)||0;
-
-  if(ctPiezas[idx]){
-    ctPiezas[idx].esp   = esp;
-    ctPiezas[idx].ancho = ancho;
-    ctPiezas[idx].largo = largo;
-    ctPiezas[idx].qty   = qty;
-    ctPiezas[idx].peso  = esp&&ancho&&largo ? esp*ancho*largo*D*qty : 0;
-  }
-
-  const pb = document.getElementById(`ct-peso-box-${idx}`);
-  const pt = document.getElementById(`ct-peso-txt-${idx}`);
-  if(pb && pt){
-    const peso = ctPiezas[idx]?.peso || 0;
-    pb.style.display = qty>0 ? '' : 'none';
-    pt.textContent = peso>0
-      ? `${qty} pzas × ${(peso/Math.max(qty,1)).toFixed(2)} kg/ud = ${peso.toFixed(2)} kg`
-      : `${qty} pzas`;
-  }
-  recalcCtTotal();
-}
-
-function recalcCtTotal(){
-  const totalQty  = ctPiezas.reduce((s,p)=>s+(p.qty||0), 0);
-  const totalPeso = ctPiezas.reduce((s,p)=>s+(p.peso||0), 0);
-  const box = document.getElementById('ct-total-box');
-  if(box) box.style.display = ctPiezas.length>1 ? '' : 'none';
-  const tq = document.getElementById('ct-total-qty');
-  const tp = document.getElementById('ct-total-peso');
-  if(tq) tq.textContent = `${totalQty} piezas`;
-  if(tp) tp.textContent = `${totalPeso.toFixed(1)} kg`;
-}
-
-// Compat stubs
-function adjCtVigas(n){ adjCtPieza(0, n); }
-function adjCt(idx, n){ adjCtPieza(idx, n); }
-function calcCtPeso(){ recalcCtTotal(); }
 
 function irASobrante(){
   const totalQty  = ctPiezas.reduce((s,p)=>s+(p.qty||0), 0);
