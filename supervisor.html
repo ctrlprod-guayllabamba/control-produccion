@@ -616,12 +616,13 @@ global.Chart = class {
 <div class="g2">
   <!-- FORM -->
   <div class="card">
-    <div class="card-hdr">✂ Registro de Corte con Plancha</div>
+    <div class="card-hdr">✂ Registro de Corte</div>
 
+    <!-- ① CABECERA -->
     <div class="frow">
       <div class="fg"><label>Fecha</label><input type="date" id="c-fecha"></div>
       <div class="fg"><label>Turno</label><select id="c-turno"><option>Diurno</option><option>Nocturno</option></select></div>
-      <div class="fg"><label>Operario (Cortador)</label><select id="c-op"><option value="">Seleccionar...</option></select></div>
+      <div class="fg"><label>Operario</label><select id="c-op"><option value="">Seleccionar...</option></select></div>
     </div>
 
     <div class="sec-div"></div>
@@ -637,219 +638,75 @@ global.Chart = class {
         <select id="c-parte" onchange="onParteChange()"><option value="">Seleccionar parte...</option></select>
       </div>
       <div class="fg fix" style="min-width:100px;"><label>Cant. a cortar</label>
-        <input type="number" id="c-qty" min="1" placeholder="0" oninput="calcCorte()">
+        <input type="number" id="c-qty" min="1" placeholder="0" oninput="supRecalc()">
       </div>
     </div>
-
     <div id="c-parte-info" style="display:none;background:var(--su);border-radius:7px;padding:8px 12px;margin-bottom:.625rem;font-size:11px;">
       <span id="c-info-txt"></span>
       <span class="pend-cnt" id="c-pend-badge" style="margin-left:8px;"></span>
     </div>
 
-    <!-- PLANCHA / MATERIAL DATA -->
-    <div class="plancha-box">
-      <div class="plancha-hdr">📋 Datos del Material a Utilizar</div>
+    <div class="sec-div"></div>
 
-      <!-- TIPO + COLADA + GRADO -->
-      <div class="frow">
-        <div class="fg"><label>Tipo de material</label>
-          <select id="c-mat-tipo" onchange="onTipoMaterialChange()" style="font-weight:600;">
-            <option value="plancha">Plancha / Placa</option>
-            <option value="angulo">Ángulo (L)</option>
-            <option value="ipe">Perfil IPE</option>
-            <option value="upn">Perfil UPN / UPE</option>
-            <option value="heb">Perfil HEB / HEA / HI</option>
-            <option value="tubo_rect">Tubo rectangular</option>
-            <option value="tubo_cuad">Tubo cuadrado</option>
-            <option value="tubo_circ">Tubo circular / CHS</option>
-            <option value="barra_red">Barra redonda</option>
-            <option value="barra_cuad">Barra cuadrada</option>
-            <option value="otro">Otro (peso manual)</option>
-          </select>
-        </div>
-        <div class="fg"><label>N° Colada / Serie</label>
-          <input type="text" id="c-colada" placeholder="PL-2024-001" oninput="autoFillSobColada()">
-        </div>
-        <div class="fg"><label>Grado de acero</label>
-          <input type="text" id="c-mat-grado" placeholder="A588-50" oninput="autoFillSobGrado()">
-        </div>
-        <div class="fg fix" style="min-width:70px;"><label>Cantidad</label>
-          <input type="number" id="c-mat-qty" value="1" min="1" placeholder="1" oninput="calcCorte()">
-        </div>
-      </div>
-
-      <!-- DIMENSIONES DINÁMICAS según tipo -->
-      <div id="dims-plancha" class="frow">
-        <div class="fg"><label>Espesor (mm)</label><input type="number" id="c-esp" placeholder="12" oninput="calcCorte()"></div>
-        <div class="fg"><label>Ancho (mm)</label><input type="number" id="c-ancho" placeholder="1500" oninput="calcCorte()"></div>
-        <div class="fg"><label>Largo (mm)</label><input type="number" id="c-largo" placeholder="6000" oninput="calcCorte()"></div>
-      </div>
-      <div id="dims-angulo" class="frow" style="display:none;">
-        <div class="fg"><label>Ala (mm)</label><input type="number" id="c-ang-ala" placeholder="100" oninput="calcCorte()"></div>
-        <div class="fg"><label>Espesor ala (mm)</label><input type="number" id="c-ang-esp" placeholder="10" oninput="calcCorte()"></div>
-        <div class="fg"><label>Largo barra (mm)</label><input type="number" id="c-ang-largo" placeholder="6000" oninput="calcCorte()"></div>
-        <div class="fg fix" style="min-width:80px;"><label>Alas iguales</label>
-          <select id="c-ang-tipo" onchange="calcCorte()">
-            <option value="L">L (igual)</option>
-            <option value="LD">LD (desigual)</option>
-          </select>
-        </div>
-        <div class="fg" id="c-ang-ala2-wrap" style="display:none;"><label>Ala 2 (mm)</label><input type="number" id="c-ang-ala2" placeholder="80" oninput="calcCorte()"></div>
-      </div>
-      <div id="dims-ipe" class="frow" style="display:none;">
-        <div class="fg"><label>Altura h (mm)</label><input type="number" id="c-ipe-h" placeholder="200" oninput="calcCorte()"></div>
-        <div class="fg"><label>Ala b (mm)</label><input type="number" id="c-ipe-b" placeholder="100" oninput="calcCorte()"></div>
-        <div class="fg"><label>Alma tw (mm)</label><input type="number" id="c-ipe-tw" placeholder="5.6" step="0.1" oninput="calcCorte()"></div>
-        <div class="fg"><label>Ala tf (mm)</label><input type="number" id="c-ipe-tf" placeholder="8.5" step="0.1" oninput="calcCorte()"></div>
-        <div class="fg"><label>Largo (mm)</label><input type="number" id="c-ipe-largo" placeholder="6000" oninput="calcCorte()"></div>
-      </div>
-      <div id="dims-heb" class="frow" style="display:none;">
-        <div class="fg"><label>Altura h (mm)</label><input type="number" id="c-heb-h" placeholder="300" oninput="calcCorte()"></div>
-        <div class="fg"><label>Ala b (mm)</label><input type="number" id="c-heb-b" placeholder="300" oninput="calcCorte()"></div>
-        <div class="fg"><label>Alma tw (mm)</label><input type="number" id="c-heb-tw" placeholder="11" step="0.1" oninput="calcCorte()"></div>
-        <div class="fg"><label>Ala tf (mm)</label><input type="number" id="c-heb-tf" placeholder="19" step="0.1" oninput="calcCorte()"></div>
-        <div class="fg"><label>Largo (mm)</label><input type="number" id="c-heb-largo" placeholder="6000" oninput="calcCorte()"></div>
-      </div>
-      <div id="dims-tubo-rect" class="frow" style="display:none;">
-        <div class="fg"><label>Ancho ext. (mm)</label><input type="number" id="c-tr-ancho" placeholder="100" oninput="calcCorte()"></div>
-        <div class="fg"><label>Alto ext. (mm)</label><input type="number" id="c-tr-alto" placeholder="60" oninput="calcCorte()"></div>
-        <div class="fg"><label>Espesor pared (mm)</label><input type="number" id="c-tr-esp" placeholder="4" step="0.5" oninput="calcCorte()"></div>
-        <div class="fg"><label>Largo (mm)</label><input type="number" id="c-tr-largo" placeholder="6000" oninput="calcCorte()"></div>
-      </div>
-      <div id="dims-tubo-cuad" class="frow" style="display:none;">
-        <div class="fg"><label>Lado ext. (mm)</label><input type="number" id="c-tc-lado" placeholder="80" oninput="calcCorte()"></div>
-        <div class="fg"><label>Espesor pared (mm)</label><input type="number" id="c-tc-esp" placeholder="4" step="0.5" oninput="calcCorte()"></div>
-        <div class="fg"><label>Largo (mm)</label><input type="number" id="c-tc-largo" placeholder="6000" oninput="calcCorte()"></div>
-      </div>
-      <div id="dims-tubo-circ" class="frow" style="display:none;">
-        <div class="fg"><label>Diám. ext. (mm)</label><input type="number" id="c-tcirc-d" placeholder="114.3" step="0.1" oninput="calcCorte()"></div>
-        <div class="fg"><label>Espesor pared (mm)</label><input type="number" id="c-tcirc-esp" placeholder="6" step="0.1" oninput="calcCorte()"></div>
-        <div class="fg"><label>Largo (mm)</label><input type="number" id="c-tcirc-largo" placeholder="6000" oninput="calcCorte()"></div>
-      </div>
-      <div id="dims-barra-red" class="frow" style="display:none;">
-        <div class="fg"><label>Diámetro (mm)</label><input type="number" id="c-br-d" placeholder="25" step="0.5" oninput="calcCorte()"></div>
-        <div class="fg"><label>Largo (mm)</label><input type="number" id="c-br-largo" placeholder="6000" oninput="calcCorte()"></div>
-      </div>
-      <div id="dims-barra-cuad" class="frow" style="display:none;">
-        <div class="fg"><label>Lado (mm)</label><input type="number" id="c-bc-lado" placeholder="25" step="0.5" oninput="calcCorte()"></div>
-        <div class="fg"><label>Largo (mm)</label><input type="number" id="c-bc-largo" placeholder="6000" oninput="calcCorte()"></div>
-      </div>
-      <div id="dims-otro" class="frow" style="display:none;">
-        <div class="fg"><label>Descripción / referencia</label>
-          <input type="text" id="c-otro-desc" placeholder="Ej: Platina 80×8 mm">
-        </div>
-        <div class="fg"><label>Largo (mm)</label><input type="number" id="c-otro-largo" placeholder="6000" oninput="calcCorte()"></div>
-      </div>
-
-      <!-- PESO CALCULADO PLANCHA -->
-      <div class="frow" style="margin-top:.25rem;">
-        <div class="fg">
-          <label>Peso por unidad (kg/ud) <span style="color:var(--oa);font-size:9px;font-weight:800;">AUTO</span></label>
-          <input type="number" id="c-peso-unit" placeholder="calculado automático" readonly style="background:var(--su);font-weight:700;color:var(--sd);">
-        </div>
-        <div class="fg">
-          <label>Peso total material (kg) <span style="color:var(--oa);font-size:9px;font-weight:800;">AUTO</span></label>
-          <input type="number" id="c-peso-plancha" placeholder="calculado automático" readonly style="background:var(--su);font-weight:700;color:var(--sd);">
-        </div>
-      </div>
-
-      <!-- BALANCE: piezas vs material -->
-      <div class="plancha-calc" id="c-calc-area" style="display:none;margin:.5rem 0;">
-        <div class="pc-item">
-          <div class="pc-lbl">Peso piezas cortadas</div>
-          <div class="pc-val" id="calc-peso-partes" style="color:var(--sd);">—</div>
-          <div style="font-size:9px;color:var(--gm);">kg (Tekla)</div>
-        </div>
-        <div class="pc-item">
-          <div class="pc-lbl">Sobrante estimado</div>
-          <div class="pc-val" id="calc-sobrante" style="color:#166534;">—</div>
-          <div style="font-size:9px;color:var(--gm);">kg</div>
-        </div>
-        <div class="pc-item">
-          <div class="pc-lbl">Desperdicio</div>
-          <div class="pc-val" id="calc-waste" style="color:var(--rt);">—</div>
-          <div style="font-size:9px;color:var(--gm);">kg</div>
-        </div>
-      </div>
-
-      <!-- SOBRANTE CON DIMENSIONES COMPLETAS IGUALES A LA PLANCHA -->
-      <div style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:9px;padding:.875rem 1rem;margin-top:.375rem;">
-        <div style="font-size:10px;font-weight:800;color:#166534;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.625rem;">
-          📦 Registro del sobrante — dimensiones completas
-        </div>
-
-        <div class="frow">
-          <div class="fg fix" style="min-width:130px;"><label>¿Hay sobrante?</label>
-            <select id="c-sob-hay" onchange="toggleSobFields()" style="border-color:#86efac;">
-              <option value="si">Sí — hay sobrante</option>
-              <option value="no">No — todo usado</option>
-            </select>
-          </div>
-          <div class="fg"><label>N° Colada sobrante <span style="font-size:9px;color:#22c55e;">(hereda plancha)</span></label>
-            <input type="text" id="c-sob-colada" placeholder="igual a plancha origen" style="border-color:#86efac;font-weight:600;">
-          </div>
-          <div class="fg fix" style="min-width:110px;"><label>Grado acero sob.</label>
-            <input type="text" id="c-sob-grado" placeholder="igual plancha" style="border-color:#86efac;">
-          </div>
-        </div>
-
-        <div id="sob-dim-fields">
-          <!-- Dimensiones del sobrante — misma lógica que el material original -->
-          <div id="sob-dims-plancha" class="frow">
-            <div class="fg fix" style="min-width:90px;"><label>Espesor (mm)</label>
-              <input type="number" id="c-sob-esp" placeholder="igual" oninput="calcSobrante()" style="border-color:#86efac;">
-            </div>
-            <div class="fg fix" style="min-width:90px;"><label>Ancho (mm)</label>
-              <input type="number" id="c-sob-ancho" placeholder="mm" oninput="calcSobrante()" style="border-color:#86efac;">
-            </div>
-            <div class="fg fix" style="min-width:90px;"><label>Largo (mm)</label>
-              <input type="number" id="c-sob-largo" placeholder="mm" oninput="calcSobrante()" style="border-color:#86efac;">
-            </div>
-            <div class="fg fix" style="min-width:75px;"><label>Cantidad</label>
-              <input type="number" id="c-sob-qty" value="1" min="1" oninput="calcSobrante()" style="border-color:#86efac;">
-            </div>
-          </div>
-          <div id="sob-dims-perfil" class="frow" style="display:none;">
-            <div class="fg fix" style="min-width:110px;"><label>Largo sobrante (mm)</label>
-              <input type="number" id="c-sob-largo-perfil" placeholder="mm" oninput="calcSobrante()" style="border-color:#86efac;">
-            </div>
-            <div class="fg fix" style="min-width:75px;"><label>Cantidad</label>
-              <input type="number" id="c-sob-qty-perfil" value="1" min="1" oninput="calcSobrante()" style="border-color:#86efac;">
-            </div>
-          </div>
-
-          <div class="frow">
-            <div class="fg">
-              <label>Peso sobrante (kg) <span style="color:#22c55e;font-weight:800;">AUTO</span></label>
-              <input type="number" id="c-sob-peso" placeholder="calculado automático" style="background:#dcfce7;border-color:#86efac;font-weight:700;" readonly>
-            </div>
-            <div class="fg fix" style="min-width:130px;"><label>Destino</label>
-              <select id="c-sob-dest" style="border-color:#86efac;">
-                <option value="stock">📦 Stock reutilizable</option>
-                <option value="waste">🗑 Desperdicio</option>
-              </select>
-            </div>
-            <div class="fg"><label>Ubicación / Referencia</label>
-              <input type="text" id="c-sob-ref" placeholder="Rack A-3, Bodega 2..." style="border-color:#86efac;">
-            </div>
-          </div>
-        </div>
-
-        <!-- DESPERDICIO FINAL -->
-        <div class="frow" style="margin-top:.25rem;">
-          <div class="fg">
-            <label>Desperdicio corte (kg) <span style="color:var(--rt);">AUTO</span></label>
-            <input type="number" id="c-desp" placeholder="0.00" readonly style="background:var(--rd);opacity:.9;font-weight:700;">
-          </div>
-          <div class="fg">
-            <label>% Aprovechamiento material</label>
-            <input type="text" id="c-aprovech" placeholder="—" readonly style="background:var(--su);font-weight:700;color:var(--sd);">
-          </div>
-        </div>
-      </div>
+    <!-- ② MATERIA PRIMA -->
+    <div style="font-size:10px;font-weight:800;color:#1e40af;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.5rem;">
+      📋 Materia prima utilizada
+      <span style="font-size:9px;font-weight:400;color:#6b7280;text-transform:none"> — registra cada plancha o perfil que usaste</span>
+    </div>
+    <div id="sup-materiales-list"></div>
+    <button onclick="supAddMaterial()" style="width:100%;padding:.5rem;background:#eef4ff;color:#1e40af;border:1.5px dashed #93c5fd;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:.5rem">
+      + Agregar material
+    </button>
+    <div id="sup-mat-total-box" style="display:none;background:#dbeafe;border-radius:8px;padding:.375rem .875rem;margin-bottom:.75rem;font-size:12px;font-weight:700;color:#1e40af">
+      Total materia prima: <span id="sup-mat-total">0.0 kg</span>
     </div>
 
-    <div class="frow" style="margin-top:.5rem;">
+    <div class="sec-div"></div>
+
+    <!-- ③ PIEZAS CORTADAS -->
+    <div style="font-size:10px;font-weight:800;color:#065f46;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.5rem;">
+      ✂ Piezas cortadas
+      <span style="font-size:9px;font-weight:400;color:#6b7280;text-transform:none"> — registra cada subparte con sus dimensiones</span>
+    </div>
+    <div id="sup-piezas-list"></div>
+    <button onclick="supAddPieza()" style="width:100%;padding:.5rem;background:#f0fdf4;color:#065f46;border:1.5px dashed #86efac;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:.5rem">
+      + Agregar pieza / subparte
+    </button>
+
+    <!-- Balance -->
+    <div id="sup-balance-box" style="display:none;background:#1a2b4a;color:#fff;border-radius:10px;padding:.875rem;margin-bottom:.75rem">
+      <div style="font-size:10px;font-weight:700;opacity:.7;margin-bottom:.5rem;text-transform:uppercase">Balance material</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px" id="sup-balance-grid"></div>
+    </div>
+
+    <div class="sec-div"></div>
+
+    <!-- ④ SOBRANTES -->
+    <div style="font-size:10px;font-weight:800;color:#166534;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.5rem;">
+      📦 Sobrantes
+      <span style="font-size:9px;font-weight:400;color:#6b7280;text-transform:none"> — material que quedó reutilizable</span>
+    </div>
+    <div id="sup-sobrantes-list"></div>
+    <button onclick="supAddSobrante()" style="width:100%;padding:.5rem;background:#f0fdf4;color:#166534;border:1.5px dashed #86efac;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:.75rem">
+      + Agregar sobrante
+    </button>
+
+    <div class="frow">
+      <div class="fg"><label>Desperdicio total (kg) <span style="color:var(--rt);">AUTO</span></label>
+        <input type="number" id="c-desp" placeholder="0.00" readonly style="background:var(--rd);opacity:.9;font-weight:700;">
+      </div>
+      <div class="fg"><label>% Aprovechamiento <span style="color:var(--oa);">AUTO</span></label>
+        <input type="text" id="c-aprovech" placeholder="—" readonly style="background:var(--su);font-weight:700;color:var(--sd);">
+      </div>
+      <div class="fg"><label>Calidad</label>
+        <select id="c-cal">
+          <option value="ok">✓ Aprobado</option>
+          <option value="rep">⚠ Reproceso</option>
+          <option value="rec">✗ Rechazo</option>
+        </select>
+      </div>
+    </div>
+    <div class="frow">
       <div class="fg wide"><label>Observaciones</label><textarea id="c-obs" rows="2" placeholder="Notas del corte..."></textarea></div>
     </div>
     <div class="act-row">
@@ -858,6 +715,7 @@ global.Chart = class {
     </div>
   </div>
 
+  <!-- HISTORIAL CORTE -->
   <!-- HISTORIAL CORTE -->
   <div>
     <div class="card">
@@ -870,10 +728,12 @@ global.Chart = class {
       <div class="tw">
         <table>
           <thead><tr>
-            <th>Fecha</th><th>Conjunto</th><th>Parte</th>
-            <th class="r">Qty</th><th class="r">Kg piezas</th>
-            <th class="r">Sobrante</th><th class="r">Desperdicio</th>
-            <th>Material / Plancha</th><th class="c no-print">Acc.</th>
+            <th>Fecha</th><th>Conjunto / Parte</th>
+            <th>Operario</th>
+            <th>Material (planchas)</th>
+            <th>Piezas cortadas</th>
+            <th>Sobrante</th><th class="r">Desperdicio</th>
+            <th class="c no-print">Acc.</th>
           </tr></thead>
           <tbody id="hc-tbody"></tbody>
         </table>
@@ -1833,7 +1693,448 @@ function renderTekla() {
   document.getElementById('tek-cnt').textContent=`${cjCount} conjuntos`;
 }
 
-// ======================= CORTE =======================
+// ══════════════════════════════════════════════════
+// SUPERVISOR CORTE — NUEVO SISTEMA MULTI-MATERIAL
+// ══════════════════════════════════════════════════
+const D_SUP = 7.85e-6; // kg/mm³ acero
+
+let supMateriales = [];
+let supPiezas     = [];
+let supSobrantes  = [];
+
+// ── Helpers de cálculo de peso ─────────────────────
+function supCalcPesoMat(m){
+  const t=m.tipo||'plancha', q=m.qty||1;
+  let pu=0;
+  if(t==='plancha'){ if(m.esp&&m.ancho&&m.largo) pu=m.esp*m.ancho*m.largo*D_SUP; }
+  else if(t==='angulo'){ if(m.a1&&m.esp&&m.largo) pu=(m.a1+(m.a2||m.a1)-m.esp)*m.esp*D_SUP*1000; }
+  else if(['ipe','upn','heb'].includes(t)){
+    if(m.h&&m.b&&m.tw&&m.tf&&m.largo){ const ar=2*m.b*m.tf+(m.h-2*m.tf)*m.tw; pu=ar*D_SUP*m.largo; }
+    else if(m.kgm&&m.largo) pu=m.kgm*m.largo/1000;
+  }
+  else if(t==='tubo_rect'){ if(m.an&&m.al&&m.esp&&m.largo) pu=(m.an*m.al-(m.an-2*m.esp)*(m.al-2*m.esp))*D_SUP*m.largo; }
+  else if(t==='tubo_cuad'){ if(m.lado&&m.esp&&m.largo) pu=(m.lado*m.lado-(m.lado-2*m.esp)*(m.lado-2*m.esp))*D_SUP*m.largo; }
+  else if(t==='tubo_circ'){ if(m.d&&m.esp&&m.largo) pu=Math.PI*((m.d/2)**2-((m.d/2)-m.esp)**2)*D_SUP*m.largo; }
+  else if(t==='barra_red'){ if(m.d&&m.largo) pu=Math.PI*(m.d/2)**2*D_SUP*m.largo; }
+  else if(t==='barra_cuad'){ if(m.lado&&m.largo) pu=m.lado*m.lado*D_SUP*m.largo; }
+  else if(t==='correa_g'||t==='correa_z'){ if(m.h&&m.b&&m.c&&m.esp&&m.largo) pu=(m.h+2*m.b+2*m.c)*m.esp*D_SUP*m.largo; }
+  else if(t==='manual') pu=m.pesoManual||0;
+  return parseFloat((pu*q).toFixed(3));
+}
+
+function supCalcPesoPieza(p){
+  const forma=p.forma||'rectangular', q=p.qty||1, esp=p.esp||0;
+  let area=0;
+  if(forma==='rectangular'){ area=esp*(p.ancho||0)*(p.largo||0)*D_SUP; }
+  else if(forma==='triangulo'){ area=0.5*(p.base||0)*(p.altura||0)*esp*D_SUP; }
+  else if(forma==='trapecio'){ area=0.5*((p.b1||0)+(p.b2||0))*(p.altura||0)*esp*D_SUP; }
+  else if(forma==='circulo'){ area=Math.PI*((p.diam||0)/2)**2*esp*D_SUP; }
+  else if(forma==='arco'){ const r=p.radio||0,ri=p.radio_i||0,ang=p.angulo||360; area=(ang/360)*Math.PI*(r**2-ri**2)*esp*D_SUP; }
+  else if(forma==='manual'){ return parseFloat(((p.pesoManual||0)*q).toFixed(3)); }
+  return parseFloat((area*q).toFixed(3));
+}
+
+function supCalcPesoSob(s){
+  const t=s.tipo||'plancha', q=s.qty||1;
+  let pu=0;
+  if(t==='plancha'){ if(s.esp&&s.ancho&&s.largo) pu=s.esp*s.ancho*s.largo*D_SUP; }
+  else if(t==='perfil'){ if(s.kgm&&s.largo) pu=s.kgm*s.largo/1000; }
+  else if(t==='manual') pu=s.pesoManual||0;
+  return parseFloat((pu*q).toFixed(3));
+}
+
+// ── Render materiales ───────────────────────────────
+function supRenderMateriales(){
+  const cont=document.getElementById('sup-materiales-list');
+  if(!cont) return;
+  cont.innerHTML = supMateriales.map((m,i)=>supMatHTML(m,i)).join('');
+  supRecalc();
+}
+
+function supMatHTML(m,i){
+  const tipos={
+    plancha:'Plancha / Placa', angulo:'Ángulo L',
+    ipe:'Perfil IPE/HEB/HI', upn:'Canal U/UPN',
+    tubo_rect:'Tubo rectangular', tubo_cuad:'Tubo cuadrado',
+    tubo_circ:'Tubo circular', barra_red:'Barra redonda',
+    barra_cuad:'Barra cuadrada', correa_g:'Correa G',
+    correa_z:'Correa Z', manual:'Peso manual'
+  };
+  const dimFields = {
+    plancha:`<div class="frow">
+      <div class="fg fix"><label>Esp (mm)</label><input type="number" id="sm-esp-${i}" value="${m.esp||''}" placeholder="12" oninput="supUpdMat(${i})"></div>
+      <div class="fg fix"><label>Ancho (mm)</label><input type="number" id="sm-ancho-${i}" value="${m.ancho||''}" placeholder="1500" oninput="supUpdMat(${i})"></div>
+      <div class="fg fix"><label>Largo (mm)</label><input type="number" id="sm-largo-${i}" value="${m.largo||''}" placeholder="6000" oninput="supUpdMat(${i})"></div>
+      <div class="fg fix" style="min-width:60px"><label>Cant.</label><input type="number" id="sm-qty-${i}" value="${m.qty||1}" min="1" oninput="supUpdMat(${i})"></div>
+    </div>`,
+    angulo:`<div class="frow">
+      <div class="fg fix"><label>Ala 1 (mm)</label><input type="number" id="sm-a1-${i}" value="${m.a1||''}" placeholder="75" oninput="supUpdMat(${i})"></div>
+      <div class="fg fix"><label>Ala 2 (mm)</label><input type="number" id="sm-a2-${i}" value="${m.a2||''}" placeholder="75" oninput="supUpdMat(${i})"></div>
+      <div class="fg fix"><label>Esp (mm)</label><input type="number" id="sm-esp-${i}" value="${m.esp||''}" placeholder="8" oninput="supUpdMat(${i})"></div>
+      <div class="fg fix"><label>Largo (mm)</label><input type="number" id="sm-largo-${i}" value="${m.largo||''}" placeholder="6000" oninput="supUpdMat(${i})"></div>
+      <div class="fg fix" style="min-width:60px"><label>Cant.</label><input type="number" id="sm-qty-${i}" value="${m.qty||1}" min="1" oninput="supUpdMat(${i})"></div>
+    </div>`,
+    ipe:`<div class="frow">
+      <div class="fg"><label>Nombre perfil (tabla)</label><input type="text" id="sm-nom-${i}" value="${m.nom||''}" placeholder="IPE200, HEB300..." list="sup-perfiles-list" oninput="supUpdMat(${i})"></div>
+      <div class="fg fix"><label>Largo (mm)</label><input type="number" id="sm-largo-${i}" value="${m.largo||''}" placeholder="6000" oninput="supUpdMat(${i})"></div>
+      <div class="fg fix" style="min-width:60px"><label>Cant.</label><input type="number" id="sm-qty-${i}" value="${m.qty||1}" min="1" oninput="supUpdMat(${i})"></div>
+    </div>`,
+    upn:`<div class="frow">
+      <div class="fg"><label>Nombre perfil (tabla)</label><input type="text" id="sm-nom-${i}" value="${m.nom||''}" placeholder="U100, U160..." list="sup-perfiles-list" oninput="supUpdMat(${i})"></div>
+      <div class="fg fix"><label>Largo (mm)</label><input type="number" id="sm-largo-${i}" value="${m.largo||''}" placeholder="6000" oninput="supUpdMat(${i})"></div>
+      <div class="fg fix" style="min-width:60px"><label>Cant.</label><input type="number" id="sm-qty-${i}" value="${m.qty||1}" min="1" oninput="supUpdMat(${i})"></div>
+    </div>`,
+    tubo_rect:`<div class="frow">
+      <div class="fg fix"><label>Ancho (mm)</label><input type="number" id="sm-an-${i}" value="${m.an||''}" placeholder="100" oninput="supUpdMat(${i})"></div>
+      <div class="fg fix"><label>Alto (mm)</label><input type="number" id="sm-al-${i}" value="${m.al||''}" placeholder="60" oninput="supUpdMat(${i})"></div>
+      <div class="fg fix"><label>Esp pared (mm)</label><input type="number" id="sm-esp-${i}" value="${m.esp||''}" placeholder="4" oninput="supUpdMat(${i})"></div>
+      <div class="fg fix"><label>Largo (mm)</label><input type="number" id="sm-largo-${i}" value="${m.largo||''}" placeholder="6000" oninput="supUpdMat(${i})"></div>
+      <div class="fg fix" style="min-width:60px"><label>Cant.</label><input type="number" id="sm-qty-${i}" value="${m.qty||1}" min="1" oninput="supUpdMat(${i})"></div>
+    </div>`,
+    tubo_cuad:`<div class="frow">
+      <div class="fg fix"><label>Lado (mm)</label><input type="number" id="sm-lado-${i}" value="${m.lado||''}" placeholder="80" oninput="supUpdMat(${i})"></div>
+      <div class="fg fix"><label>Esp pared (mm)</label><input type="number" id="sm-esp-${i}" value="${m.esp||''}" placeholder="4" oninput="supUpdMat(${i})"></div>
+      <div class="fg fix"><label>Largo (mm)</label><input type="number" id="sm-largo-${i}" value="${m.largo||''}" placeholder="6000" oninput="supUpdMat(${i})"></div>
+      <div class="fg fix" style="min-width:60px"><label>Cant.</label><input type="number" id="sm-qty-${i}" value="${m.qty||1}" min="1" oninput="supUpdMat(${i})"></div>
+    </div>`,
+    tubo_circ:`<div class="frow">
+      <div class="fg fix"><label>Diám. ext (mm)</label><input type="number" id="sm-d-${i}" value="${m.d||''}" placeholder="114" oninput="supUpdMat(${i})"></div>
+      <div class="fg fix"><label>Esp pared (mm)</label><input type="number" id="sm-esp-${i}" value="${m.esp||''}" placeholder="4" oninput="supUpdMat(${i})"></div>
+      <div class="fg fix"><label>Largo (mm)</label><input type="number" id="sm-largo-${i}" value="${m.largo||''}" placeholder="6000" oninput="supUpdMat(${i})"></div>
+      <div class="fg fix" style="min-width:60px"><label>Cant.</label><input type="number" id="sm-qty-${i}" value="${m.qty||1}" min="1" oninput="supUpdMat(${i})"></div>
+    </div>`,
+    barra_red:`<div class="frow">
+      <div class="fg fix"><label>Diám (mm)</label><input type="number" id="sm-d-${i}" value="${m.d||''}" placeholder="25" oninput="supUpdMat(${i})"></div>
+      <div class="fg fix"><label>Largo (mm)</label><input type="number" id="sm-largo-${i}" value="${m.largo||''}" placeholder="6000" oninput="supUpdMat(${i})"></div>
+      <div class="fg fix" style="min-width:60px"><label>Cant.</label><input type="number" id="sm-qty-${i}" value="${m.qty||1}" min="1" oninput="supUpdMat(${i})"></div>
+    </div>`,
+    barra_cuad:`<div class="frow">
+      <div class="fg fix"><label>Lado (mm)</label><input type="number" id="sm-lado-${i}" value="${m.lado||''}" placeholder="30" oninput="supUpdMat(${i})"></div>
+      <div class="fg fix"><label>Largo (mm)</label><input type="number" id="sm-largo-${i}" value="${m.largo||''}" placeholder="6000" oninput="supUpdMat(${i})"></div>
+      <div class="fg fix" style="min-width:60px"><label>Cant.</label><input type="number" id="sm-qty-${i}" value="${m.qty||1}" min="1" oninput="supUpdMat(${i})"></div>
+    </div>`,
+    correa_g:`<div class="frow">
+      <div class="fg fix"><label>Alto H (mm)</label><input type="number" id="sm-h-${i}" value="${m.h||''}" placeholder="160" oninput="supUpdMat(${i})"></div>
+      <div class="fg fix"><label>Ala B (mm)</label><input type="number" id="sm-b-${i}" value="${m.b||''}" placeholder="65" oninput="supUpdMat(${i})"></div>
+      <div class="fg fix"><label>Labio C (mm)</label><input type="number" id="sm-c-${i}" value="${m.c||''}" placeholder="15" oninput="supUpdMat(${i})"></div>
+      <div class="fg fix"><label>Esp (mm)</label><input type="number" id="sm-esp-${i}" value="${m.esp||''}" placeholder="2" oninput="supUpdMat(${i})"></div>
+      <div class="fg fix"><label>Largo (mm)</label><input type="number" id="sm-largo-${i}" value="${m.largo||''}" placeholder="6000" oninput="supUpdMat(${i})"></div>
+      <div class="fg fix" style="min-width:60px"><label>Cant.</label><input type="number" id="sm-qty-${i}" value="${m.qty||1}" min="1" oninput="supUpdMat(${i})"></div>
+    </div>`,
+    manual:`<div class="frow">
+      <div class="fg"><label>Descripción</label><input type="text" id="sm-desc-${i}" value="${m.desc||''}" placeholder="Ej: Platina 80×8 mm"></div>
+      <div class="fg fix"><label>Peso total (kg)</label><input type="number" id="sm-pm-${i}" value="${m.pesoManual||''}" placeholder="0.0" oninput="supUpdMat(${i})"></div>
+    </div>`,
+  };
+
+  const peso=supCalcPesoMat(m);
+  return `<div style="border:1.5px solid #bfdbfe;border-radius:10px;padding:.75rem;margin-bottom:.625rem;background:#f8faff">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <span style="font-size:12px;font-weight:700;color:#1e40af">📋 Material ${i+1}</span>
+        <select id="sm-tipo-${i}" style="font-size:12px;border:1px solid #bfdbfe;border-radius:6px;padding:2px 6px" onchange="supChgMatTipo(${i})">
+          ${Object.entries({plancha:'Plancha',angulo:'Ángulo L',ipe:'Viga I/HEB/HI',upn:'Canal U',tubo_rect:'Tubo rect.',tubo_cuad:'Tubo cuad.',tubo_circ:'Tubo circ.',barra_red:'Barra red.',barra_cuad:'Barra cuad.',correa_g:'Correa G/Z',manual:'Peso manual'}).map(([v,l])=>`<option value="${v}" ${m.tipo===v?'selected':''}>${l}</option>`).join('')}
+        </select>
+        <input type="text" id="sm-colada-${i}" value="${m.colada||''}" placeholder="N° Colada" style="font-size:11px;border:1px solid #d1d5db;border-radius:6px;padding:2px 8px;width:120px" oninput="supUpdMat(${i})">
+        <input type="text" id="sm-grado-${i}" value="${m.grado||'A588-50'}" placeholder="Grado acero" style="font-size:11px;border:1px solid #d1d5db;border-radius:6px;padding:2px 8px;width:90px" oninput="supUpdMat(${i})">
+      </div>
+      ${supMateriales.length>1?`<button onclick="supRmMat(${i})" style="background:#fee2e2;color:#991b1b;border:none;border-radius:6px;padding:2px 8px;font-size:12px;cursor:pointer;flex-shrink:0">✕</button>`:''}
+    </div>
+    ${dimFields[m.tipo]||dimFields.plancha}
+    <div style="font-size:12px;font-weight:700;color:#065f46;text-align:right;margin-top:4px" id="sm-peso-lbl-${i}">
+      ${peso>0?`→ ${peso.toFixed(2)} kg`:''}
+    </div>
+  </div>`;
+}
+
+function supAddMaterial(){
+  supMateriales.push({tipo:'plancha',qty:1,grado:'A588-50'});
+  supRenderMateriales();
+}
+function supRmMat(i){ supMateriales.splice(i,1); supRenderMateriales(); }
+
+function supChgMatTipo(i){
+  const t=document.getElementById(`sm-tipo-${i}`)?.value||'plancha';
+  supMateriales[i]={...supMateriales[i], tipo:t};
+  supRenderMateriales();
+}
+
+function supUpdMat(i){
+  const m=supMateriales[i]; if(!m) return;
+  const g=id=>parseFloat(document.getElementById(id)?.value)||0;
+  const s=id=>document.getElementById(id)?.value||'';
+  m.tipo=document.getElementById(`sm-tipo-${i}`)?.value||'plancha';
+  m.colada=s(`sm-colada-${i}`); m.grado=s(`sm-grado-${i}`);
+  m.qty=g(`sm-qty-${i}`)||1;
+  m.esp=g(`sm-esp-${i}`); m.ancho=g(`sm-ancho-${i}`); m.largo=g(`sm-largo-${i}`);
+  m.a1=g(`sm-a1-${i}`); m.a2=g(`sm-a2-${i}`);
+  m.an=g(`sm-an-${i}`); m.al=g(`sm-al-${i}`);
+  m.lado=g(`sm-lado-${i}`); m.d=g(`sm-d-${i}`);
+  m.h=g(`sm-h-${i}`); m.b=g(`sm-b-${i}`); m.c=g(`sm-c-${i}`);
+  m.nom=s(`sm-nom-${i}`);
+  // Buscar kg/m en tabla si es perfil
+  if(['ipe','upn'].includes(m.tipo) && m.nom){
+    const kgm=buscarPesoMSup(m.nom);
+    if(kgm){ m.kgm=kgm; m.h=0; m.b=0; m.tw=0; m.tf=0; }
+  }
+  m.pesoManual=g(`sm-pm-${i}`);
+  m.desc=s(`sm-desc-${i}`);
+  const peso=supCalcPesoMat(m);
+  m.peso=peso;
+  const lbl=document.getElementById(`sm-peso-lbl-${i}`);
+  if(lbl) lbl.textContent=peso>0?`→ ${peso.toFixed(2)} kg`:'';
+  supRecalc();
+}
+
+// Tabla de kg/m (copia de la del worker para el supervisor)
+function buscarPesoMSup(nom){
+  const TABLA={'IPE80':6.0,'IPE100':8.1,'IPE120':10.4,'IPE140':12.9,'IPE160':15.8,'IPE180':18.8,'IPE200':22.4,'IPE220':26.2,'IPE240':30.7,'IPE270':36.1,'IPE300':42.2,'IPE330':49.1,'IPE360':57.1,'IPE400':66.3,'IPE450':77.6,'IPE500':90.7,'HEB100':20.4,'HEB120':26.7,'HEB140':33.7,'HEB160':42.6,'HEB180':51.2,'HEB200':61.3,'HEB220':71.5,'HEB240':83.2,'HEB260':93.0,'HEB280':103,'HEB300':117,'U80':8.64,'U100':10.6,'U120':13.4,'U140':16.0,'U160':18.8,'U200':25.3,'U240':33.2,'U300':46.2,'L50x5':3.77,'L60x6':5.42,'L75x8':9.03,'L80x8':9.66,'L100x10':15.1};
+  const k=nom.replace(/\s/g,'').toUpperCase();
+  return TABLA[k]||null;
+}
+
+// ── Render piezas cortadas ──────────────────────────
+function supRenderPiezas(){
+  const cont=document.getElementById('sup-piezas-list');
+  if(!cont) return;
+  cont.innerHTML=supPiezas.map((p,i)=>supPiezaHTML(p,i)).join('');
+  supRecalc();
+}
+
+function supPiezaHTML(p,i){
+  const formas={rectangular:'Rectángulo',triangulo:'Triángulo / Cuña',trapecio:'Trapecio',circulo:'Círculo / Disco',arco:'Arco / Sector',manual:'Peso manual (Tekla)'};
+  const dimsPorForma={
+    rectangular:`<div class="frow">
+      <div class="fg fix"><label>Esp (mm)</label><input type="number" id="sp-esp-${i}" value="${p.esp||''}" placeholder="12" oninput="supUpdPieza(${i})"></div>
+      <div class="fg fix"><label>Ancho (mm)</label><input type="number" id="sp-ancho-${i}" value="${p.ancho||''}" placeholder="300" oninput="supUpdPieza(${i})"></div>
+      <div class="fg fix"><label>Largo (mm)</label><input type="number" id="sp-largo-${i}" value="${p.largo||''}" placeholder="3000" oninput="supUpdPieza(${i})"></div>
+      <div class="fg fix" style="min-width:60px"><label>Cant.</label><input type="number" id="sp-qty-${i}" value="${p.qty||0}" min="0" oninput="supUpdPieza(${i})"></div>
+    </div>`,
+    triangulo:`<div class="frow">
+      <div class="fg fix"><label>Esp (mm)</label><input type="number" id="sp-esp-${i}" value="${p.esp||''}" placeholder="12" oninput="supUpdPieza(${i})"></div>
+      <div class="fg fix"><label>Base (mm)</label><input type="number" id="sp-base-${i}" value="${p.base||''}" placeholder="500" oninput="supUpdPieza(${i})"></div>
+      <div class="fg fix"><label>Altura (mm)</label><input type="number" id="sp-altura-${i}" value="${p.altura||''}" placeholder="400" oninput="supUpdPieza(${i})"></div>
+      <div class="fg fix" style="min-width:60px"><label>Cant.</label><input type="number" id="sp-qty-${i}" value="${p.qty||0}" min="0" oninput="supUpdPieza(${i})"></div>
+    </div>`,
+    trapecio:`<div class="frow">
+      <div class="fg fix"><label>Esp (mm)</label><input type="number" id="sp-esp-${i}" value="${p.esp||''}" placeholder="12" oninput="supUpdPieza(${i})"></div>
+      <div class="fg fix"><label>Base mayor (mm)</label><input type="number" id="sp-b1-${i}" value="${p.b1||''}" placeholder="500" oninput="supUpdPieza(${i})"></div>
+      <div class="fg fix"><label>Base menor (mm)</label><input type="number" id="sp-b2-${i}" value="${p.b2||''}" placeholder="200" oninput="supUpdPieza(${i})"></div>
+      <div class="fg fix"><label>Altura (mm)</label><input type="number" id="sp-altura-${i}" value="${p.altura||''}" placeholder="300" oninput="supUpdPieza(${i})"></div>
+      <div class="fg fix" style="min-width:60px"><label>Cant.</label><input type="number" id="sp-qty-${i}" value="${p.qty||0}" min="0" oninput="supUpdPieza(${i})"></div>
+    </div>`,
+    circulo:`<div class="frow">
+      <div class="fg fix"><label>Esp (mm)</label><input type="number" id="sp-esp-${i}" value="${p.esp||''}" placeholder="12" oninput="supUpdPieza(${i})"></div>
+      <div class="fg fix"><label>Diámetro (mm)</label><input type="number" id="sp-diam-${i}" value="${p.diam||''}" placeholder="500" oninput="supUpdPieza(${i})"></div>
+      <div class="fg fix" style="min-width:60px"><label>Cant.</label><input type="number" id="sp-qty-${i}" value="${p.qty||0}" min="0" oninput="supUpdPieza(${i})"></div>
+    </div>`,
+    arco:`<div class="frow">
+      <div class="fg fix"><label>Esp (mm)</label><input type="number" id="sp-esp-${i}" value="${p.esp||''}" placeholder="12" oninput="supUpdPieza(${i})"></div>
+      <div class="fg fix"><label>Radio ext (mm)</label><input type="number" id="sp-radio-${i}" value="${p.radio||''}" placeholder="300" oninput="supUpdPieza(${i})"></div>
+      <div class="fg fix"><label>Radio int (mm)</label><input type="number" id="sp-radio-i-${i}" value="${p.radio_i||0}" placeholder="0" oninput="supUpdPieza(${i})"></div>
+      <div class="fg fix"><label>Ángulo (°)</label><input type="number" id="sp-angulo-${i}" value="${p.angulo||360}" placeholder="360" oninput="supUpdPieza(${i})"></div>
+      <div class="fg fix" style="min-width:60px"><label>Cant.</label><input type="number" id="sp-qty-${i}" value="${p.qty||0}" min="0" oninput="supUpdPieza(${i})"></div>
+    </div>`,
+    manual:`<div class="frow">
+      <div class="fg"><label>Descripción subparte</label><input type="text" id="sp-desc-${i}" value="${p.desc||''}" placeholder="Ej: Rigidizador diagonal"></div>
+      <div class="fg fix"><label>Peso unit. Tekla (kg)</label><input type="number" id="sp-pm-${i}" value="${p.pesoManual||''}" placeholder="45.32" oninput="supUpdPieza(${i})"></div>
+      <div class="fg fix" style="min-width:60px"><label>Cant.</label><input type="number" id="sp-qty-${i}" value="${p.qty||0}" min="0" oninput="supUpdPieza(${i})"></div>
+    </div>`,
+  };
+  const peso=supCalcPesoPieza(p);
+  return `<div style="border:1.5px solid #d1fae5;border-radius:10px;padding:.75rem;margin-bottom:.625rem;background:#f0fdf4">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <span style="font-size:12px;font-weight:700;color:#065f46">✂ Subparte ${i+1}</span>
+        <select id="sp-forma-${i}" style="font-size:12px;border:1px solid #86efac;border-radius:6px;padding:2px 6px;background:#f0fdf4" onchange="supChgPiezaForma(${i})">
+          ${Object.entries(formas).map(([v,l])=>`<option value="${v}" ${p.forma===v?'selected':''}>${l}</option>`).join('')}
+        </select>
+        <input type="text" id="sp-ref-${i}" value="${p.ref||''}" placeholder="Referencia (ej: PL10×276)" style="font-size:11px;border:1px solid #d1d5db;border-radius:6px;padding:2px 8px;width:140px">
+        <!-- De qué material sale -->
+        ${supMateriales.length>1?`<select id="sp-mat-${i}" style="font-size:11px;border:1px solid #d1d5db;border-radius:6px;padding:2px 6px" onchange="supUpdPieza(${i})">
+          ${supMateriales.map((_,mi)=>`<option value="${mi}" ${p.matIdx===mi?'selected':''}>Mat.${mi+1}</option>`).join('')}
+        </select>`:''}
+      </div>
+      ${supPiezas.length>1?`<button onclick="supRmPieza(${i})" style="background:#fee2e2;color:#991b1b;border:none;border-radius:6px;padding:2px 8px;font-size:12px;cursor:pointer">✕</button>`:''}
+    </div>
+    ${dimsPorForma[p.forma]||dimsPorForma.rectangular}
+    <div style="font-size:12px;font-weight:700;color:#065f46;text-align:right;margin-top:4px" id="sp-peso-lbl-${i}">
+      ${peso>0?`⚖ ${p.qty||0} pzas · ${(p.qty?peso/p.qty:0).toFixed(3)} kg/ud = ${peso.toFixed(2)} kg total`:''}
+    </div>
+  </div>`;
+}
+
+function supAddPieza(){
+  supPiezas.push({forma:'rectangular',qty:0,matIdx:0});
+  supRenderPiezas();
+}
+function supRmPieza(i){ supPiezas.splice(i,1); supRenderPiezas(); }
+
+function supChgPiezaForma(i){
+  const f=document.getElementById(`sp-forma-${i}`)?.value||'rectangular';
+  supPiezas[i]={...supPiezas[i],forma:f};
+  supRenderPiezas();
+}
+
+function supUpdPieza(i){
+  const p=supPiezas[i]; if(!p) return;
+  const g=id=>parseFloat(document.getElementById(id)?.value)||0;
+  const s=id=>document.getElementById(id)?.value||'';
+  p.forma=document.getElementById(`sp-forma-${i}`)?.value||'rectangular';
+  p.qty=g(`sp-qty-${i}`);
+  p.esp=g(`sp-esp-${i}`); p.ancho=g(`sp-ancho-${i}`); p.largo=g(`sp-largo-${i}`);
+  p.base=g(`sp-base-${i}`); p.altura=g(`sp-altura-${i}`);
+  p.b1=g(`sp-b1-${i}`); p.b2=g(`sp-b2-${i}`);
+  p.diam=g(`sp-diam-${i}`);
+  p.radio=g(`sp-radio-${i}`); p.radio_i=g(`sp-radio-i-${i}`); p.angulo=g(`sp-angulo-${i}`)||360;
+  p.pesoManual=g(`sp-pm-${i}`);
+  p.desc=s(`sp-desc-${i}`); p.ref=s(`sp-ref-${i}`);
+  p.matIdx=parseInt(document.getElementById(`sp-mat-${i}`)?.value)||0;
+  const peso=supCalcPesoPieza(p);
+  p.peso=peso;
+  const lbl=document.getElementById(`sp-peso-lbl-${i}`);
+  if(lbl) lbl.textContent=peso>0?`⚖ ${p.qty} pzas · ${(p.qty?peso/p.qty:0).toFixed(3)} kg/ud = ${peso.toFixed(2)} kg total`:'';
+  supRecalc();
+}
+
+// ── Render sobrantes ────────────────────────────────
+function supRenderSobrantes(){
+  const cont=document.getElementById('sup-sobrantes-list');
+  if(!cont) return;
+  cont.innerHTML=supSobrantes.map((s,i)=>supSobranteHTML(s,i)).join('');
+  supRecalc();
+}
+
+function supSobranteHTML(s,i){
+  return `<div style="border:1.5px solid #86efac;border-radius:10px;padding:.75rem;margin-bottom:.625rem;background:#f0fdf4">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <span style="font-size:12px;font-weight:700;color:#166534">📦 Sobrante ${i+1}</span>
+        <select id="ss-tipo-${i}" style="font-size:12px;border:1px solid #86efac;border-radius:6px;padding:2px 6px;background:#f0fdf4" onchange="supChgSobTipo(${i})">
+          <option value="plancha" ${s.tipo==='plancha'?'selected':''}>Plancha / Placa</option>
+          <option value="perfil" ${s.tipo==='perfil'?'selected':''}>Perfil (por largo)</option>
+          <option value="manual" ${s.tipo==='manual'?'selected':''}>Peso manual</option>
+        </select>
+        ${supMateriales.length>1?`<select id="ss-mat-${i}" style="font-size:11px;border:1px solid #d1d5db;border-radius:6px;padding:2px 6px" onchange="supUpdSob(${i})">
+          ${supMateriales.map((_,mi)=>`<option value="${mi}" ${s.matIdx===mi?'selected':''}>De Mat.${mi+1}</option>`).join('')}
+        </select>`:''}
+        <input type="text" id="ss-colada-${i}" value="${s.colada||''}" placeholder="N° Colada" style="font-size:11px;border:1px solid #d1d5db;border-radius:6px;padding:2px 8px;width:120px" oninput="supUpdSob(${i})">
+        <select id="ss-dest-${i}" style="font-size:11px;border:1px solid #86efac;border-radius:6px;padding:2px 6px;background:#f0fdf4">
+          <option value="stock">📦 Stock</option><option value="waste">🗑 Desperdicio</option>
+        </select>
+      </div>
+      ${supSobrantes.length>1?`<button onclick="supRmSob(${i})" style="background:#fee2e2;color:#991b1b;border:none;border-radius:6px;padding:2px 8px;font-size:12px;cursor:pointer">✕</button>`:''}
+    </div>
+    ${s.tipo==='plancha'?`<div class="frow">
+      <div class="fg fix"><label>Esp (mm)</label><input type="number" id="ss-esp-${i}" value="${s.esp||''}" placeholder="12" oninput="supUpdSob(${i})" style="border-color:#86efac"></div>
+      <div class="fg fix"><label>Ancho (mm)</label><input type="number" id="ss-ancho-${i}" value="${s.ancho||''}" placeholder="mm" oninput="supUpdSob(${i})" style="border-color:#86efac"></div>
+      <div class="fg fix"><label>Largo (mm)</label><input type="number" id="ss-largo-${i}" value="${s.largo||''}" placeholder="mm" oninput="supUpdSob(${i})" style="border-color:#86efac"></div>
+      <div class="fg fix" style="min-width:60px"><label>Cant.</label><input type="number" id="ss-qty-${i}" value="${s.qty||1}" min="1" oninput="supUpdSob(${i})" style="border-color:#86efac"></div>
+      <div class="fg"><label>Ubicación</label><input type="text" id="ss-ref-${i}" value="${s.ref||''}" placeholder="Rack A-3..." style="border-color:#86efac"></div>
+    </div>`:s.tipo==='perfil'?`<div class="frow">
+      <div class="fg fix"><label>Largo sobrante (mm)</label><input type="number" id="ss-largo-${i}" value="${s.largo||''}" placeholder="mm" oninput="supUpdSob(${i})" style="border-color:#86efac"></div>
+      <div class="fg fix" style="min-width:60px"><label>Cant.</label><input type="number" id="ss-qty-${i}" value="${s.qty||1}" min="1" oninput="supUpdSob(${i})" style="border-color:#86efac"></div>
+      <div class="fg fix"><label>kg/m</label><input type="number" id="ss-kgm-${i}" value="${s.kgm||''}" placeholder="kg/m" oninput="supUpdSob(${i})" style="border-color:#86efac"></div>
+      <div class="fg"><label>Ubicación</label><input type="text" id="ss-ref-${i}" value="${s.ref||''}" placeholder="Rack A-3..." style="border-color:#86efac"></div>
+    </div>`:`<div class="frow">
+      <div class="fg"><label>Descripción</label><input type="text" id="ss-desc-${i}" value="${s.desc||''}" placeholder="Ej: retazos varios"></div>
+      <div class="fg fix"><label>Peso (kg)</label><input type="number" id="ss-pm-${i}" value="${s.pesoManual||''}" placeholder="kg" oninput="supUpdSob(${i})" style="border-color:#86efac"></div>
+      <div class="fg"><label>Ubicación</label><input type="text" id="ss-ref-${i}" value="${s.ref||''}" placeholder="Rack A-3..." style="border-color:#86efac"></div>
+    </div>`}
+    <div style="font-size:12px;font-weight:700;color:#166534;text-align:right;margin-top:4px" id="ss-peso-lbl-${i}">
+      ${supCalcPesoSob(s)>0?`→ ${supCalcPesoSob(s).toFixed(2)} kg`:''}
+    </div>
+  </div>`;
+}
+
+function supAddSobrante(){
+  const m0=supMateriales[0]||{};
+  supSobrantes.push({tipo:'plancha',qty:1,dest:'stock',matIdx:0,colada:m0.colada||'',esp:m0.esp||0});
+  supRenderSobrantes();
+}
+function supRmSob(i){ supSobrantes.splice(i,1); supRenderSobrantes(); }
+function supChgSobTipo(i){ supSobrantes[i]={...supSobrantes[i],tipo:document.getElementById(`ss-tipo-${i}`)?.value||'plancha'}; supRenderSobrantes(); }
+
+function supUpdSob(i){
+  const s=supSobrantes[i]; if(!s) return;
+  const g=id=>parseFloat(document.getElementById(id)?.value)||0;
+  const sv2=id=>document.getElementById(id)?.value||'';
+  s.tipo=document.getElementById(`ss-tipo-${i}`)?.value||'plancha';
+  s.colada=sv2(`ss-colada-${i}`); s.ref=sv2(`ss-ref-${i}`);
+  s.matIdx=parseInt(document.getElementById(`ss-mat-${i}`)?.value)||0;
+  s.dest=document.getElementById(`ss-dest-${i}`)?.value||'stock';
+  s.esp=g(`ss-esp-${i}`); s.ancho=g(`ss-ancho-${i}`); s.largo=g(`ss-largo-${i}`);
+  s.qty=g(`ss-qty-${i}`)||1; s.kgm=g(`ss-kgm-${i}`);
+  s.pesoManual=g(`ss-pm-${i}`); s.desc=sv2(`ss-desc-${i}`);
+  const peso=supCalcPesoSob(s);
+  s.peso=peso;
+  const lbl=document.getElementById(`ss-peso-lbl-${i}`);
+  if(lbl) lbl.textContent=peso>0?`→ ${peso.toFixed(2)} kg`:'';
+  supRecalc();
+}
+
+// ── Balance y desperdicio ───────────────────────────
+function supRecalc(){
+  const totalMat  =supMateriales.reduce((s,m)=>s+(m.peso||supCalcPesoMat(m)),0);
+  const totalPzas =supPiezas.reduce((s,p)=>s+(p.peso||supCalcPesoPieza(p)),0);
+  const totalSob  =supSobrantes.reduce((s,sb)=>s+(sb.peso||supCalcPesoSob(sb)),0);
+  const desp=Math.max(0,totalMat-totalPzas-totalSob);
+  const aprov=totalMat>0?(totalPzas/totalMat*100):0;
+
+  // Mat total label
+  const mt=document.getElementById('sup-mat-total');
+  const mtb=document.getElementById('sup-mat-total-box');
+  if(mt) mt.textContent=`${totalMat.toFixed(2)} kg`;
+  if(mtb) mtb.style.display=supMateriales.length>0?'':'none';
+
+  // Balance box
+  const bb=document.getElementById('sup-balance-box');
+  const bg=document.getElementById('sup-balance-grid');
+  if(bb&&bg&&(totalMat>0||totalPzas>0)){
+    bb.style.display='';
+    const despColor=desp>0&&totalMat>0&&(desp/totalMat)>0.08?'#fca5a5':'#fde68a';
+    bg.innerHTML=`
+      <div style="text-align:center">
+        <div style="font-size:9px;opacity:.7;font-weight:700">📋 MATERIAL</div>
+        <div style="font-size:20px;font-weight:800;color:#93c5fd">${totalMat.toFixed(1)}</div>
+        <div style="font-size:10px;opacity:.6">kg entrada</div>
+      </div>
+      <div style="text-align:center">
+        <div style="font-size:9px;opacity:.7;font-weight:700">✂ PIEZAS</div>
+        <div style="font-size:20px;font-weight:800;color:#86efac">${totalPzas.toFixed(1)}</div>
+        <div style="font-size:10px;opacity:.6">${aprov.toFixed(1)}% aprov.</div>
+      </div>
+      <div style="text-align:center">
+        <div style="font-size:9px;opacity:.7;font-weight:700">📦 SOBRANTE</div>
+        <div style="font-size:20px;font-weight:800;color:#93c5fd">${totalSob.toFixed(1)}</div>
+        <div style="font-size:10px;opacity:.6">kg reutilizable</div>
+      </div>`;
+    // Segunda fila: desperdicio
+    bg.innerHTML+=`<div style="grid-column:1/-1;margin-top:4px">
+      <div style="background:${despColor};border-radius:6px;padding:4px 10px;display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:11px;font-weight:700;color:#1a2b4a">🗑 Desperdicio</span>
+        <span style="font-size:16px;font-weight:800;color:#1a2b4a">${desp.toFixed(2)} kg (${aprov>0?(100-aprov).toFixed(1):0}%)</span>
+      </div>
+    </div>`;
+  } else if(bb) bb.style.display='none';
+
+  // Campos finales
+  const despEl=document.getElementById('c-desp');
+  const aprovEl=document.getElementById('c-aprovech');
+  if(despEl) despEl.value=desp.toFixed(2);
+  if(aprovEl) aprovEl.value=totalMat>0?`${aprov.toFixed(1)}% de ${totalMat.toFixed(1)} kg`:'—';
+}
+
+function clearCorte(){
+  supMateriales=[]; supPiezas=[]; supSobrantes=[];
+  ['c-fecha','c-turno','c-op','c-cj','c-parte','c-qty','c-cal','c-obs','c-desp','c-aprovech'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el){if(el.tagName==='SELECT')el.selectedIndex=0; else el.value='';}
+  });
+  document.getElementById('c-parte-info').style.display='none';
+  supAddMaterial(); supAddPieza();
+  supRenderMateriales(); supRenderPiezas(); supRenderSobrantes();
+}
 function initCorteSelects() {
   const selCj=document.getElementById('c-cj');
   if(!selCj.options.length||selCj.options.length===1){
@@ -1847,6 +2148,10 @@ function initCorteSelects() {
   if(hcOp) hcOp.innerHTML='<option value="">Todos operarios</option>'+ST.ops.map(o=>`<option value="${o.id}">${o.nom} ${o.ape}</option>`).join('');
   const f=document.getElementById('c-fecha');
   if(f&&!f.value) f.value=today();
+  // Iniciar con un material y una pieza si están vacíos
+  if(!supMateriales.length){ supMateriales=[{tipo:'plancha',qty:1,grado:'A588-50'}]; supRenderMateriales(); }
+  if(!supPiezas.length){ supPiezas=[{forma:'rectangular',qty:0,matIdx:0}]; supRenderPiezas(); }
+  if(!supSobrantes.length){ supSobrantes=[{tipo:'plancha',qty:1,dest:'stock'}]; supRenderSobrantes(); }
 }
 function onConjuntoChange() {
   const cj=document.getElementById('c-cj').value;
@@ -2096,100 +2401,141 @@ function addCorte() {
   const parte=document.getElementById('c-parte').value;
   const qty=parseFloat(document.getElementById('c-qty').value)||0;
   if(!fecha||!cj||!parte||qty<=0){toast('⚠ Completa: fecha, conjunto, parte y cantidad');return;}
+  if(!supMateriales.length){toast('⚠ Registra al menos un material');return;}
+
   const sel=document.getElementById('c-parte');
   const opt=sel.options[sel.selectedIndex];
   const pu=parseFloat(opt?.dataset?.pu||0);
   const opId=document.getElementById('c-op').value;
   const op=ST.ops.find(o=>o.id==opId);
-  const pesoPlancha=parseFloat(document.getElementById('c-peso-plancha').value)||0;
-  const sobPeso=parseFloat(document.getElementById('c-sob-peso').value)||0;
-  const sobQty=parseFloat(document.getElementById('c-sob-qty')?.value)||1;
-  const desp=parseFloat(document.getElementById('c-desp').value)||0;
   const c=TEKLA.conjuntos.find(x=>x.conjunto===cj);
   const p=c?.partes.find(x=>x.parte===parte);
-  const tipoMat=document.getElementById('c-mat-tipo')?.value||'plancha';
-  const isPerfil=!['plancha','otro'].includes(tipoMat);
-  const sobEsp   = parseFloat(document.getElementById('c-sob-esp')?.value)  || parseFloat(document.getElementById('c-esp')?.value)||0;
-  const sobAncho = parseFloat(document.getElementById('c-sob-ancho')?.value) || parseFloat(document.getElementById('c-ancho')?.value)||0;
-  const sobLargo = isPerfil
-    ? parseFloat(document.getElementById('c-sob-largo-perfil')?.value)||0
-    : parseFloat(document.getElementById('c-sob-largo')?.value)||0;
-  const sobQty2  = isPerfil
-    ? parseFloat(document.getElementById('c-sob-qty-perfil')?.value)||1
-    : parseFloat(document.getElementById('c-sob-qty')?.value)||1;
-  const sobHay   = document.getElementById('c-sob-hay')?.value||'si';
-  const sobColada= document.getElementById('c-sob-colada')?.value.trim() || document.getElementById('c-colada').value.trim();
-  const sobGrado = document.getElementById('c-sob-grado')?.value.trim()  || document.getElementById('c-mat-grado').value.trim();
-  const matQty   = parseFloat(document.getElementById('c-mat-qty')?.value)||1;
-  const pesoUnit = parseFloat(document.getElementById('c-peso-unit')?.value)||0;
-  const aprovech = document.getElementById('c-aprovech')?.value||'—';
+
+  const totalMat =supMateriales.reduce((s,m)=>s+(m.peso||supCalcPesoMat(m)),0);
+  const totalPzas=supPiezas.reduce((s,pz)=>s+(pz.peso||supCalcPesoPieza(pz)),0);
+  const totalSob =supSobrantes.reduce((s,sb)=>s+(sb.peso||supCalcPesoSob(sb)),0);
+  const desp=parseFloat(document.getElementById('c-desp').value)||Math.max(0,totalMat-totalPzas-totalSob);
+  const aprovech=document.getElementById('c-aprovech')?.value||'—';
+
+  const m0=supMateriales[0]||{};
+  const sob0=supSobrantes[0]||{};
+
   const rec={
-    id:Date.now(),fecha,turno:document.getElementById('c-turno').value,
-    conjunto:cj,parte,perfil:p?.perfil||'',qty,
-    pesoParts:qty*pu,
-    // Material original completo
-    tipoMat,
-    colada:document.getElementById('c-colada').value.trim(),
-    material:document.getElementById('c-mat-grado').value.trim(),
-    matQty, pesoUnit,
-    espesor:parseFloat(document.getElementById('c-esp')?.value)||0,
-    ancho:parseFloat(document.getElementById('c-ancho')?.value)||0,
-    largo:parseFloat(document.getElementById('c-largo')?.value)||0,
-    pesoPlancha,
-    aprovech,
-    // Sobrante con dimensiones completas
-    sobHay, sobEsp, sobAncho, sobLargo, sobQty:sobQty2,
-    sobPeso, sobColada, sobGrado,
-    destSob:document.getElementById('c-sob-dest').value,
-    sobRef:document.getElementById('c-sob-ref').value.trim(),
-    desperdicio:desp,
+    id:Date.now(), fecha, turno:document.getElementById('c-turno').value,
+    tipo:'corte', fase:'Corte',
+    conjunto:cj, cj, parte, pr:parte, perfil:p?.perfil||'',
+    qty, pesoParts:totalPzas, pesoPzas:totalPzas,
+    calidad:document.getElementById('c-cal').value,
     obs:document.getElementById('c-obs').value.trim(),
-    opId,opNom:op?`${op.nom} ${op.ape}`:'—'
+    opId, opNom:op?`${op.nom} ${op.ape}`:'—', opRol:op?.rol||'Cortador',
+    // Material — array completo
+    pl_planchas: JSON.stringify(supMateriales),
+    pl_tipo: m0.tipo||'plancha',
+    pl_num: m0.colada||'—', pl_mat: m0.grado||'—',
+    pl_esp: m0.esp||0, pl_ancho: m0.ancho||0, pl_largo: m0.largo||0,
+    pl_qty: m0.qty||1, pl_peso: totalMat,
+    // Piezas cortadas
+    pl_cortes_por_plancha: JSON.stringify(supPiezas),
+    // Sobrante — array completo
+    sob_por_plancha: JSON.stringify(supSobrantes),
+    sob_hay: sob0.dest==='waste'?'no':'si',
+    sob_peso: totalSob, sob_esp: sob0.esp||0,
+    sob_ancho: sob0.ancho||0, sob_largo: sob0.largo||0,
+    sob_qty: sob0.qty||1, sob_colada: sob0.colada||'—',
+    sob_mat: m0.grado||'—', sob_dest: sob0.dest||'stock',
+    sob_ref: sob0.ref||'',
+    desperdicio: desp, aprovech,
   };
-  // Normalizar campos para compatibilidad con worker y servidor
-  rec.cj=cj; rec.pr=parte; ST.cortes.push(rec); addExec(cj,parte,'Corte',qty);
+
+  ST.cortes.push(rec); addExec(cj,parte,'Corte',qty);
   saveAll();
   if(GAS.configured()) GAS.post('addRegistro',rec).catch(()=>{});
   clearCorte(); renderCorteHist(); renderDashboard();
-  toast(`✓ Corte: ${cj}/${parte} — ${qty} uds | Desp: ${desp.toFixed(1)} kg`);
-}
-function clearCorte(){
-  ['c-cj','c-parte','c-turno','c-op','c-qty','c-colada','c-mat-grado','c-mat-qty','c-esp','c-ancho','c-largo','c-ang-ala','c-ang-esp','c-ang-largo','c-ang-ala2','c-ipe-h','c-ipe-b','c-ipe-tw','c-ipe-tf','c-ipe-largo','c-heb-h','c-heb-b','c-heb-tw','c-heb-tf','c-heb-largo','c-tr-ancho','c-tr-alto','c-tr-esp','c-tr-largo','c-tc-lado','c-tc-esp','c-tc-largo','c-tcirc-d','c-tcirc-esp','c-tcirc-largo','c-br-d','c-br-largo','c-bc-lado','c-bc-largo','c-otro-desc','c-otro-largo','c-peso-unit','c-peso-plancha','c-sob-esp','c-sob-ancho','c-sob-largo','c-sob-qty','c-sob-largo-perfil','c-sob-qty-perfil','c-sob-peso','c-sob-colada','c-sob-grado','c-sob-ref','c-obs','c-desp','c-aprovech'].forEach(id=>{
-    const el=document.getElementById(id);if(el)el.value=el.tagName==='SELECT'?el.options[0]?.value||'':'';
-  });
-  document.getElementById('c-parte-info').style.display='none';
-  document.getElementById('c-calc-area').style.display='none';
-  document.getElementById('c-mat-grado').value='';
+  toast(`✓ Corte: ${cj}/${parte} — ${qty} uds | Mat: ${totalMat.toFixed(1)}kg | Pzas: ${totalPzas.toFixed(1)}kg | Desp: ${desp.toFixed(1)}kg`);
 }
 function renderCorteHist(){
   const q=(document.getElementById('hc-q')?.value||'').toLowerCase();
   const op=document.getElementById('hc-op')?.value||'';
-  const recs=ST.cortes.filter(r=>(!q||(r.conjunto+r.parte+r.colada+r.opNom).toLowerCase().includes(q))&&(!op||r.opId==op));
-  document.getElementById('hc-tbody').innerHTML=recs.length?recs.map(r=>{
-  const hasSob = r.sobHay!=='no' && r.sobPeso>0;
-  const sobCell = hasSob
-    ? `<span class="stock-tag">${r.sobPeso.toFixed(1)} kg</span><br>
-       <span style="font-size:10px;color:#166534;">${r.sobEsp||r.espesor||'?'}×${r.sobAncho||r.ancho||'?'}×${r.sobLargo||'?'} mm ×${r.sobQty||1}</span><br>
-       <span style="font-size:9px;color:#3730a3;font-weight:700;">📋 ${r.sobColada||r.colada||'—'}</span>`
-    : '<span style="color:var(--gm);font-size:11px;">Sin sobrante</span>';
-  const matCell = `<span style="font-size:10px;">
-    ${r.tipoMat?'<strong>['+r.tipoMat+']</strong><br>':''}
-    📋 ${r.colada||'—'}<br>
-    ${r.espesor?r.espesor+'×'+r.ancho+'×'+r.largo+' mm':''} ${r.matQty>1?'×'+r.matQty:''}<br>
-    ${r.material||''} ${r.pesoUnit?'('+r.pesoUnit+' kg/ud)':''}
-  </span>`;
-  const despCell = `<span style="color:var(--rt);font-weight:700;">${r.desperdicio.toFixed(1)} kg</span><br>
-    <span style="font-size:9px;color:var(--gm);">${r.aprovech||'—'} aprov.</span>`;
-  return `<tr>
-    <td>${r.fecha}</td><td><strong>${r.conjunto}</strong></td>
-    <td style="font-size:11px;">${r.parte}<br><span style="color:var(--gm);font-family:monospace;">${r.perfil||''}</span></td>
-    <td class="r">${r.qty}</td><td class="r">${r.pesoParts.toFixed(1)}</td>
-    <td class="r">${sobCell}</td>
-    <td class="r">${despCell}</td>
-    <td>${matCell}</td>
-    <td class="c no-print"><button class="btn btn-d btn-sm" onclick="delCorte(${r.id})">✕</button></td>
-  </tr>`;}).join('')
-  :'<tr><td colspan="9" style="text-align:center;padding:1.5rem;color:var(--gm);">Sin cortes registrados</td></tr>';
+  const recs=ST.cortes.filter(r=>
+    (!q||(r.conjunto+r.parte+r.colada+r.opNom+(r.pl_num||'')).toLowerCase().includes(q))&&
+    (!op||r.opId==op)
+  );
+
+  document.getElementById('hc-tbody').innerHTML = recs.length ? recs.map(r=>{
+
+    // ── Material (planchas) ─────────────────────────────────────
+    let matHtml = '';
+    const planchas = (() => { try { return JSON.parse(r.pl_planchas||'[]'); } catch(e){ return []; } })();
+    if(planchas.length > 0){
+      matHtml = planchas.map((pl,i)=>`
+        <div style="border:1px solid #bfdbfe;border-radius:6px;padding:4px 6px;margin-bottom:3px;background:#f8faff;font-size:11px">
+          <span style="font-weight:700;color:#1e40af">Plancha ${i+1}</span>
+          <span style="color:#6b7280;margin-left:4px">${pl.esp||'?'}×${pl.ancho||'?'}×${pl.largo||'?'} mm</span><br>
+          <span style="color:#374151">📋 ${pl.num||'—'} · ${pl.mat||'—'} · ${(pl.peso||0).toFixed(1)} kg</span>
+        </div>`).join('');
+    } else {
+      // Formato legacy
+      const esp=r.pl_esp||r.espesor||'?', ancho=r.pl_ancho||r.ancho||'?', largo=r.pl_largo||r.largo||'?';
+      matHtml=`<div style="font-size:11px">📋 ${r.pl_num||r.colada||'—'}<br>${esp}×${ancho}×${largo} mm · ${r.pl_mat||r.material||'—'}</div>`;
+    }
+
+    // ── Piezas cortadas ─────────────────────────────────────────
+    let piezasHtml = '';
+    const piezas = (() => { try { return JSON.parse(r.pl_cortes_por_plancha||'[]'); } catch(e){ return []; } })();
+    if(piezas.length > 0){
+      piezasHtml = piezas.map((p,i)=>`
+        <div style="border:1px solid #d1fae5;border-radius:6px;padding:4px 6px;margin-bottom:3px;background:#f0fdf4;font-size:11px">
+          <span style="font-weight:700;color:#065f46">✂ Pieza ${i+1}</span>
+          <span style="color:#374151;margin-left:4px">${p.esp||'?'}×${p.ancho||'?'}×${p.largo||'?'} mm</span>
+          <span style="float:right;font-weight:700;color:#065f46">${p.qty||0} pzas · ${(p.peso||0).toFixed(1)} kg</span>
+        </div>`).join('');
+    } else {
+      piezasHtml = `<div style="font-size:11px;color:#065f46">✂ ${r.qty} pzas · ${(r.pesoParts||r.pesoPzas||0).toFixed(1)} kg</div>`;
+    }
+
+    // ── Sobrante por plancha ────────────────────────────────────
+    let sobHtml = '';
+    const sobPorPl = (() => { try { return JSON.parse(r.sob_por_plancha||'[]'); } catch(e){ return []; } })();
+    if(sobPorPl.length > 0){
+      sobHtml = sobPorPl.map((s,i)=>{
+        if(s.hay==='si' && s.sobPeso>0) return `
+          <div style="border:1px solid #bbf7d0;border-radius:6px;padding:4px 6px;margin-bottom:3px;background:#f0fdf4;font-size:11px">
+            <span style="color:#166534;font-weight:700">📦 P${i+1}: ${s.sobPeso.toFixed(1)} kg</span>
+            <span style="color:#6b7280;margin-left:4px">${s.esp||'?'}×${s.ancho||'?'}×${s.largo||'?'} mm</span>
+            <span style="font-size:10px;color:#3730a3;display:block">📋 ${s.colada||'—'} · ${s.dest==='stock'?'Stock':'Desperdicio'}</span>
+          </div>`;
+        return `<div style="font-size:10px;color:#6b7280">P${i+1}: sin sobrante</div>`;
+      }).join('');
+    } else if(r.sob_hay==='si' && r.sob_peso>0){
+      sobHtml=`<div style="font-size:11px"><span class="stock-tag">${Number(r.sob_peso).toFixed(1)} kg</span><br>
+        <span style="font-size:10px;color:#166534;">${r.sob_esp||'?'}×${r.sob_ancho||'?'}×${r.sob_largo||'?'} mm</span></div>`;
+    } else {
+      sobHtml='<span style="color:var(--gm);font-size:11px;">Sin sobrante</span>';
+    }
+
+    // ── Desperdicio ─────────────────────────────────────────────
+    const desp = Number(r.desperdicio||0);
+    const plPeso = planchas.reduce((s,p)=>s+(p.peso||0),0) || Number(r.pl_peso||0);
+    const pct = plPeso>0 ? (desp/plPeso*100).toFixed(1) : '—';
+    const despColor = desp>0&&plPeso>0&&(desp/plPeso)>0.08 ? '#991b1b' : '#374151';
+
+    return `<tr>
+      <td style="font-size:11px">${r.fecha}<br><span style="color:var(--gm);font-size:10px">${r.hora||''}</span></td>
+      <td><strong style="color:var(--b)">${r.conjunto||r.cj||'—'}</strong><br>
+          <span style="font-size:11px;color:var(--o)">${r.parte||r.pr||'—'}</span><br>
+          <span style="font-size:10px;color:var(--gm);font-family:monospace">${r.perfil||''}</span></td>
+      <td style="font-size:11px">${r.opNom||'—'}</td>
+      <td style="vertical-align:top">${matHtml}</td>
+      <td style="vertical-align:top">${piezasHtml}</td>
+      <td style="vertical-align:top">${sobHtml}</td>
+      <td style="vertical-align:top;text-align:right">
+        <span style="font-weight:700;color:${despColor}">${desp.toFixed(1)} kg</span><br>
+        <span style="font-size:10px;color:${despColor}">${pct}%</span>
+      </td>
+      <td class="c no-print"><button class="btn btn-d btn-sm" onclick="delCorte(${r.id})">✕</button></td>
+    </tr>`;
+  }).join('')
+  :'<tr><td colspan="8" style="text-align:center;padding:1.5rem;color:var(--gm);">Sin cortes registrados</td></tr>';
 }
 function delCorte(id){
   const r=ST.cortes.find(x=>x.id===id);
