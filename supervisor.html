@@ -2171,17 +2171,35 @@ function onParteChange() {
   const sel=document.getElementById('c-parte');
   const opt=sel.options[sel.selectedIndex];
   if(!opt||!opt.value){document.getElementById('c-parte-info').style.display='none';return;}
+  const cj=document.getElementById('c-cj').value;
+  const parte=opt.value;
   const pend=parseInt(opt.dataset.pend||0);
   const plan=parseInt(opt.dataset.plan||0);
   const ej=parseInt(opt.dataset.ej||0);
-  document.getElementById('c-info-txt').textContent=`Plan: ${plan} | Ejecutado: ${ej} | Pendiente: ${pend} | Long: ${opt.dataset.lng||'—'} mm | Mat: ${opt.dataset.mat||'—'}`;
+  const pu=parseFloat(opt.dataset.pu||0); // kg/ud desde Tekla
+
+  // Calcular pesos
+  const kgPlan   = (plan * pu).toFixed(1);
+  const kgEjec   = (ej   * pu).toFixed(1);
+  const kgPend   = (pend * pu).toFixed(1);
+
+  document.getElementById('c-info-txt').innerHTML=`
+    <span style="margin-right:12px">📐 Plan: <strong>${plan} uds</strong> · <strong>${kgPlan} kg</strong></span>
+    <span style="margin-right:12px;color:#166534">✅ Ejecutado: <strong>${ej} uds</strong> · <strong>${kgEjec} kg</strong></span>
+    <span style="color:#92400e">⏳ Pendiente: <strong>${pend} uds</strong> · <strong>${kgPend} kg</strong></span>
+    <span style="margin-left:12px;color:#6b7280">Long: ${opt.dataset.lng||'—'} mm · Mat: ${opt.dataset.mat||'—'} · ${pu} kg/ud</span>`;
+
   const badge=document.getElementById('c-pend-badge');
-  badge.textContent=`⚠ ${pend} PENDIENTES`;
+  badge.textContent=`⚠ ${pend} uds — ${kgPend} kg PENDIENTES`;
   badge.className='pend-cnt'+(pend===0?' zero':'');
   document.getElementById('c-parte-info').style.display='block';
-  // auto-fill material grade
-  if(opt.dataset.mat) document.getElementById('c-mat-grado').value=opt.dataset.mat;
-  calcCorte();
+
+  // Pre-llenar dimensiones de la primera pieza cortada con largo de la parte
+  if(supPiezas.length>0 && supPiezas[0].largo===0){
+    supPiezas[0].largo=parseFloat(opt.dataset.lng||0)||0;
+    supRenderPiezas();
+  }
+  supRecalc();
 }
 // == CÁLCULO DE PESO POR TIPO DE PERFIL ======================================
 const D = 7.85e-6; // kg/mm³ — densidad del acero
