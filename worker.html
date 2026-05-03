@@ -1014,41 +1014,21 @@ function selectParte(prId){
   if(!selParte)return;
   if(selFase==='Corte'){
     draft={pl:{},ct:{}};
+    ctPiezas=[];
     document.getElementById('sb-plancha').innerHTML=stepbar(1,['Material','Cortes','Sobrante']);
     const tipoSel=document.getElementById('pl-tipo');
     if(tipoSel) tipoSel.value='plancha';
-
-    // Asegurar que el panel plancha esté visible ANTES de manipularlo
-    const dimsPlancha = document.getElementById('wk-dims-plancha');
-    const dimsIrreg = document.getElementById('wk-dims-irreg');
-    const dimsPerfil = document.getElementById('wk-dims-perfil');
+    // Mostrar panel plancha, ocultar otros
+    const dimsPlancha=document.getElementById('wk-dims-plancha');
+    const dimsIrreg=document.getElementById('wk-dims-irreg');
+    const dimsPerfil=document.getElementById('wk-dims-perfil');
     if(dimsPlancha) dimsPlancha.style.display='';
-    if(dimsIrreg) dimsIrreg.style.display='none';
-    if(dimsPerfil) dimsPerfil.style.display='none';
-
-    const piezasHI = PIEZAS_HI[selParte.perfil];
-    if(piezasHI){
-      planchasData=[];
-      document.getElementById('wk-planchas-list').innerHTML='';
-      document.querySelectorAll('.hi-aviso').forEach(el=>el.remove());
-
-      const aviso=document.createElement('div');
-      aviso.className='hi-aviso';
-      aviso.style.cssText='background:#fef3c7;border:1px solid #fcd34d;border-radius:10px;padding:10px 12px;font-size:12px;color:#92400e;margin-bottom:.5rem';
-      aviso.innerHTML=`🏗 <strong>Viga ${selParte.perfil}</strong><br>
-        Ingresa las planchas comerciales que usaste.<br>
-        <span style="font-size:10px;opacity:.8">El espesor está fijo por diseño. Completa ancho, largo y N° colada.</span>`;
-      if(dimsPlancha) dimsPlancha.insertBefore(aviso, document.getElementById('wk-planchas-list'));
-
-      piezasHI.forEach(pz=>{
-        const idx=planchasData.length;
-        planchasData.push({esp:pz.esp, ancho:'', largo:'', qty:1, num:'', mat:'A588-50', peso:0, _pzTipo:pz.tipo, _pzDesc:pz.desc});
-        addPlanchaRowHI(idx, pz);
-      });
-    } else {
-      initPlanchasWk();
-    }
-
+    if(dimsIrreg)   dimsIrreg.style.display='none';
+    if(dimsPerfil)  dimsPerfil.style.display='none';
+    // Limpiar avisos anteriores
+    document.querySelectorAll('.hi-aviso').forEach(el=>el.remove());
+    // Iniciar con una plancha vacía
+    initPlanchasWk();
     sv('pl-peso','');
     window._perfilData=null;
     go('sc-plancha');
@@ -1744,8 +1724,160 @@ function irACortes(){
   go('sc-cortes');
 }
 
-// ======= PASO 2: REGISTRO DE CORTES POR DIÁLOGO =======
-let ctPiezas = []; // array de piezas cortadas registradas
+// ======= PASO 2: REGISTRO DE CORTES =======
+let ctPiezas = [];
+
+function buildCtPorPlancha(){
+  ctPiezas = [];
+  // Siempre empezar con una fila vacía — el operario ingresa lo que cortó
+  const pl0 = draft.pl.planchas?.[0] || draft.pl;
+  ctPiezas.push({
+    esp:   pl0.esp  || 0,
+    ancho: 0,
+    largo: selParte?.long || 0,
+    qty:   0,
+    peso:  0,
+    planchaNum: pl0.num || '—',
+    planchaIdx: 0,
+  });
+  renderCtPiezas();
+}
+
+function newCtPieza(){
+  const pl0 = draft.pl.planchas?.[0] || draft.pl;
+  return {
+    esp:   pl0.esp || 0,
+    ancho: 0,
+    largo: 0,
+    qty:   0,
+    peso:  0,
+    planchaNum: pl0.num || '—',
+    planchaIdx: 0,
+  };
+}
+
+function addCtPieza(){
+  ctPiezas.push(newCtPieza());
+  renderCtPiezas();
+  setTimeout(()=>{
+    const list=document.getElementById('ct-piezas-list');
+    list?.lastElementChild?.scrollIntoView({behavior:'smooth',block:'start'});
+  },100);
+}
+
+function removeCtPieza(idx){
+  if(ctPiezas.length<=1) return;
+  ctPiezas.splice(idx,1);
+  renderCtPiezas();
+}
+
+function renderCtPiezas(){
+  const cont=document.getElementById('ct-piezas-list');
+  if(!cont) return;
+  const planchas = draft.pl.planchas || [];
+
+  cont.innerHTML = ctPiezas.map((pz,i)=>`
+    <div style="border:2px solid #bfdbfe;border-radius:12px;padding:.875rem;margin-bottom:.75rem;background:#f8faff">
+
+      <!-- Título + eliminar -->
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.625rem">
+        <div style="font-size:13px;font-weight:700;color:#1e40af">
+          ✂ Pieza ${i+1}
+          ${planchas.length>1?`<span style="font-size:10px;color:#6b7280;font-weight:400"> — De plancha:</span>
+          <select id="ct-pl-${i}" style="font-size:11px;border:1px solid #d1d5db;border-radius:4px;padding:1px 4px" onchange="updateCtPieza(${i})">
+            ${planchas.map((pl,pi)=>`<option value="${pi}" ${pz.planchaIdx===pi?'selected':''}>${pi+1}: ${pl.esp}mm · ${pl.num||'—'}</option>`).join('')}
+          </select>`:''}
+        </div>
+        ${ctPiezas.length>1?`<button onclick="removeCtPieza(${i})" style="background:#fee2e2;color:#991b1b;border:none;border-radius:6px;padding:2px 8px;font-size:12px;cursor:pointer">✕</button>`:''}
+      </div>
+
+      <!-- Dimensiones -->
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:.625rem">
+        <div>
+          <label style="font-size:10px;color:#6b7280;font-weight:700;display:block;margin-bottom:2px">ESP (mm)</label>
+          <input type="number" id="ct-esp-${i}" value="${pz.esp||''}" inputmode="numeric" placeholder="12"
+            style="width:100%;padding:8px;border:1.5px solid #bfdbfe;border-radius:8px;font-size:15px;font-weight:700;text-align:center"
+            oninput="updateCtPieza(${i})">
+        </div>
+        <div>
+          <label style="font-size:10px;color:#6b7280;font-weight:700;display:block;margin-bottom:2px">ANCHO (mm)</label>
+          <input type="number" id="ct-ancho-${i}" value="${pz.ancho||''}" inputmode="numeric" placeholder="300"
+            style="width:100%;padding:8px;border:1.5px solid #bfdbfe;border-radius:8px;font-size:15px;font-weight:700;text-align:center"
+            oninput="updateCtPieza(${i})">
+        </div>
+        <div>
+          <label style="font-size:10px;color:#6b7280;font-weight:700;display:block;margin-bottom:2px">LARGO (mm)</label>
+          <input type="number" id="ct-largo-${i}" value="${pz.largo||''}" inputmode="numeric" placeholder="3000"
+            style="width:100%;padding:8px;border:1.5px solid #bfdbfe;border-radius:8px;font-size:15px;font-weight:700;text-align:center"
+            oninput="updateCtPieza(${i})">
+        </div>
+      </div>
+
+      <!-- Cantidad -->
+      <label style="font-size:10px;color:#6b7280;font-weight:700;display:block;margin-bottom:4px">CANTIDAD</label>
+      <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px">
+        <button onclick="adjCtPieza(${i},-1)" style="width:44px;height:44px;border-radius:10px;border:1.5px solid #d1d5db;background:#f9fafb;font-size:22px;cursor:pointer;flex-shrink:0;font-weight:300">−</button>
+        <input type="number" id="ct-qty-${i}" value="${pz.qty||0}" inputmode="numeric" min="0"
+          style="flex:1;text-align:center;font-size:32px;font-weight:800;border:2px solid #1e40af;border-radius:10px;padding:.25rem;color:#1e40af"
+          oninput="updateCtPieza(${i})">
+        <button onclick="adjCtPieza(${i},1)" style="width:44px;height:44px;border-radius:10px;border:1.5px solid #d1d5db;background:#f9fafb;font-size:22px;cursor:pointer;flex-shrink:0;font-weight:300">+</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-bottom:.5rem">
+        ${[5,10,25,50].map(n=>`<button onclick="adjCtPieza(${i},${n})" style="padding:5px;background:#eef4ff;color:#1e40af;border:1px solid #bfdbfe;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer">+${n}</button>`).join('')}
+      </div>
+
+      <!-- Peso calculado -->
+      <div id="ct-peso-box-${i}" style="display:${pz.qty>0?'block':'none'};background:#f0fdf4;border-radius:8px;padding:6px 10px;font-size:12px;font-weight:700;color:#065f46">
+        ⚖ <span id="ct-peso-txt-${i}">${pz.peso>0?`${pz.qty} pzas × ${(pz.peso/pz.qty).toFixed(2)} kg/ud = ${pz.peso.toFixed(2)} kg`:''}</span>
+      </div>
+    </div>`).join('');
+
+  recalcCtTotal();
+}
+
+function adjCtPieza(idx,n){
+  const el=document.getElementById(`ct-qty-${idx}`);
+  if(!el) return;
+  el.value=Math.max(0,(parseInt(el.value||'0')+n));
+  updateCtPieza(idx);
+}
+
+function updateCtPieza(idx){
+  if(!ctPiezas[idx]) return;
+  const esp  =parseFloat(document.getElementById(`ct-esp-${idx}`)?.value)||0;
+  const ancho=parseFloat(document.getElementById(`ct-ancho-${idx}`)?.value)||0;
+  const largo=parseFloat(document.getElementById(`ct-largo-${idx}`)?.value)||0;
+  const qty  =parseInt(document.getElementById(`ct-qty-${idx}`)?.value)||0;
+  const plIdx=parseInt(document.getElementById(`ct-pl-${idx}`)?.value)||0;
+
+  ctPiezas[idx]={...ctPiezas[idx], esp, ancho, largo, qty, planchaIdx:plIdx,
+    peso: esp&&ancho&&largo ? esp*ancho*largo*D*qty : 0};
+
+  const pb=document.getElementById(`ct-peso-box-${idx}`);
+  const pt=document.getElementById(`ct-peso-txt-${idx}`);
+  if(pb&&pt){
+    const p=ctPiezas[idx].peso;
+    pb.style.display=qty>0?'block':'none';
+    pt.textContent=p>0&&qty>0?`${qty} pzas × ${(p/qty).toFixed(2)} kg/ud = ${p.toFixed(2)} kg`:`${qty} pzas`;
+  }
+  recalcCtTotal();
+}
+
+function recalcCtTotal(){
+  const totalQty =ctPiezas.reduce((s,p)=>s+(p.qty||0),0);
+  const totalPeso=ctPiezas.reduce((s,p)=>s+(p.peso||0),0);
+  const box=document.getElementById('ct-total-box');
+  if(box) box.style.display=ctPiezas.length>1?'':'none';
+  const tq=document.getElementById('ct-total-qty');
+  const tp=document.getElementById('ct-total-peso');
+  if(tq) tq.textContent=`${totalQty} piezas`;
+  if(tp) tp.textContent=`${totalPeso.toFixed(1)} kg`;
+}
+
+// Compat stubs
+function adjCtVigas(n){ adjCtPieza(0,n); }
+function adjCt(idx,n){ adjCtPieza(idx,n); }
+function calcCtPeso(){ recalcCtTotal(); }
 
 function buildCtPorPlancha(){
   // Compatibilidad — ahora usamos el nuevo sistema de diálogos
