@@ -181,8 +181,93 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);min-height
   <div id="parte-list"></div>
 </div>
 
-<!-- PLANCHA (corte paso 1) -->
+<!-- CORTE: PASO ÚNICO UNIFICADO (igual al supervisor) -->
 <div class="sc" id="sc-plancha">
+  <button class="btn-back" onclick="go('sc-parte')">← Cambiar pieza</button>
+  <div id="sb-plancha"></div>
+
+  <!-- Info parte -->
+  <div id="wk-parte-info" style="display:none;background:#fffbeb;border:1.5px solid #fcd34d;border-radius:10px;padding:.75rem;margin-bottom:.75rem">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:.5rem">
+      <div style="background:#fff;border-radius:8px;padding:6px;text-align:center;border:1px solid #e5e7eb">
+        <div style="font-size:9px;font-weight:800;color:#6b7280">📐 PLAN</div>
+        <div id="wk-info-plan" style="font-size:16px;font-weight:800;color:#1a2b4a">—</div>
+        <div id="wk-info-plan-kg" style="font-size:10px;color:#6b7280">— kg</div>
+      </div>
+      <div style="background:#f0fdf4;border-radius:8px;padding:6px;text-align:center;border:1px solid #86efac">
+        <div style="font-size:9px;font-weight:800;color:#065f46">✅ CORTADO</div>
+        <div id="wk-info-ej" style="font-size:16px;font-weight:800;color:#065f46">—</div>
+        <div id="wk-info-ej-kg" style="font-size:10px;color:#065f46">— kg</div>
+      </div>
+      <div id="wk-info-pend-box" style="background:#fef3c7;border-radius:8px;padding:6px;text-align:center;border:1px solid #fcd34d">
+        <div style="font-size:9px;font-weight:800;color:#92400e">⏳ PEND.</div>
+        <div id="wk-info-pend" style="font-size:16px;font-weight:800;color:#92400e">—</div>
+        <div id="wk-info-pend-kg" style="font-size:10px;color:#92400e">— kg</div>
+      </div>
+    </div>
+    <div style="background:#e5e7eb;border-radius:999px;height:8px;overflow:hidden;margin-bottom:.375rem">
+      <div id="wk-info-bar" style="height:100%;border-radius:999px;background:#3b82f6;transition:width .4s;width:0%"></div>
+    </div>
+    <div id="wk-info-msg" style="display:none;border-radius:6px;padding:5px 8px;font-size:11px;font-weight:700;text-align:center"></div>
+    <div id="wk-info-txt" style="font-size:10px;color:#92400e;margin-top:3px"></div>
+  </div>
+
+  <!-- ① MATERIA PRIMA -->
+  <div class="card">
+    <div class="card-t" style="color:#1e40af">📋 Materia prima utilizada</div>
+    <div style="font-size:11px;color:#6b7280;margin-bottom:.625rem">Registra cada plancha o perfil que usaste</div>
+    <div id="wk-mat-list"></div>
+    <button onclick="wkAddMaterial()" style="width:100%;padding:.625rem;background:#eef4ff;color:#1e40af;border:1.5px dashed #93c5fd;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:.5rem">
+      + Agregar material
+    </button>
+    <div id="wk-mat-total" style="display:none;background:#dbeafe;border-radius:8px;padding:.375rem .875rem;font-size:12px;font-weight:700;color:#1e40af">
+      Total: <span id="wk-mat-total-kg">0.0 kg</span>
+    </div>
+  </div>
+
+  <!-- ② PIEZAS CORTADAS -->
+  <div class="card" style="margin-top:.75rem">
+    <div class="card-t" style="color:#065f46">✂ Piezas cortadas</div>
+    <div style="font-size:11px;color:#6b7280;margin-bottom:.625rem">Registra cada subparte con sus dimensiones</div>
+    <div id="wk-pzas-list"></div>
+    <button onclick="wkAddPieza()" style="width:100%;padding:.625rem;background:#f0fdf4;color:#065f46;border:1.5px dashed #86efac;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:.5rem">
+      + Agregar pieza / subparte
+    </button>
+  </div>
+
+  <!-- ③ SOBRANTES -->
+  <div class="card" style="margin-top:.75rem">
+    <div class="card-t" style="color:#166534">📦 Sobrantes</div>
+    <div style="font-size:11px;color:#6b7280;margin-bottom:.625rem">Material que quedó reutilizable</div>
+    <div id="wk-sob-list"></div>
+    <button onclick="wkAddSobrante()" style="width:100%;padding:.625rem;background:#f0fdf4;color:#166534;border:1.5px dashed #86efac;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:.75rem">
+      + Agregar sobrante
+    </button>
+
+    <!-- Balance -->
+    <div id="wk-balance" style="display:none;background:#1a2b4a;color:#fff;border-radius:10px;padding:.875rem;margin-bottom:.75rem">
+      <div style="font-size:10px;font-weight:700;opacity:.7;margin-bottom:.5rem;text-transform:uppercase">Balance</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px" id="wk-balance-grid"></div>
+    </div>
+
+    <!-- Calidad y obs -->
+    <div class="field"><label>¿Cómo salieron las piezas?</label>
+      <div class="cal-row">
+        <div class="cal-btn ok-sel" id="cal-ok" onclick="setCal('ok')"><span class="ci">✅</span>Buenas</div>
+        <div class="cal-btn" id="cal-rep" onclick="setCal('rep')"><span class="ci">⚠️</span>Reproceso</div>
+        <div class="cal-btn" id="cal-rec" onclick="setCal('rec')"><span class="ci">❌</span>Rechazo</div>
+      </div>
+    </div>
+    <div class="field"><label>Notas (opcional)</label>
+      <textarea id="ct-obs" placeholder="Ej: corte limpio, defecto en borde..."></textarea>
+    </div>
+    <button class="btn-main" onclick="wkGuardarCorte()">✔ Guardar registro de corte</button>
+  </div>
+</div>
+
+<!-- Mantener sc-cortes y sc-sob como alias vacíos para compatibilidad -->
+<div class="sc" id="sc-cortes" style="display:none"></div>
+<div class="sc" id="sc-sob" style="display:none"></div>
   <button class="btn-back" onclick="go('sc-parte')">← Cambiar pieza</button>
   <div id="sb-plancha"></div>
   <div class="info-box" style="background:#eef4ff;border:1px solid #bfdbfe;color:#1e40af">
@@ -388,76 +473,6 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);min-height
     <input type="hidden" id="pl-peso">
     <button class="btn-main" style="margin-top:.5rem" onclick="irACortes()">Siguiente — Registrar piezas cortadas →</button>
   </div>
-</div>
-
-<!-- CORTES (paso 2) -->
-<div class="sc" id="sc-cortes">
-  <button class="btn-back" onclick="go('sc-plancha')">← Cambiar material</button>
-  <div id="sb-cortes"></div>
-
-  <!-- Resumen material usado -->
-  <div class="ebox eb-yellow" style="margin-bottom:.75rem">
-    <div class="eb-t">🗃 Material en uso</div>
-    <div id="plancha-txt" style="font-size:12px;color:#92400e;line-height:1.6"></div>
-  </div>
-
-  <div class="card">
-    <div class="card-t">✂ Piezas cortadas de <span id="corte-pr-lbl" style="color:var(--o)"></span></div>
-    <div style="font-size:12px;color:#6b7280;margin-bottom:.875rem">
-      Registra las dimensiones y cantidad de cada pieza que cortaste
-    </div>
-
-    <!-- Lista dinámica de piezas cortadas -->
-    <div id="ct-piezas-list"></div>
-
-    <!-- Botón agregar pieza -->
-    <button id="ct-btn-add" onclick="addCtPieza()"
-      style="width:100%;padding:.625rem;background:#eef4ff;color:#1e40af;border:1.5px dashed #93c5fd;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:.875rem">
-      + Agregar otra pieza cortada
-    </button>
-
-    <!-- Total acumulado -->
-    <div id="ct-total-box" style="display:none;background:#f0fdf4;border-radius:10px;padding:.75rem 1rem;margin-bottom:.875rem">
-      <div style="font-size:11px;font-weight:700;color:#065f46;margin-bottom:4px">TOTAL ACUMULADO</div>
-      <div style="display:flex;justify-content:space-between;align-items:center">
-        <span style="font-size:20px;font-weight:800;color:#065f46" id="ct-total-qty">0 piezas</span>
-        <span style="font-size:16px;font-weight:700;color:#065f46" id="ct-total-peso">0.0 kg</span>
-      </div>
-    </div>
-
-    <div class="field"><label>¿Cómo salieron las piezas?</label>
-      <div class="cal-row">
-        <div class="cal-btn ok-sel" id="cal-ok" onclick="setCal('ok')"><span class="ci">✅</span>Buenas</div>
-        <div class="cal-btn" id="cal-rep" onclick="setCal('rep')"><span class="ci">⚠️</span>Reproceso</div>
-        <div class="cal-btn" id="cal-rec" onclick="setCal('rec')"><span class="ci">❌</span>Rechazo</div>
-      </div>
-    </div>
-    <div class="field"><label>Notas (opcional)</label>
-      <textarea id="ct-obs" placeholder="Ej: corte limpio, defecto en borde..."></textarea>
-    </div>
-    <button class="btn-main" onclick="irASobrante()">Siguiente — Registrar sobrante →</button>
-  </div>
-</div>
-
-<!-- SOBRANTE (paso 3) -->
-<div class="sc" id="sc-sob">
-  <button class="btn-back" onclick="go('sc-cortes')">← Volver a piezas</button>
-  <div id="sb-sob"></div>
-  <!-- Contenedor dinámico: un bloque por plancha -->
-  <div id="sob-bloques"></div>
-  <!-- Resumen global -->
-  <div id="sob-resumen-global" style="display:none;background:#1a2b4a;color:#fff;border-radius:12px;padding:1rem;margin-bottom:.875rem">
-    <div style="font-size:11px;font-weight:700;opacity:.7;margin-bottom:.5rem">RESUMEN GLOBAL</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px" id="sob-resumen-grid"></div>
-  </div>
-  <button class="btn-main" id="btn-guardar-corte" onclick="guardarCorte()">✔  Guardar registro de corte</button>
-</div>
-
-<!-- FORM OTRAS FASES -->
-<div class="sc" id="sc-form">
-  <button class="btn-back" id="form-back-btn">← Volver</button>
-  <div id="sb-form"></div>
-  <div id="form-content"></div>
 </div>
 
 <!-- OK -->
@@ -1013,22 +1028,27 @@ function selectParte(prId){
   selParte=selCj.partes.find(x=>x.pr===prId);
   if(!selParte)return;
   if(selFase==='Corte'){
-    draft={pl:{},ct:{}};
-    ctPiezas=[];
-    document.getElementById('sb-plancha').innerHTML=stepbar(1,['Material','Cortes','Sobrante']);
-    const tipoSel=document.getElementById('pl-tipo');
-    if(tipoSel) tipoSel.value='plancha';
-    // Mostrar panel plancha, ocultar otros
-    const dimsPlancha=document.getElementById('wk-dims-plancha');
-    const dimsIrreg=document.getElementById('wk-dims-irreg');
-    const dimsPerfil=document.getElementById('wk-dims-perfil');
-    if(dimsPlancha) dimsPlancha.style.display='';
-    if(dimsIrreg)   dimsIrreg.style.display='none';
-    if(dimsPerfil)  dimsPerfil.style.display='none';
-    // Iniciar con planchas vacías (sin aviso de sub-piezas)
-    initPlanchasWk();
-    sv('pl-peso','');
-    window._perfilData=null;
+    wkMateriales=[{tipo:'plancha',qty:1,grado:'A588-50'}];
+    wkPiezas=[{forma:'rectangular',qty:0,largo:selParte.long||0}];
+    wkSobrantes=[{tipo:'plancha',qty:1,dest:'stock'}];
+    const yaHecho=totalExec(selCj.cj,selParte.pr,'Corte');
+    const plan=selParte.plan; const pu=selParte.pu;
+    const pend=Math.max(0,plan-yaHecho);
+    document.getElementById('wk-parte-info').style.display='';
+    document.getElementById('wk-info-plan').textContent=plan+' uds';
+    document.getElementById('wk-info-plan-kg').textContent=(plan*pu).toFixed(1)+' kg';
+    document.getElementById('wk-info-ej').textContent=yaHecho+' uds';
+    document.getElementById('wk-info-ej-kg').textContent=(yaHecho*pu).toFixed(1)+' kg';
+    document.getElementById('wk-info-pend').textContent=pend+' uds';
+    document.getElementById('wk-info-pend-kg').textContent=(pend*pu).toFixed(1)+' kg';
+    const pct=plan>0?(yaHecho/plan*100):0;
+    const bar=document.getElementById('wk-info-bar');
+    if(bar){bar.style.width=pct+'%';bar.style.background=pct>=100?'#22c55e':pct>=80?'#f59e0b':'#3b82f6';}
+    const msg=document.getElementById('wk-info-msg');
+    if(msg&&pend===0){msg.style.display='';msg.style.background='#f0fdf4';msg.style.color='#065f46';msg.innerHTML='✅ Esta parte ya está completamente cortada.';}
+    else if(msg) msg.style.display='none';
+    document.getElementById('wk-info-txt').textContent='Long: '+selParte.long+' mm · '+pu+' kg/ud';
+    wkRenderMateriales(); wkRenderPiezas(); wkRenderSobrantes();
     go('sc-plancha');
   } else {
     buildForm();go('sc-form');
@@ -1662,8 +1682,410 @@ function irACortes(){
   go('sc-cortes');
 }
 
-// ======= PASO 2: REGISTRO DE CORTES =======
-let ctPiezas = [];
+// ══════════════════════════════════════════════════
+// WORKER — FLUJO UNIFICADO DE CORTE (igual supervisor)
+// ══════════════════════════════════════════════════
+let wkMateriales = [];
+let wkPiezas     = [];
+let wkSobrantes  = [];
+
+const TIPOS_MAT_WK = {
+  plancha:'Plancha', angulo:'Ángulo L', ipe:'Viga I/HEB',
+  upn:'Canal U', tubo_rect:'Tubo rect.', tubo_cuad:'Tubo cuad.',
+  tubo_circ:'Tubo circ.', barra_red:'Barra red.', barra_cuad:'Barra cuad.',
+  correa_g:'Correa G/Z', manual:'Peso manual'
+};
+
+const FORMAS_WK = {
+  rectangular:'Rectángulo', triangulo:'Triángulo', trapecio:'Trapecio',
+  circulo:'Círculo', arco:'Arco / Sector', manual:'Peso manual (Tekla)'
+};
+
+function wkCalcPesoMat(m){
+  const t=m.tipo||'plancha', q=m.qty||1; let pu=0;
+  if(t==='plancha'&&m.esp&&m.ancho&&m.largo) pu=m.esp*m.ancho*m.largo*D;
+  else if(t==='angulo'&&m.a1&&m.esp&&m.largo) pu=(m.a1+(m.a2||m.a1)-m.esp)*m.esp*D*1000;
+  else if(['ipe','upn'].includes(t)&&m.kgm&&m.largo) pu=m.kgm*m.largo/1000;
+  else if(t==='tubo_rect'&&m.an&&m.al&&m.esp&&m.largo) pu=(m.an*m.al-(m.an-2*m.esp)*(m.al-2*m.esp))*D*m.largo;
+  else if(t==='tubo_cuad'&&m.lado&&m.esp&&m.largo) pu=(m.lado**2-(m.lado-2*m.esp)**2)*D*m.largo;
+  else if(t==='tubo_circ'&&m.d&&m.esp&&m.largo) pu=Math.PI*((m.d/2)**2-((m.d/2)-m.esp)**2)*D*m.largo;
+  else if(t==='barra_red'&&m.d&&m.largo) pu=Math.PI*(m.d/2)**2*D*m.largo;
+  else if(t==='barra_cuad'&&m.lado&&m.largo) pu=m.lado**2*D*m.largo;
+  else if((t==='correa_g'||t==='correa_z')&&m.h&&m.b&&m.c&&m.esp&&m.largo) pu=(m.h+2*m.b+2*m.c)*m.esp*D*m.largo;
+  else if(t==='manual') pu=m.pesoManual||0;
+  return parseFloat((pu*q).toFixed(3));
+}
+
+function wkCalcPesoPieza(p){
+  const forma=p.forma||'rectangular', q=p.qty||0, esp=p.esp||0; let area=0;
+  if(forma==='rectangular') area=esp*(p.ancho||0)*(p.largo||0)*D;
+  else if(forma==='triangulo') area=0.5*(p.base||0)*(p.altura||0)*esp*D;
+  else if(forma==='trapecio') area=0.5*((p.b1||0)+(p.b2||0))*(p.altura||0)*esp*D;
+  else if(forma==='circulo') area=Math.PI*((p.diam||0)/2)**2*esp*D;
+  else if(forma==='arco'){ const r=p.radio||0,ri=p.radio_i||0,ang=p.angulo||360; area=(ang/360)*Math.PI*(r**2-ri**2)*esp*D; }
+  else if(forma==='manual') return parseFloat(((p.pesoManual||0)*q).toFixed(3));
+  return parseFloat((area*q).toFixed(3));
+}
+
+function wkCalcPesoSob(s){
+  const t=s.tipo||'plancha', q=s.qty||1; let pu=0;
+  if(t==='plancha'&&s.esp&&s.ancho&&s.largo) pu=s.esp*s.ancho*s.largo*D;
+  else if(t==='perfil'&&s.kgm&&s.largo) pu=s.kgm*s.largo/1000;
+  else if(t==='manual') pu=s.pesoManual||0;
+  return parseFloat((pu*q).toFixed(3));
+}
+
+// ── Render materiales ───────────────────────────────
+function wkRenderMateriales(){
+  const cont=document.getElementById('wk-mat-list'); if(!cont) return;
+  cont.innerHTML=wkMateriales.map((m,i)=>wkMatHTML(m,i)).join('');
+  wkRecalc();
+}
+
+function wkMatHTML(m,i){
+  const dimsPorTipo={
+    plancha:`<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:.375rem">
+      <div><label style="font-size:10px;color:#6b7280">Esp (mm)</label><input type="number" id="wm-esp-${i}" value="${m.esp||''}" inputmode="numeric" placeholder="12" style="width:100%;padding:7px;border:1.5px solid #bfdbfe;border-radius:8px;font-size:15px;font-weight:700" oninput="wkUpdMat(${i})"></div>
+      <div><label style="font-size:10px;color:#6b7280">Ancho (mm)</label><input type="number" id="wm-ancho-${i}" value="${m.ancho||''}" inputmode="numeric" placeholder="2500" style="width:100%;padding:7px;border:1.5px solid #bfdbfe;border-radius:8px;font-size:15px;font-weight:700" oninput="wkUpdMat(${i})"></div>
+      <div><label style="font-size:10px;color:#6b7280">Largo (mm)</label><input type="number" id="wm-largo-${i}" value="${m.largo||''}" inputmode="numeric" placeholder="6000" style="width:100%;padding:7px;border:1.5px solid #bfdbfe;border-radius:8px;font-size:15px;font-weight:700" oninput="wkUpdMat(${i})"></div>
+      <div><label style="font-size:10px;color:#6b7280">Cant.</label><input type="number" id="wm-qty-${i}" value="${m.qty||1}" inputmode="numeric" min="1" style="width:100%;padding:7px;border:1.5px solid #bfdbfe;border-radius:8px;font-size:15px" oninput="wkUpdMat(${i})"></div>
+    </div>`,
+    angulo:`<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:.375rem">
+      <div><label style="font-size:10px;color:#6b7280">Ala 1 (mm)</label><input type="number" id="wm-a1-${i}" value="${m.a1||''}" inputmode="numeric" placeholder="75" style="width:100%;padding:7px;border:1.5px solid #bfdbfe;border-radius:8px;font-size:15px;font-weight:700" oninput="wkUpdMat(${i})"></div>
+      <div><label style="font-size:10px;color:#6b7280">Ala 2 (mm)</label><input type="number" id="wm-a2-${i}" value="${m.a2||''}" inputmode="numeric" placeholder="75" style="width:100%;padding:7px;border:1.5px solid #bfdbfe;border-radius:8px;font-size:15px;font-weight:700" oninput="wkUpdMat(${i})"></div>
+      <div><label style="font-size:10px;color:#6b7280">Esp (mm)</label><input type="number" id="wm-esp-${i}" value="${m.esp||''}" inputmode="numeric" placeholder="8" style="width:100%;padding:7px;border:1.5px solid #bfdbfe;border-radius:8px;font-size:15px;font-weight:700" oninput="wkUpdMat(${i})"></div>
+      <div><label style="font-size:10px;color:#6b7280">Largo (mm)</label><input type="number" id="wm-largo-${i}" value="${m.largo||''}" inputmode="numeric" placeholder="6000" style="width:100%;padding:7px;border:1.5px solid #bfdbfe;border-radius:8px;font-size:15px;font-weight:700" oninput="wkUpdMat(${i})"></div>
+      <div><label style="font-size:10px;color:#6b7280">Cant.</label><input type="number" id="wm-qty-${i}" value="${m.qty||1}" inputmode="numeric" min="1" style="width:100%;padding:7px;border:1.5px solid #bfdbfe;border-radius:8px;font-size:15px" oninput="wkUpdMat(${i})"></div>
+    </div>`,
+    ipe:`<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:.375rem">
+      <div style="grid-column:1/-1"><label style="font-size:10px;color:#6b7280">Perfil nominal (ej: IPE200, HEB300)</label><input type="text" id="wm-nom-${i}" value="${m.nom||''}" placeholder="IPE200" style="width:100%;padding:7px;border:1.5px solid #bfdbfe;border-radius:8px;font-size:14px;font-weight:700" oninput="wkUpdMat(${i})"></div>
+      <div><label style="font-size:10px;color:#6b7280">Largo (mm)</label><input type="number" id="wm-largo-${i}" value="${m.largo||''}" inputmode="numeric" placeholder="6000" style="width:100%;padding:7px;border:1.5px solid #bfdbfe;border-radius:8px;font-size:15px" oninput="wkUpdMat(${i})"></div>
+      <div><label style="font-size:10px;color:#6b7280">Cant.</label><input type="number" id="wm-qty-${i}" value="${m.qty||1}" inputmode="numeric" min="1" style="width:100%;padding:7px;border:1.5px solid #bfdbfe;border-radius:8px;font-size:15px" oninput="wkUpdMat(${i})"></div>
+    </div>`,
+    tubo_rect:`<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:.375rem">
+      <div><label style="font-size:10px;color:#6b7280">Ancho (mm)</label><input type="number" id="wm-an-${i}" value="${m.an||''}" inputmode="numeric" placeholder="100" style="width:100%;padding:7px;border:1.5px solid #bfdbfe;border-radius:8px;font-size:15px;font-weight:700" oninput="wkUpdMat(${i})"></div>
+      <div><label style="font-size:10px;color:#6b7280">Alto (mm)</label><input type="number" id="wm-al-${i}" value="${m.al||''}" inputmode="numeric" placeholder="60" style="width:100%;padding:7px;border:1.5px solid #bfdbfe;border-radius:8px;font-size:15px;font-weight:700" oninput="wkUpdMat(${i})"></div>
+      <div><label style="font-size:10px;color:#6b7280">Esp pared (mm)</label><input type="number" id="wm-esp-${i}" value="${m.esp||''}" inputmode="numeric" placeholder="4" style="width:100%;padding:7px;border:1.5px solid #bfdbfe;border-radius:8px;font-size:15px;font-weight:700" oninput="wkUpdMat(${i})"></div>
+      <div><label style="font-size:10px;color:#6b7280">Largo (mm)</label><input type="number" id="wm-largo-${i}" value="${m.largo||''}" inputmode="numeric" placeholder="6000" style="width:100%;padding:7px;border:1.5px solid #bfdbfe;border-radius:8px;font-size:15px" oninput="wkUpdMat(${i})"></div>
+      <div><label style="font-size:10px;color:#6b7280">Cant.</label><input type="number" id="wm-qty-${i}" value="${m.qty||1}" inputmode="numeric" min="1" style="width:100%;padding:7px;border:1.5px solid #bfdbfe;border-radius:8px;font-size:15px" oninput="wkUpdMat(${i})"></div>
+    </div>`,
+    tubo_cuad:`<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:.375rem">
+      <div><label style="font-size:10px;color:#6b7280">Lado (mm)</label><input type="number" id="wm-lado-${i}" value="${m.lado||''}" inputmode="numeric" placeholder="80" style="width:100%;padding:7px;border:1.5px solid #bfdbfe;border-radius:8px;font-size:15px;font-weight:700" oninput="wkUpdMat(${i})"></div>
+      <div><label style="font-size:10px;color:#6b7280">Esp pared (mm)</label><input type="number" id="wm-esp-${i}" value="${m.esp||''}" inputmode="numeric" placeholder="4" style="width:100%;padding:7px;border:1.5px solid #bfdbfe;border-radius:8px;font-size:15px;font-weight:700" oninput="wkUpdMat(${i})"></div>
+      <div><label style="font-size:10px;color:#6b7280">Largo (mm)</label><input type="number" id="wm-largo-${i}" value="${m.largo||''}" inputmode="numeric" placeholder="6000" style="width:100%;padding:7px;border:1.5px solid #bfdbfe;border-radius:8px;font-size:15px" oninput="wkUpdMat(${i})"></div>
+      <div><label style="font-size:10px;color:#6b7280">Cant.</label><input type="number" id="wm-qty-${i}" value="${m.qty||1}" inputmode="numeric" min="1" style="width:100%;padding:7px;border:1.5px solid #bfdbfe;border-radius:8px;font-size:15px" oninput="wkUpdMat(${i})"></div>
+    </div>`,
+    tubo_circ:`<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:.375rem">
+      <div><label style="font-size:10px;color:#6b7280">Diám. ext (mm)</label><input type="number" id="wm-d-${i}" value="${m.d||''}" inputmode="numeric" placeholder="114" style="width:100%;padding:7px;border:1.5px solid #bfdbfe;border-radius:8px;font-size:15px;font-weight:700" oninput="wkUpdMat(${i})"></div>
+      <div><label style="font-size:10px;color:#6b7280">Esp pared (mm)</label><input type="number" id="wm-esp-${i}" value="${m.esp||''}" inputmode="numeric" placeholder="4" style="width:100%;padding:7px;border:1.5px solid #bfdbfe;border-radius:8px;font-size:15px;font-weight:700" oninput="wkUpdMat(${i})"></div>
+      <div><label style="font-size:10px;color:#6b7280">Largo (mm)</label><input type="number" id="wm-largo-${i}" value="${m.largo||''}" inputmode="numeric" placeholder="6000" style="width:100%;padding:7px;border:1.5px solid #bfdbfe;border-radius:8px;font-size:15px" oninput="wkUpdMat(${i})"></div>
+      <div><label style="font-size:10px;color:#6b7280">Cant.</label><input type="number" id="wm-qty-${i}" value="${m.qty||1}" inputmode="numeric" min="1" style="width:100%;padding:7px;border:1.5px solid #bfdbfe;border-radius:8px;font-size:15px" oninput="wkUpdMat(${i})"></div>
+    </div>`,
+    barra_red:`<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:.375rem">
+      <div><label style="font-size:10px;color:#6b7280">Diám (mm)</label><input type="number" id="wm-d-${i}" value="${m.d||''}" inputmode="numeric" placeholder="25" style="width:100%;padding:7px;border:1.5px solid #bfdbfe;border-radius:8px;font-size:15px;font-weight:700" oninput="wkUpdMat(${i})"></div>
+      <div><label style="font-size:10px;color:#6b7280">Largo (mm)</label><input type="number" id="wm-largo-${i}" value="${m.largo||''}" inputmode="numeric" placeholder="6000" style="width:100%;padding:7px;border:1.5px solid #bfdbfe;border-radius:8px;font-size:15px" oninput="wkUpdMat(${i})"></div>
+      <div><label style="font-size:10px;color:#6b7280">Cant.</label><input type="number" id="wm-qty-${i}" value="${m.qty||1}" inputmode="numeric" min="1" style="width:100%;padding:7px;border:1.5px solid #bfdbfe;border-radius:8px;font-size:15px" oninput="wkUpdMat(${i})"></div>
+    </div>`,
+    barra_cuad:`<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:.375rem">
+      <div><label style="font-size:10px;color:#6b7280">Lado (mm)</label><input type="number" id="wm-lado-${i}" value="${m.lado||''}" inputmode="numeric" placeholder="30" style="width:100%;padding:7px;border:1.5px solid #bfdbfe;border-radius:8px;font-size:15px;font-weight:700" oninput="wkUpdMat(${i})"></div>
+      <div><label style="font-size:10px;color:#6b7280">Largo (mm)</label><input type="number" id="wm-largo-${i}" value="${m.largo||''}" inputmode="numeric" placeholder="6000" style="width:100%;padding:7px;border:1.5px solid #bfdbfe;border-radius:8px;font-size:15px" oninput="wkUpdMat(${i})"></div>
+      <div><label style="font-size:10px;color:#6b7280">Cant.</label><input type="number" id="wm-qty-${i}" value="${m.qty||1}" inputmode="numeric" min="1" style="width:100%;padding:7px;border:1.5px solid #bfdbfe;border-radius:8px;font-size:15px" oninput="wkUpdMat(${i})"></div>
+    </div>`,
+    correa_g:`<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:.375rem">
+      <div><label style="font-size:10px;color:#6b7280">Alto H (mm)</label><input type="number" id="wm-h-${i}" value="${m.h||''}" inputmode="numeric" placeholder="160" style="width:100%;padding:7px;border:1.5px solid #bfdbfe;border-radius:8px;font-size:15px;font-weight:700" oninput="wkUpdMat(${i})"></div>
+      <div><label style="font-size:10px;color:#6b7280">Ala B (mm)</label><input type="number" id="wm-b-${i}" value="${m.b||''}" inputmode="numeric" placeholder="65" style="width:100%;padding:7px;border:1.5px solid #bfdbfe;border-radius:8px;font-size:15px;font-weight:700" oninput="wkUpdMat(${i})"></div>
+      <div><label style="font-size:10px;color:#6b7280">Labio C (mm)</label><input type="number" id="wm-c-${i}" value="${m.c||''}" inputmode="numeric" placeholder="15" style="width:100%;padding:7px;border:1.5px solid #bfdbfe;border-radius:8px;font-size:15px;font-weight:700" oninput="wkUpdMat(${i})"></div>
+      <div><label style="font-size:10px;color:#6b7280">Esp (mm)</label><input type="number" id="wm-esp-${i}" value="${m.esp||''}" inputmode="numeric" placeholder="2" style="width:100%;padding:7px;border:1.5px solid #bfdbfe;border-radius:8px;font-size:15px;font-weight:700" oninput="wkUpdMat(${i})"></div>
+      <div><label style="font-size:10px;color:#6b7280">Largo (mm)</label><input type="number" id="wm-largo-${i}" value="${m.largo||''}" inputmode="numeric" placeholder="6000" style="width:100%;padding:7px;border:1.5px solid #bfdbfe;border-radius:8px;font-size:15px" oninput="wkUpdMat(${i})"></div>
+      <div><label style="font-size:10px;color:#6b7280">Cant.</label><input type="number" id="wm-qty-${i}" value="${m.qty||1}" inputmode="numeric" min="1" style="width:100%;padding:7px;border:1.5px solid #bfdbfe;border-radius:8px;font-size:15px" oninput="wkUpdMat(${i})"></div>
+    </div>`,
+    manual:`<div style="display:grid;grid-template-columns:1fr;gap:6px;margin-top:.375rem">
+      <div><label style="font-size:10px;color:#6b7280">Peso total (kg)</label><input type="number" id="wm-pm-${i}" value="${m.pesoManual||''}" inputmode="decimal" placeholder="0.0" style="width:100%;padding:7px;border:1.5px solid #bfdbfe;border-radius:8px;font-size:20px;font-weight:700" oninput="wkUpdMat(${i})"></div>
+    </div>`,
+  };
+
+  const peso=wkCalcPesoMat(m);
+  return `<div style="border:1.5px solid #bfdbfe;border-radius:12px;padding:.875rem;margin-bottom:.625rem;background:#f8faff">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <span style="font-size:12px;font-weight:700;color:#1e40af">📋 Material ${i+1}</span>
+        <select id="wm-tipo-${i}" style="font-size:12px;border:1px solid #bfdbfe;border-radius:6px;padding:3px 6px" onchange="wkChgMatTipo(${i})">
+          ${Object.entries(TIPOS_MAT_WK).map(([v,l])=>`<option value="${v}" ${m.tipo===v?'selected':''}>${l}</option>`).join('')}
+        </select>
+      </div>
+      ${wkMateriales.length>1?`<button onclick="wkRmMat(${i})" style="background:#fee2e2;color:#991b1b;border:none;border-radius:6px;padding:3px 10px;font-size:12px;cursor:pointer">✕</button>`:''}
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:.375rem">
+      <div><label style="font-size:10px;color:#6b7280">N° Colada</label><input type="text" id="wm-colada-${i}" value="${m.colada||''}" placeholder="000000-000013" style="width:100%;padding:6px;border:1px solid #d1d5db;border-radius:6px;font-size:13px" oninput="wkUpdMat(${i})"></div>
+      <div><label style="font-size:10px;color:#6b7280">Material</label><select id="wm-grado-${i}" style="width:100%;padding:6px;border:1px solid #d1d5db;border-radius:6px;font-size:13px" onchange="wkUpdMat(${i})"><option ${m.grado==='A588-50'?'selected':''}>A588-50</option><option ${m.grado==='A572-50'?'selected':''}>A572-50</option><option ${m.grado==='A36'?'selected':''}>A36</option></select></div>
+    </div>
+    ${dimsPorTipo[m.tipo]||dimsPorTipo.plancha}
+    <div style="font-size:12px;font-weight:700;color:#065f46;text-align:right;margin-top:6px" id="wm-peso-lbl-${i}">
+      ${peso>0?`→ ${peso.toFixed(2)} kg`:''}
+    </div>
+  </div>`;
+}
+
+function wkAddMaterial(){ wkMateriales.push({tipo:'plancha',qty:1,grado:'A588-50'}); wkRenderMateriales(); }
+function wkRmMat(i){ wkMateriales.splice(i,1); wkRenderMateriales(); }
+function wkChgMatTipo(i){ wkMateriales[i]={...wkMateriales[i],tipo:document.getElementById(`wm-tipo-${i}`)?.value||'plancha'}; wkRenderMateriales(); }
+
+function wkUpdMat(i){
+  const m=wkMateriales[i]; if(!m) return;
+  const g=id=>parseFloat(document.getElementById(id)?.value)||0;
+  m.tipo=document.getElementById(`wm-tipo-${i}`)?.value||'plancha';
+  m.colada=document.getElementById(`wm-colada-${i}`)?.value||'';
+  m.grado=document.getElementById(`wm-grado-${i}`)?.value||'A588-50';
+  m.qty=g(`wm-qty-${i}`)||1; m.esp=g(`wm-esp-${i}`); m.ancho=g(`wm-ancho-${i}`);
+  m.largo=g(`wm-largo-${i}`); m.a1=g(`wm-a1-${i}`); m.a2=g(`wm-a2-${i}`);
+  m.an=g(`wm-an-${i}`); m.al=g(`wm-al-${i}`); m.lado=g(`wm-lado-${i}`);
+  m.d=g(`wm-d-${i}`); m.h=g(`wm-h-${i}`); m.b=g(`wm-b-${i}`); m.c=g(`wm-c-${i}`);
+  m.nom=document.getElementById(`wm-nom-${i}`)?.value||'';
+  if(['ipe','upn'].includes(m.tipo)&&m.nom){ const k=buscarPesoM(m.nom); if(k) m.kgm=k; }
+  m.pesoManual=g(`wm-pm-${i}`);
+  const peso=wkCalcPesoMat(m); m.peso=peso;
+  const lbl=document.getElementById(`wm-peso-lbl-${i}`);
+  if(lbl) lbl.textContent=peso>0?`→ ${peso.toFixed(2)} kg`:'';
+  wkRecalc();
+}
+
+// ── Render piezas ───────────────────────────────────
+function wkRenderPiezas(){
+  const cont=document.getElementById('wk-pzas-list'); if(!cont) return;
+  cont.innerHTML=wkPiezas.map((p,i)=>wkPiezaHTML(p,i)).join('');
+  wkRecalc();
+}
+
+function wkPiezaHTML(p,i){
+  const dimsPorForma={
+    rectangular:`<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:.5rem">
+      <div><label style="font-size:10px;color:#6b7280;font-weight:700">ESP (mm)</label><input type="number" id="wp-esp-${i}" value="${p.esp||''}" inputmode="numeric" placeholder="12" style="width:100%;padding:8px;border:1.5px solid #bfdbfe;border-radius:8px;font-size:16px;font-weight:700;text-align:center" oninput="wkUpdPieza(${i})"></div>
+      <div><label style="font-size:10px;color:#6b7280;font-weight:700">ANCHO (mm)</label><input type="number" id="wp-ancho-${i}" value="${p.ancho||''}" inputmode="numeric" placeholder="300" style="width:100%;padding:8px;border:1.5px solid #bfdbfe;border-radius:8px;font-size:16px;font-weight:700;text-align:center" oninput="wkUpdPieza(${i})"></div>
+      <div><label style="font-size:10px;color:#6b7280;font-weight:700">LARGO (mm)</label><input type="number" id="wp-largo-${i}" value="${p.largo||''}" inputmode="numeric" placeholder="3000" style="width:100%;padding:8px;border:1.5px solid #bfdbfe;border-radius:8px;font-size:16px;font-weight:700;text-align:center" oninput="wkUpdPieza(${i})"></div>
+    </div>`,
+    triangulo:`<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:.5rem">
+      <div><label style="font-size:10px;color:#6b7280;font-weight:700">ESP (mm)</label><input type="number" id="wp-esp-${i}" value="${p.esp||''}" inputmode="numeric" placeholder="12" style="width:100%;padding:8px;border:1.5px solid #bfdbfe;border-radius:8px;font-size:16px;font-weight:700;text-align:center" oninput="wkUpdPieza(${i})"></div>
+      <div><label style="font-size:10px;color:#6b7280;font-weight:700">BASE (mm)</label><input type="number" id="wp-base-${i}" value="${p.base||''}" inputmode="numeric" placeholder="500" style="width:100%;padding:8px;border:1.5px solid #bfdbfe;border-radius:8px;font-size:16px;font-weight:700;text-align:center" oninput="wkUpdPieza(${i})"></div>
+      <div><label style="font-size:10px;color:#6b7280;font-weight:700">ALTURA (mm)</label><input type="number" id="wp-altura-${i}" value="${p.altura||''}" inputmode="numeric" placeholder="400" style="width:100%;padding:8px;border:1.5px solid #bfdbfe;border-radius:8px;font-size:16px;font-weight:700;text-align:center" oninput="wkUpdPieza(${i})"></div>
+    </div>`,
+    trapecio:`<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:.5rem">
+      <div><label style="font-size:10px;color:#6b7280;font-weight:700">ESP (mm)</label><input type="number" id="wp-esp-${i}" value="${p.esp||''}" inputmode="numeric" placeholder="12" style="width:100%;padding:8px;border:1.5px solid #bfdbfe;border-radius:8px;font-size:15px;font-weight:700;text-align:center" oninput="wkUpdPieza(${i})"></div>
+      <div><label style="font-size:10px;color:#6b7280;font-weight:700">BASE MAYOR (mm)</label><input type="number" id="wp-b1-${i}" value="${p.b1||''}" inputmode="numeric" placeholder="500" style="width:100%;padding:8px;border:1.5px solid #bfdbfe;border-radius:8px;font-size:15px;font-weight:700;text-align:center" oninput="wkUpdPieza(${i})"></div>
+      <div><label style="font-size:10px;color:#6b7280;font-weight:700">BASE MENOR (mm)</label><input type="number" id="wp-b2-${i}" value="${p.b2||''}" inputmode="numeric" placeholder="200" style="width:100%;padding:8px;border:1.5px solid #bfdbfe;border-radius:8px;font-size:15px;font-weight:700;text-align:center" oninput="wkUpdPieza(${i})"></div>
+      <div><label style="font-size:10px;color:#6b7280;font-weight:700">ALTURA (mm)</label><input type="number" id="wp-altura-${i}" value="${p.altura||''}" inputmode="numeric" placeholder="300" style="width:100%;padding:8px;border:1.5px solid #bfdbfe;border-radius:8px;font-size:15px;font-weight:700;text-align:center" oninput="wkUpdPieza(${i})"></div>
+    </div>`,
+    circulo:`<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:.5rem">
+      <div><label style="font-size:10px;color:#6b7280;font-weight:700">ESP (mm)</label><input type="number" id="wp-esp-${i}" value="${p.esp||''}" inputmode="numeric" placeholder="12" style="width:100%;padding:8px;border:1.5px solid #bfdbfe;border-radius:8px;font-size:16px;font-weight:700;text-align:center" oninput="wkUpdPieza(${i})"></div>
+      <div><label style="font-size:10px;color:#6b7280;font-weight:700">DIÁMETRO (mm)</label><input type="number" id="wp-diam-${i}" value="${p.diam||''}" inputmode="numeric" placeholder="500" style="width:100%;padding:8px;border:1.5px solid #bfdbfe;border-radius:8px;font-size:16px;font-weight:700;text-align:center" oninput="wkUpdPieza(${i})"></div>
+    </div>`,
+    arco:`<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:.5rem">
+      <div><label style="font-size:10px;color:#6b7280;font-weight:700">ESP (mm)</label><input type="number" id="wp-esp-${i}" value="${p.esp||''}" inputmode="numeric" placeholder="12" style="width:100%;padding:8px;border:1.5px solid #bfdbfe;border-radius:8px;font-size:15px;font-weight:700;text-align:center" oninput="wkUpdPieza(${i})"></div>
+      <div><label style="font-size:10px;color:#6b7280;font-weight:700">RADIO EXT (mm)</label><input type="number" id="wp-radio-${i}" value="${p.radio||''}" inputmode="numeric" placeholder="300" style="width:100%;padding:8px;border:1.5px solid #bfdbfe;border-radius:8px;font-size:15px;font-weight:700;text-align:center" oninput="wkUpdPieza(${i})"></div>
+      <div><label style="font-size:10px;color:#6b7280;font-weight:700">RADIO INT (mm)</label><input type="number" id="wp-radio-i-${i}" value="${p.radio_i||0}" inputmode="numeric" placeholder="0" style="width:100%;padding:8px;border:1.5px solid #bfdbfe;border-radius:8px;font-size:15px;font-weight:700;text-align:center" oninput="wkUpdPieza(${i})"></div>
+      <div><label style="font-size:10px;color:#6b7280;font-weight:700">ÁNGULO (°)</label><input type="number" id="wp-angulo-${i}" value="${p.angulo||360}" inputmode="numeric" placeholder="360" style="width:100%;padding:8px;border:1.5px solid #bfdbfe;border-radius:8px;font-size:15px;font-weight:700;text-align:center" oninput="wkUpdPieza(${i})"></div>
+    </div>`,
+    manual:`<div style="margin-bottom:.5rem">
+      <label style="font-size:10px;color:#6b7280;font-weight:700">PESO UNIT. TEKLA (kg/pieza)</label>
+      <input type="number" id="wp-pm-${i}" value="${p.pesoManual||''}" inputmode="decimal" placeholder="45.32" style="width:100%;padding:8px;border:1.5px solid #7c3aed;border-radius:8px;font-size:20px;font-weight:700;text-align:center" oninput="wkUpdPieza(${i})">
+    </div>`,
+  };
+
+  const peso=wkCalcPesoPieza(p);
+  return `<div style="border:1.5px solid #d1fae5;border-radius:12px;padding:.875rem;margin-bottom:.625rem;background:#f0fdf4">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <span style="font-size:12px;font-weight:700;color:#065f46">✂ Pieza ${i+1}</span>
+        <select id="wp-forma-${i}" style="font-size:12px;border:1px solid #86efac;border-radius:6px;padding:3px 6px;background:#f0fdf4" onchange="wkChgPiezaForma(${i})">
+          ${Object.entries(FORMAS_WK).map(([v,l])=>`<option value="${v}" ${p.forma===v?'selected':''}>${l}</option>`).join('')}
+        </select>
+      </div>
+      ${wkPiezas.length>1?`<button onclick="wkRmPieza(${i})" style="background:#fee2e2;color:#991b1b;border:none;border-radius:6px;padding:3px 10px;font-size:12px;cursor:pointer">✕</button>`:''}
+    </div>
+    ${dimsPorForma[p.forma]||dimsPorForma.rectangular}
+    <!-- Cantidad -->
+    <label style="font-size:10px;color:#6b7280;font-weight:700;display:block;margin-bottom:4px">CANTIDAD</label>
+    <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px">
+      <button onclick="wkAdjPieza(${i},-1)" style="width:44px;height:44px;border-radius:10px;border:1.5px solid #d1d5db;background:#f9fafb;font-size:22px;cursor:pointer;flex-shrink:0">−</button>
+      <input type="number" id="wp-qty-${i}" value="${p.qty||0}" inputmode="numeric" min="0"
+        style="flex:1;text-align:center;font-size:32px;font-weight:800;border:2px solid #065f46;border-radius:10px;padding:.25rem;color:#065f46"
+        oninput="wkUpdPieza(${i})">
+      <button onclick="wkAdjPieza(${i},1)" style="width:44px;height:44px;border-radius:10px;border:1.5px solid #d1d5db;background:#f9fafb;font-size:22px;cursor:pointer;flex-shrink:0">+</button>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-bottom:.5rem">
+      ${[5,10,25,50].map(n=>`<button onclick="wkAdjPieza(${i},${n})" style="padding:5px;background:#dcfce7;color:#166534;border:1px solid #86efac;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer">+${n}</button>`).join('')}
+    </div>
+    <div id="wp-peso-lbl-${i}" style="font-size:12px;font-weight:700;color:#065f46;text-align:right;display:${peso>0?'block':'none'}">
+      ⚖ ${p.qty>0?`${p.qty} pzas × ${(p.qty?(peso/p.qty):0).toFixed(2)} kg = ${peso.toFixed(2)} kg`:''}
+    </div>
+  </div>`;
+}
+
+function wkAddPieza(){ wkPiezas.push({forma:'rectangular',qty:0}); wkRenderPiezas(); }
+function wkRmPieza(i){ wkPiezas.splice(i,1); wkRenderPiezas(); }
+function wkChgPiezaForma(i){ wkPiezas[i]={...wkPiezas[i],forma:document.getElementById(`wp-forma-${i}`)?.value||'rectangular'}; wkRenderPiezas(); }
+function wkAdjPieza(i,n){ const el=document.getElementById(`wp-qty-${i}`); if(el){el.value=Math.max(0,(parseInt(el.value||0)+n)); wkUpdPieza(i);} }
+
+function wkUpdPieza(i){
+  const p=wkPiezas[i]; if(!p) return;
+  const g=id=>parseFloat(document.getElementById(id)?.value)||0;
+  p.forma=document.getElementById(`wp-forma-${i}`)?.value||'rectangular';
+  p.qty=g(`wp-qty-${i}`); p.esp=g(`wp-esp-${i}`); p.ancho=g(`wp-ancho-${i}`);
+  p.largo=g(`wp-largo-${i}`); p.base=g(`wp-base-${i}`); p.altura=g(`wp-altura-${i}`);
+  p.b1=g(`wp-b1-${i}`); p.b2=g(`wp-b2-${i}`); p.diam=g(`wp-diam-${i}`);
+  p.radio=g(`wp-radio-${i}`); p.radio_i=g(`wp-radio-i-${i}`); p.angulo=g(`wp-angulo-${i}`)||360;
+  p.pesoManual=g(`wp-pm-${i}`);
+  const peso=wkCalcPesoPieza(p); p.peso=peso;
+  const lbl=document.getElementById(`wp-peso-lbl-${i}`);
+  if(lbl){ lbl.style.display=peso>0?'block':'none'; lbl.textContent=p.qty>0?`⚖ ${p.qty} pzas × ${(p.qty?peso/p.qty:0).toFixed(2)} kg = ${peso.toFixed(2)} kg`:''; }
+  wkRecalc();
+}
+
+// ── Render sobrantes ────────────────────────────────
+function wkRenderSobrantes(){
+  const cont=document.getElementById('wk-sob-list'); if(!cont) return;
+  cont.innerHTML=wkSobrantes.map((s,i)=>wkSobHTML(s,i)).join('');
+  wkRecalc();
+}
+
+function wkSobHTML(s,i){
+  const dims = s.tipo==='plancha'
+    ? `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:.375rem">
+        <div><label style="font-size:10px;color:#6b7280">Esp (mm)</label><input type="number" id="ws-esp-${i}" value="${s.esp||''}" inputmode="numeric" placeholder="12" style="width:100%;padding:7px;border:1.5px solid #86efac;border-radius:8px;font-size:15px;font-weight:700" oninput="wkUpdSob(${i})"></div>
+        <div><label style="font-size:10px;color:#6b7280">Ancho (mm)</label><input type="number" id="ws-ancho-${i}" value="${s.ancho||''}" inputmode="numeric" placeholder="mm" style="width:100%;padding:7px;border:1.5px solid #86efac;border-radius:8px;font-size:15px;font-weight:700" oninput="wkUpdSob(${i})"></div>
+        <div><label style="font-size:10px;color:#6b7280">Largo (mm)</label><input type="number" id="ws-largo-${i}" value="${s.largo||''}" inputmode="numeric" placeholder="mm" style="width:100%;padding:7px;border:1.5px solid #86efac;border-radius:8px;font-size:15px;font-weight:700" oninput="wkUpdSob(${i})"></div>
+        <div><label style="font-size:10px;color:#6b7280">Cant.</label><input type="number" id="ws-qty-${i}" value="${s.qty||1}" inputmode="numeric" min="1" style="width:100%;padding:7px;border:1.5px solid #86efac;border-radius:8px;font-size:15px" oninput="wkUpdSob(${i})"></div>
+      </div>`
+    : s.tipo==='perfil'
+    ? `<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:.375rem">
+        <div><label style="font-size:10px;color:#6b7280">Largo (mm)</label><input type="number" id="ws-largo-${i}" value="${s.largo||''}" inputmode="numeric" placeholder="mm" style="width:100%;padding:7px;border:1.5px solid #86efac;border-radius:8px;font-size:14px" oninput="wkUpdSob(${i})"></div>
+        <div><label style="font-size:10px;color:#6b7280">kg/m</label><input type="number" id="ws-kgm-${i}" value="${s.kgm||''}" inputmode="decimal" placeholder="kg/m" style="width:100%;padding:7px;border:1.5px solid #86efac;border-radius:8px;font-size:14px" oninput="wkUpdSob(${i})"></div>
+        <div><label style="font-size:10px;color:#6b7280">Cant.</label><input type="number" id="ws-qty-${i}" value="${s.qty||1}" inputmode="numeric" min="1" style="width:100%;padding:7px;border:1.5px solid #86efac;border-radius:8px;font-size:14px" oninput="wkUpdSob(${i})"></div>
+      </div>`
+    : `<div style="margin-top:.375rem"><label style="font-size:10px;color:#6b7280">Peso (kg)</label><input type="number" id="ws-pm-${i}" value="${s.pesoManual||''}" inputmode="decimal" placeholder="kg" style="width:100%;padding:7px;border:1.5px solid #86efac;border-radius:8px;font-size:18px;font-weight:700" oninput="wkUpdSob(${i})"></div>`;
+
+  const peso=wkCalcPesoSob(s);
+  return `<div style="border:1.5px solid #86efac;border-radius:12px;padding:.875rem;margin-bottom:.625rem;background:#f0fdf4">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <span style="font-size:12px;font-weight:700;color:#166534">📦 Sobrante ${i+1}</span>
+        <select id="ws-tipo-${i}" style="font-size:12px;border:1px solid #86efac;border-radius:6px;padding:3px 6px;background:#f0fdf4" onchange="wkChgSobTipo(${i})">
+          <option value="plancha" ${s.tipo==='plancha'?'selected':''}>Plancha</option>
+          <option value="perfil" ${s.tipo==='perfil'?'selected':''}>Perfil</option>
+          <option value="manual" ${s.tipo==='manual'?'selected':''}>Peso manual</option>
+        </select>
+        <select id="ws-dest-${i}" style="font-size:11px;border:1px solid #86efac;border-radius:6px;padding:3px 6px;background:#f0fdf4">
+          <option value="stock">📦 Stock</option><option value="waste">🗑 Desperd.</option>
+        </select>
+      </div>
+      ${wkSobrantes.length>1?`<button onclick="wkRmSob(${i})" style="background:#fee2e2;color:#991b1b;border:none;border-radius:6px;padding:3px 10px;font-size:12px;cursor:pointer">✕</button>`:''}
+    </div>
+    <input type="text" id="ws-colada-${i}" value="${s.colada||''}" placeholder="N° Colada / Lote" style="width:100%;padding:6px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;margin-bottom:.375rem" oninput="wkUpdSob(${i})">
+    ${dims}
+    <div id="ws-peso-lbl-${i}" style="font-size:12px;font-weight:700;color:#166534;text-align:right;margin-top:6px;display:${peso>0?'block':'none'}">
+      → ${peso.toFixed(2)} kg
+    </div>
+  </div>`;
+}
+
+function wkAddSobrante(){ wkSobrantes.push({tipo:'plancha',qty:1,dest:'stock',esp:wkMateriales[0]?.esp||0}); wkRenderSobrantes(); }
+function wkRmSob(i){ wkSobrantes.splice(i,1); wkRenderSobrantes(); }
+function wkChgSobTipo(i){ wkSobrantes[i]={...wkSobrantes[i],tipo:document.getElementById(`ws-tipo-${i}`)?.value||'plancha'}; wkRenderSobrantes(); }
+
+function wkUpdSob(i){
+  const s=wkSobrantes[i]; if(!s) return;
+  const g=id=>parseFloat(document.getElementById(id)?.value)||0;
+  s.tipo=document.getElementById(`ws-tipo-${i}`)?.value||'plancha';
+  s.dest=document.getElementById(`ws-dest-${i}`)?.value||'stock';
+  s.colada=document.getElementById(`ws-colada-${i}`)?.value||'';
+  s.esp=g(`ws-esp-${i}`); s.ancho=g(`ws-ancho-${i}`); s.largo=g(`ws-largo-${i}`);
+  s.qty=g(`ws-qty-${i}`)||1; s.kgm=g(`ws-kgm-${i}`); s.pesoManual=g(`ws-pm-${i}`);
+  const peso=wkCalcPesoSob(s); s.peso=peso;
+  const lbl=document.getElementById(`ws-peso-lbl-${i}`);
+  if(lbl){ lbl.style.display=peso>0?'block':'none'; lbl.textContent=`→ ${peso.toFixed(2)} kg`; }
+  wkRecalc();
+}
+
+// ── Balance ─────────────────────────────────────────
+function wkRecalc(){
+  const totalMat =wkMateriales.reduce((s,m)=>s+(m.peso||wkCalcPesoMat(m)),0);
+  const totalPzas=wkPiezas.reduce((s,p)=>s+(p.peso||wkCalcPesoPieza(p)),0);
+  const totalSob =wkSobrantes.reduce((s,sb)=>s+(sb.peso||wkCalcPesoSob(sb)),0);
+  const desp=Math.max(0,totalMat-totalPzas-totalSob);
+  const aprov=totalMat>0?(totalPzas/totalMat*100):0;
+
+  const mt=document.getElementById('wk-mat-total'); const mtb=document.getElementById('wk-mat-total');
+  const mtkg=document.getElementById('wk-mat-total-kg');
+  if(mtkg) mtkg.textContent=`${totalMat.toFixed(2)} kg`;
+  if(mt) mt.style.display=totalMat>0?'':'none';
+
+  const bal=document.getElementById('wk-balance'); const bgrid=document.getElementById('wk-balance-grid');
+  if(bal&&bgrid&&(totalMat>0||totalPzas>0)){
+    bal.style.display='';
+    const despColor=totalMat>0&&(desp/totalMat)>0.08?'#fca5a5':'#fde68a';
+    bgrid.innerHTML=`
+      <div style="text-align:center"><div style="font-size:9px;opacity:.7;font-weight:700">📋 MATERIAL</div><div style="font-size:18px;font-weight:800;color:#93c5fd">${totalMat.toFixed(1)}</div><div style="font-size:9px;opacity:.6">kg</div></div>
+      <div style="text-align:center"><div style="font-size:9px;opacity:.7;font-weight:700">✂ PIEZAS</div><div style="font-size:18px;font-weight:800;color:#86efac">${totalPzas.toFixed(1)}</div><div style="font-size:9px;opacity:.6">${aprov.toFixed(1)}%</div></div>
+      <div style="text-align:center"><div style="font-size:9px;opacity:.7;font-weight:700">📦 SOBRANTE</div><div style="font-size:18px;font-weight:800;color:#93c5fd">${totalSob.toFixed(1)}</div><div style="font-size:9px;opacity:.6">kg</div></div>
+      <div style="grid-column:1/-1;margin-top:4px;background:${despColor};border-radius:6px;padding:4px 10px;display:flex;justify-content:space-between">
+        <span style="font-size:11px;font-weight:700;color:#1a2b4a">🗑 Desperdicio</span>
+        <span style="font-size:14px;font-weight:800;color:#1a2b4a">${desp.toFixed(2)} kg (${(100-aprov).toFixed(1)}%)</span>
+      </div>`;
+  } else if(bal) bal.style.display='none';
+}
+
+// ── Guardar corte ───────────────────────────────────
+function wkGuardarCorte(){
+  if(!W){ alert('Selecciona tu nombre primero'); return; }
+  if(!selCj||!selParte){ alert('Selecciona conjunto y parte'); return; }
+  const totalPzas=wkPiezas.reduce((s,p)=>s+(p.qty||0),0);
+  if(totalPzas<=0){ alert('Ingresa al menos una pieza cortada'); return; }
+
+  const totalMat =wkMateriales.reduce((s,m)=>s+(m.peso||wkCalcPesoMat(m)),0);
+  const totalPeso=wkPiezas.reduce((s,p)=>s+(p.peso||wkCalcPesoPieza(p)),0);
+  const totalSob =wkSobrantes.reduce((s,sb)=>s+(sb.peso||wkCalcPesoSob(sb)),0);
+  const desp=parseFloat(Math.max(0,totalMat-totalPeso-totalSob).toFixed(2));
+
+  const m0=wkMateriales[0]||{};
+  const sob0=wkSobrantes[0]||{};
+
+  const rec={
+    id:Date.now(), tipo:'corte', fecha:todayISO(), hora:timeNow(),
+    opId:W.id, opNom:`${W.nom} ${W.ape}`, opRol:W.rol,
+    fase:'Corte', cj:selCj.cj, pr:selParte.pr, perfil:selParte.perfil,
+    qty:totalPzas, pesoPzas:totalPeso, calidad, obs:document.getElementById('ct-obs')?.value.trim()||'',
+    // Materiales
+    pl_planchas:JSON.stringify(wkMateriales),
+    pl_tipo:m0.tipo||'plancha', pl_num:m0.colada||'—', pl_mat:m0.grado||'—',
+    pl_esp:m0.esp||0, pl_ancho:m0.ancho||0, pl_largo:m0.largo||0,
+    pl_qty:m0.qty||1, pl_peso:totalMat,
+    // Piezas
+    pl_cortes_por_plancha:JSON.stringify(wkPiezas),
+    // Sobrantes
+    sob_por_plancha:JSON.stringify(wkSobrantes),
+    sob_hay:totalSob>0?'si':'no', sob_peso:totalSob,
+    sob_esp:sob0.esp||0, sob_ancho:sob0.ancho||0, sob_largo:sob0.largo||0,
+    sob_qty:sob0.qty||1, sob_colada:sob0.colada||'—',
+    sob_mat:m0.grado||'—', sob_dest:sob0.dest||'stock',
+    desperdicio:desp,
+  };
+
+  saveRec(rec);
+  setSync(true,'ok');
+
+  // Reset form
+  wkMateriales=[{tipo:'plancha',qty:1,grado:'A588-50'}];
+  wkPiezas=[{forma:'rectangular',qty:0}];
+  wkSobrantes=[{tipo:'plancha',qty:1,dest:'stock'}];
+
+  document.getElementById('ok-detail').innerHTML=
+    `✂ <strong>Corte</strong> · ${selCj.cj}/${selParte.pr} · <strong>${totalPzas} piezas</strong><br>
+     📋 Mat: ${totalMat.toFixed(1)} kg · Pzas: ${totalPeso.toFixed(1)} kg · Desp: ${desp.toFixed(1)} kg`;
+  loadMyRecs().then(()=>{
+    document.getElementById('ok-hist').innerHTML=renderHistItems(_cache.filter(r=>r.fecha===todayISO()));
+  });
+  renderHomeHist();
+  go('sc-ok');
+}
 
 function buildCtPorPlancha(){
   ctPiezas = [];
