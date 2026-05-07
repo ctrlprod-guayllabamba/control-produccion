@@ -2139,7 +2139,6 @@ function supRecalc(){
         <div style="font-size:10px;opacity:.6">kg reutilizable</div>
       </div>`;
     // Segunda fila: desperdicio
-    const despColor=desp>0&&totalMat>0&&(desp/totalMat)>0.08?'#fca5a5':'#fde68a';
     const pctDesp=totalMat>0?(desp/totalMat*100):0;
     bg.innerHTML+=`<div style="grid-column:1/-1;margin-top:4px">
       <div style="background:${despColor};border-radius:6px;padding:4px 10px;display:flex;justify-content:space-between;align-items:center">
