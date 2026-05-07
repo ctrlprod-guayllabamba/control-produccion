@@ -436,6 +436,7 @@ global.Chart = class {
 </head>
 <body>
 
+  <div id="global-error-banner" style="display:none;position:fixed;top:50px;left:0;right:0;background:#fee2e2;color:#991b1b;font-size:12px;padding:8px 16px;z-index:99999;font-family:monospace;max-height:200px;overflow-y:auto"></div>
 <div class="topbar">
   <div class="topbar-logo">⚙ CtrlProd</div>
   <div class="topbar-title">CRUCE GUAYLLABAMBA V3 &nbsp;·&nbsp; CPC-DIS-PEG &nbsp;·&nbsp; Tablero 56 Módulos</div>
@@ -519,6 +520,7 @@ global.Chart = class {
           <button class="btn btn-p btn-sm" onclick="importarDatosOperario()">📥 Importar datos operario</button>
           <button class="btn" id="btn-solicitudes" onclick="verSolicitudes()" style="background:#92400e;color:#fff;">📋 Solicitudes <span id="badge-solicitudes" style="background:#dc2626;color:#fff;border-radius:10px;padding:1px 6px;font-size:10px;display:none">0</span></button>
           <button class="btn btn-g btn-sm" onclick="exportarTodosDatos()">📤 Exportar copia</button>
+          <button class="btn btn-s btn-sm" onclick="exportarExcel()" style="background:#166534;color:#fff;border-color:#166534">📊 Exportar Excel</button>
           <button onclick="limpiarRegistros()" style="background:#dc2626;color:#fff;border:none;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer">🗑 Limpiar registros</button>
         </div>
         <div style="font-size:11px;color:var(--gm);">
@@ -1314,6 +1316,83 @@ function exportarTodosDatos() {
   a.download = 'produccion_' + new Date().toISOString().slice(0,10) + '.json';
   a.click();
   toast('✓ Datos exportados como archivo JSON');
+}
+
+function exportarExcel(){
+  if(window.XLSX){ _doExportExcel(); return; }
+  const s=document.createElement('script');
+  s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+  s.onload=()=>_doExportExcel();
+  s.onerror=()=>toast('❌ Error cargando librería Excel');
+  document.head.appendChild(s);
+  toast('⏳ Preparando Excel...');
+}
+
+function _doExportExcel(){
+  const wb = XLSX.utils.book_new();
+
+  // ── Hoja 1: Cortes ─────────────────────────────────────────
+  const cortesData = [[
+    'Fecha','Hora','Conjunto','Parte','Perfil','Operario','Cantidad',
+    'Peso Piezas (kg)','Material','N° Colada','Esp (mm)','Ancho (mm)',
+    'Largo (mm)','Cant. Planchas','Peso Material (kg)',
+    'Sobrante (kg)','Desperdicio (kg)','% Desperdicio','Calidad','Observaciones'
+  ]];
+  ST.cortes.forEach(r=>{
+    const planchas=(() => { try{return JSON.parse(r.pl_planchas||'[]');}catch(e){return [];} })();
+    const m0=planchas[0]||{};
+    const totalMat=planchas.reduce((s,p)=>s+(p.peso||0),0)||Number(r.pl_peso||0);
+    const totalSob=(() => { try{const s=JSON.parse(r.sob_por_plancha||'[]');return s.reduce((a,x)=>a+(x.peso||x.sobPeso||0),0);}catch(e){return Number(r.sob_peso||0);} })();
+    const desp=Number(r.desperdicio||0);
+    cortesData.push([
+      r.fecha||'', r.hora||'', r.conjunto||r.cj||'', r.parte||r.pr||'', r.perfil||'',
+      r.opNom||'', Number(r.qty||0), Number((r.pesoPzas||r.pesoParts||0)).toFixed(2),
+      m0.grado||r.pl_mat||'', m0.colada||r.pl_num||'',
+      m0.esp||r.pl_esp||'', m0.ancho||r.pl_ancho||'', m0.largo||r.pl_largo||'',
+      m0.qty||r.pl_qty||1, totalMat.toFixed(2), totalSob.toFixed(2),
+      desp.toFixed(2), totalMat>0?(desp/totalMat*100).toFixed(1)+'%':'—',
+      r.calidad||'', r.obs||''
+    ]);
+  });
+  const wsC=XLSX.utils.aoa_to_sheet(cortesData);
+  wsC['!cols']=[10,6,8,6,14,16,7,10,8,14,6,7,7,6,10,8,8,8,6,20].map(w=>({wch:w}));
+  XLSX.utils.book_append_sheet(wb, wsC, 'Cortes');
+
+  // ── Hoja 2: Producción ─────────────────────────────────────
+  const prodData = [['Fecha','Hora','Fase','Conjunto','Parte','Perfil','Operario','Cantidad','Calidad','Observaciones']];
+  ST.prods.forEach(r=>{
+    prodData.push([r.fecha||'',r.hora||'',r.fase||'',r.conjunto||r.cj||'',
+      r.parte||r.pr||'',r.perfil||'',r.opNom||'',Number(r.qty||0),r.calidad||'',r.obs||'']);
+  });
+  const wsP=XLSX.utils.aoa_to_sheet(prodData);
+  wsP['!cols']=[10,6,12,8,6,14,16,8,6,20].map(w=>({wch:w}));
+  XLSX.utils.book_append_sheet(wb, wsP, 'Producción');
+
+  // ── Hoja 3: Resumen Tekla ──────────────────────────────────
+  const resData=[['Conjunto','Parte','Perfil','Plan (uds)','Ejecutado','Pendiente','% Avance']];
+  TEKLA.conjuntos.forEach(cj=>{
+    cj.partes.forEach(p=>{
+      const ej=ST.exec[cj.conjunto]?.[p.parte]?.Corte||0;
+      const pend=Math.max(0,p.cantidad-ej);
+      resData.push([cj.conjunto,p.parte,p.perfil,p.cantidad,ej,pend,
+        p.cantidad>0?(ej/p.cantidad*100).toFixed(1)+'%':'0%']);
+    });
+  });
+  const wsR=XLSX.utils.aoa_to_sheet(resData);
+  wsR['!cols']=[8,6,14,8,8,8,8].map(w=>({wch:w}));
+  XLSX.utils.book_append_sheet(wb, wsR, 'Resumen Tekla');
+
+  // ── Hoja 4: Operarios ──────────────────────────────────────
+  const opsData=[['ID','Nombre','Apellido','Rol','Fase','Cédula','Teléfono','Empresa','Estado']];
+  ST.ops.forEach(o=>{
+    opsData.push([o.id,o.nom||'',o.ape||'',o.rol||'',o.fase||'',o.ced||'',o.tel||'',o.emp||'',o.est||'activo']);
+  });
+  const wsO=XLSX.utils.aoa_to_sheet(opsData);
+  wsO['!cols']=[14,10,12,10,14,12,12,14,8].map(w=>({wch:w}));
+  XLSX.utils.book_append_sheet(wb, wsO, 'Operarios');
+
+  XLSX.writeFile(wb, `ControlProduccion_${new Date().toISOString().slice(0,10)}.xlsx`);
+  toast('✅ Excel descargado — 4 hojas: Cortes, Producción, Resumen Tekla, Operarios');
 }
 
 function importarDatosOperario() {
@@ -2595,18 +2674,32 @@ function renderCorteHist(){
     let sobHtml = '';
     const sobPorPl = (() => { try { return JSON.parse(r.sob_por_plancha||'[]'); } catch(e){ return []; } })();
     if(sobPorPl.length > 0){
-      sobHtml = sobPorPl.map((s,i)=>{
-        if(s.hay==='si' && s.sobPeso>0) return `
-          <div style="border:1px solid #bbf7d0;border-radius:6px;padding:4px 6px;margin-bottom:3px;background:#f0fdf4;font-size:11px">
-            <span style="color:#166534;font-weight:700">📦 P${i+1}: ${s.sobPeso.toFixed(1)} kg</span>
-            <span style="color:#6b7280;margin-left:4px">${s.esp||'?'}×${s.ancho||'?'}×${s.largo||'?'} mm</span>
-            <span style="font-size:10px;color:#3730a3;display:block">📋 ${s.colada||'—'} · ${s.dest==='stock'?'Stock':'Desperdicio'}</span>
+      const conSob = sobPorPl.filter(s=>{
+        // Soportar ambos formatos: nuevo (s.peso) y viejo (s.sobPeso, s.hay)
+        const peso = s.peso || s.sobPeso || 0;
+        const dest = s.dest || s.sob_dest || 'stock';
+        return peso > 0 && dest !== 'waste';
+      });
+      if(conSob.length > 0){
+        sobHtml = conSob.map((s,i)=>{
+          const peso = s.peso || s.sobPeso || 0;
+          const colada = s.colada || s.sob_colada || '—';
+          const dest = s.dest || s.sob_dest || 'stock';
+          const esp = s.esp || '?', ancho = s.ancho || '?', largo = s.largo || '?';
+          return `<div style="border:1px solid #bbf7d0;border-radius:6px;padding:4px 6px;margin-bottom:3px;background:#f0fdf4;font-size:11px">
+            <span style="color:#166534;font-weight:700">📦 ${peso.toFixed(1)} kg</span>
+            <span style="color:#6b7280;margin-left:4px">${esp}×${ancho}×${largo} mm</span>
+            <span style="font-size:10px;color:#3730a3;display:block">📋 ${colada} · ${dest==='stock'?'Stock':'Desperdicio'}</span>
           </div>`;
-        return `<div style="font-size:10px;color:#6b7280">P${i+1}: sin sobrante</div>`;
-      }).join('');
-    } else if(r.sob_hay==='si' && r.sob_peso>0){
-      sobHtml=`<div style="font-size:11px"><span class="stock-tag">${Number(r.sob_peso).toFixed(1)} kg</span><br>
-        <span style="font-size:10px;color:#166534;">${r.sob_esp||'?'}×${r.sob_ancho||'?'}×${r.sob_largo||'?'} mm</span></div>`;
+        }).join('');
+      } else {
+        sobHtml='<span style="color:var(--gm);font-size:11px;">Sin sobrante</span>';
+      }
+    } else if(r.sob_hay==='si' && Number(r.sob_peso)>0){
+      sobHtml=`<div style="font-size:11px">
+        <span class="stock-tag">${Number(r.sob_peso).toFixed(1)} kg</span><br>
+        <span style="font-size:10px;color:#166534;">${r.sob_esp||'?'}×${r.sob_ancho||'?'}×${r.sob_largo||'?'} mm</span>
+      </div>`;
     } else {
       sobHtml='<span style="color:var(--gm);font-size:11px;">Sin sobrante</span>';
     }
@@ -3348,6 +3441,15 @@ window.addEventListener('storage', e=>{
 });
 
 // ======================= INIT =======================
+window.onerror = function(msg, src, line, col, err){
+  const div = document.getElementById('global-error-banner');
+  if(div){ div.style.display=''; div.innerHTML += `<div>❌ ${msg} (línea ${line})</div>`; }
+  return false;
+};
+window.addEventListener('unhandledrejection', e=>{
+  const div = document.getElementById('global-error-banner');
+  if(div){ div.style.display=''; div.innerHTML += `<div>❌ Promise: ${e.reason}</div>`; }
+});
 document.addEventListener('DOMContentLoaded', async ()=>{
   await loadFromServer();
   renderDashboard();
