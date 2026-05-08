@@ -2914,34 +2914,98 @@ function openModalFase(cj, parte, fase) {
 // ======================= STOCK =======================
 function renderStock(){
   const q=(document.getElementById('st-q')?.value||'').toLowerCase();
-  const dest=document.getElementById('st-dest')?.value||'';
-  const items=ST.cortes.filter(c=>c.sobPeso>0||c.destSob)
-    .filter(c=>(!q||(c.colada+c.material+c.parte+c.conjunto).toLowerCase().includes(q))&&(!dest||c.destSob===dest));
-  const totStock=items.filter(i=>i.destSob==='stock').reduce((s,i)=>s+i.sobPeso,0);
-  const totWaste=ST.cortes.reduce((s,c)=>s+c.desperdicio,0);
+  const destFilt=document.getElementById('st-dest')?.value||'';
+
+  // Construir lista de sobrantes desde nuevo formato (sob_por_plancha) y viejo
+  const items=[];
+  ST.cortes.forEach(c=>{
+    // Nuevo formato: array sob_por_plancha
+    const sobArr=(()=>{ try{return JSON.parse(c.sob_por_plancha||'[]');}catch(e){return [];} })();
+    if(sobArr.length>0){
+      sobArr.forEach((s,i)=>{
+        const peso=s.peso||s.sobPeso||0;
+        if(peso<=0) return;
+        const dest=s.dest||s.sob_dest||'stock';
+        const colada=s.colada||s.sob_colada||c.pl_num||'—';
+        const grado=s.mat||s.sob_mat||c.pl_mat||'—';
+        items.push({
+          id:c.id+'_'+i, fecha:c.fecha, cj:c.conjunto||c.cj, parte:c.parte||c.pr,
+          colada, grado,
+          esp:s.esp||0, ancho:s.ancho||0, largo:s.largo||0,
+          qty:s.qty||1, peso, dest, ref:s.ref||'',
+          tipo:c.pl_tipo||'plancha',
+        });
+      });
+    } else if(Number(c.sob_peso||c.sobPeso||0)>0){
+      // Formato viejo
+      const peso=Number(c.sob_peso||c.sobPeso||0);
+      const dest=c.sob_dest||c.destSob||'stock';
+      items.push({
+        id:c.id+'_0', fecha:c.fecha, cj:c.conjunto||c.cj, parte:c.parte||c.pr,
+        colada:c.sob_colada||c.sobColada||c.pl_num||'—',
+        grado:c.sob_mat||c.sobGrado||c.pl_mat||'—',
+        esp:c.sob_esp||c.sobEsp||0, ancho:c.sob_ancho||c.sobAncho||0,
+        largo:c.sob_largo||c.sobLargo||0,
+        qty:c.sob_qty||c.sobQty||1, peso, dest,
+        ref:c.sob_ref||c.sobRef||'', tipo:c.pl_tipo||'plancha',
+      });
+    }
+  });
+
+  // Filtrar
+  const filtered=items.filter(s=>
+    (!q||(s.colada+s.grado+s.parte+s.cj).toLowerCase().includes(q))&&
+    (!destFilt||s.dest===destFilt)
+  );
+
+  const totStock=items.filter(s=>s.dest==='stock').reduce((a,s)=>a+s.peso,0);
+  const totWaste=ST.cortes.reduce((a,c)=>a+Number(c.desperdicio||0),0);
+  const nStock=items.filter(s=>s.dest==='stock').length;
+
   document.getElementById('kpi-stock').innerHTML=`
     <div class="kpi k-green"><div class="kpi-lbl">Stock reutilizable</div><div class="kpi-val">${totStock.toFixed(1)}</div><div class="kpi-sub">kg disponibles</div></div>
     <div class="kpi k-warn"><div class="kpi-lbl">Desperdicio total</div><div class="kpi-val">${totWaste.toFixed(1)}</div><div class="kpi-sub">kg desperdicio acum.</div></div>
-    <div class="kpi"><div class="kpi-lbl">Ítems en stock</div><div class="kpi-val">${items.filter(i=>i.destSob==='stock').length}</div><div class="kpi-sub">piezas sobrantes</div></div>`;
-  document.getElementById('st-tbody').innerHTML=items.length?items.map(c=>`<tr>
-    <td>${c.fecha}</td>
-    <td><span style="font-weight:700;color:#3730a3;">📋 ${c.sobColada||c.colada||'—'}</span><br><span style="font-size:9px;color:var(--gm);">${c.tipoMat||'plancha'}</span></td>
-    <td>${c.sobGrado||c.material||'—'}</td>
-    <td class="r">${c.sobEsp||c.espesor||'—'}</td>
-    <td class="r">${c.sobAncho||c.ancho||'—'}</td>
-    <td class="r">${c.sobLargo||'—'}</td>
-    <td class="r">${c.sobQty||1}</td>
-    <td class="r"><strong>${c.sobPeso.toFixed(1)}</strong></td>
-    <td>${c.destSob==='stock'?'<span class="badge b-stock">📦 STOCK</span>':'<span class="badge b-waste">🗑 DESP.</span>'}</td>
-    <td style="font-size:11px;">${c.sobRef||'—'}</td>
-    <td style="font-size:10px;">${c.conjunto}/${c.parte}</td>
-    <td class="c no-print"><button class="btn btn-d btn-sm" onclick="delStock(${c.id})">✕</button></td>
-  </tr>`).join(''):'<tr><td colspan="11" style="text-align:center;padding:1.5rem;color:var(--gm);">Sin sobrantes registrados</td></tr>';
-  // Resumen por material
+    <div class="kpi"><div class="kpi-lbl">Ítems en stock</div><div class="kpi-val">${nStock}</div><div class="kpi-sub">piezas sobrantes</div></div>`;
+
+  document.getElementById('st-tbody').innerHTML=filtered.length?filtered.map(s=>`<tr>
+    <td>${s.fecha||'—'}</td>
+    <td><span style="font-weight:700;color:#3730a3;">📋 ${s.colada}</span><br><span style="font-size:9px;color:var(--gm);">${s.tipo}</span></td>
+    <td>${s.grado}</td>
+    <td class="r">${s.esp||'—'}</td>
+    <td class="r">${s.ancho||'—'}</td>
+    <td class="r">${s.largo||'—'}</td>
+    <td class="r">${s.qty}</td>
+    <td class="r"><strong>${s.peso.toFixed(1)}</strong></td>
+    <td>${s.dest==='stock'?'<span class="badge b-stock">📦 STOCK</span>':'<span class="badge b-waste">🗑 DESP.</span>'}</td>
+    <td style="font-size:11px;">${s.ref||'—'}</td>
+    <td style="font-size:10px;">${s.cj}/${s.parte}</td>
+    <td class="c no-print"><button class="btn btn-d btn-sm" onclick="delStock('${s.id}')">✕</button></td>
+  </tr>`).join('')
+  :'<tr><td colspan="12" style="text-align:center;padding:1.5rem;color:var(--gm);">Sin sobrantes registrados</td></tr>';
+
+  // Resumen por material/grado
   const byMat={};
-  ST.cortes.forEach(c=>{if(!byMat[c.material])byMat[c.material]={stock:0,waste:0};if(c.destSob==='stock')byMat[c.material].stock+=c.sobPeso;byMat[c.material].waste+=c.desperdicio;});
+  items.forEach(s=>{
+    const k=s.grado||'—';
+    if(!byMat[k]) byMat[k]={stock:0,waste:0};
+    if(s.dest==='stock') byMat[k].stock+=s.peso;
+    else byMat[k].waste+=s.peso;
+  });
+  // Agregar desperdicio sin sobrante
+  ST.cortes.forEach(c=>{
+    const desp=Number(c.desperdicio||0);
+    if(desp<=0) return;
+    const k=c.pl_mat||c.material||'—';
+    if(!byMat[k]) byMat[k]={stock:0,waste:0};
+    byMat[k].waste+=desp;
+  });
+
   document.getElementById('st-resumen').innerHTML='<div class="tw"><table><thead><tr><th>Material</th><th class="r">Stock (kg)</th><th class="r">Desperdicio (kg)</th><th class="r">% Desperdicio</th></tr></thead><tbody>'+
-    Object.entries(byMat).map(([mat,v])=>`<tr><td><strong>${mat}</strong></td><td class="r" style="color:#166534;font-weight:700;">${v.stock.toFixed(1)}</td><td class="r" style="color:var(--rt);font-weight:700;">${v.waste.toFixed(1)}</td><td class="r">${v.stock+v.waste>0?((v.waste/(v.stock+v.waste))*100).toFixed(1):'—'}%</td></tr>`).join('')+
+    Object.entries(byMat).filter(([k])=>k!=='undefined'&&k).map(([mat,v])=>`
+      <tr><td><strong>${mat}</strong></td>
+      <td class="r" style="color:#166534;font-weight:700;">${v.stock.toFixed(1)}</td>
+      <td class="r" style="color:var(--rt);font-weight:700;">${v.waste.toFixed(1)}</td>
+      <td class="r">${v.stock+v.waste>0?((v.waste/(v.stock+v.waste))*100).toFixed(1):'—'}%</td></tr>`).join('')+
     '</tbody></table></div>';
 }
 function delStock(id){ST.cortes=ST.cortes.filter(c=>c.id!==id);renderStock();}
