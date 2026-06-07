@@ -2759,15 +2759,11 @@ function limpiarDatosLocales(){
   if(!confirm('¿Limpiar todos los datos guardados en este celular?\n\nEsto borra los registros locales. Los datos ya enviados a Google Sheets NO se eliminan.')) return;
   if(!confirm('Confirma: ¿borrar datos locales de este celular?')) return;
   try {
-    // Limpiar todo el localStorage relacionado con la app
-    const keys = Object.keys(localStorage).filter(k =>
-      k.startsWith('prodapp_') || k.startsWith('wk_') ||
-      k.startsWith('alertas_') || k === 'pendingSync' || k === 'pendingCorrecciones'
-    );
-    keys.forEach(k => localStorage.removeItem(k));
-    // Recargar la página para empezar limpio
+    // Borrar TODO el localStorage sin excepción
+    localStorage.clear();
     alert('✓ Datos locales eliminados. La app se reiniciará.');
-    location.reload();
+    // Forzar recarga limpia con timestamp para evitar caché
+    location.href = location.href.split('?')[0] + '?t=' + Date.now();
   } catch(e) {
     alert('Error al limpiar: ' + e.message);
   }
