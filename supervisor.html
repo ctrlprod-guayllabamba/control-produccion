@@ -454,6 +454,7 @@ global.Chart = class {
   <button class="tab-btn" id="tab-operarios" onclick="goTab('operarios',this)">Operarios</button>
   <button class="tab-btn" id="tab-informes" onclick="goTab('informes',this)">Informes</button>
   <button class="tab-btn" id="tab-links" onclick="goTab('links',this)">🔗 Links Operarios</button>
+  <button class="tab-btn" id="tab-alertas" onclick="goTab('alertas',this)">🚨 Alertas <span id="badge-alertas" style="background:#dc2626;color:#fff;border-radius:10px;padding:1px 6px;font-size:10px;display:none;margin-left:2px">0</span></button>
 </div>
 
 <!-- ═══════════════════════════════════════════════════
@@ -780,6 +781,27 @@ global.Chart = class {
 ════════════════════════════════════════════════════ -->
 <div id="panel-produccion" class="panel">
 <div class="container">
+
+  <!-- TABLA REFERENCIA CONJUNTO -->
+  <div class="card" id="p-ref-card" style="display:none;margin-bottom:.875rem;">
+    <div class="card-hdr" style="justify-content:space-between;display:flex;align-items:center;">
+      <span id="p-ref-titulo">📋 Partes del conjunto</span>
+      <span id="p-ref-resumen" style="font-size:11px;font-weight:400;color:var(--gm);"></span>
+    </div>
+    <div class="tw">
+      <table>
+        <thead><tr>
+          <th>Parte</th><th>Perfil</th><th class="r">Plan</th>
+          <th class="r">Cortado</th><th class="r" style="background:#065f46">Armado</th>
+          <th class="r" style="background:#92400e">Soldado</th>
+          <th class="r">Pendiente fase</th><th class="r">% Avance</th>
+          <th class="c no-print">Acción</th>
+        </tr></thead>
+        <tbody id="p-ref-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
 <div class="g2">
   <div class="card">
     <div class="card-hdr">Registrar Ejecución de Fase</div>
@@ -789,7 +811,7 @@ global.Chart = class {
     </div>
     <div class="frow">
       <div class="fg wide"><label>Conjunto</label>
-        <select id="p-cj" onchange="pUpdatePartes()"><option value="">Seleccionar...</option></select>
+        <select id="p-cj" onchange="pUpdatePartes();pRenderRef()"><option value="">Seleccionar...</option></select>
       </div>
     </div>
     <div class="frow">
@@ -1144,6 +1166,51 @@ global.Chart = class {
     <div class="card-hdr">📲 QR por operario</div>
     <p style="font-size:12px;color:var(--gm);margin-bottom:.75rem;">Imprime esta página para entregar a cada operario. Escanean el código QR con su celular y entran directo a su app.</p>
     <div id="qr-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;"></div>
+  </div>
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     ALERTAS DE SOBREPASO
+════════════════════════════════════════════════════ -->
+<div id="panel-alertas" class="panel">
+<div class="container">
+  <div class="kpi-row" id="kpi-alertas"></div>
+  <div class="card">
+    <div class="card-hdr" style="justify-content:space-between;display:flex;align-items:center;">
+      <span>🚨 Registro de Alertas — Intentos de sobrepaso de plan</span>
+      <button class="btn btn-s btn-sm" onclick="loadAlertas()">⟳ Actualizar</button>
+    </div>
+    <div class="alert alert-warn" style="margin-bottom:.75rem;">
+      ⚠ Este registro es permanente. Cada intento de sobrepaso queda guardado aunque el operario no lo haya logrado.
+    </div>
+    <div class="fbar no-print">
+      <input type="text" id="al-q" placeholder="Buscar operario, parte, conjunto..." oninput="renderAlertas()">
+      <select id="al-tipo" onchange="renderAlertas()">
+        <option value="">Todos los tipos</option>
+        <option value="intento_bloqueado">Intento bloqueado (100%)</option>
+        <option value="cantidad_ajustada">Cantidad ajustada</option>
+      </select>
+      <select id="al-fase" onchange="renderAlertas()">
+        <option value="">Todas las fases</option>
+        <option>Corte</option><option>Armado</option><option>Soldadura</option>
+        <option>Perforaciones</option><option>Limpieza Mecánica</option><option>Pintura</option>
+      </select>
+    </div>
+    <div class="tw">
+      <table>
+        <thead><tr>
+          <th>Fecha</th><th>Hora</th><th>Operario</th><th>Fase</th>
+          <th>Conjunto / Parte</th><th>Perfil</th>
+          <th class="r">Plan</th><th class="r">Ya ejecutado</th>
+          <th class="r" style="background:#dc2626;">Intentó registrar</th>
+          <th class="r" style="background:#991b1b;">Exceso</th>
+          <th>Tipo</th>
+        </tr></thead>
+        <tbody id="al-tbody"></tbody>
+      </table>
+    </div>
+    <div id="al-total" style="font-size:11px;color:var(--gm);text-align:right;margin-top:.5rem;"></div>
   </div>
 </div>
 </div>
@@ -1534,7 +1601,8 @@ function goTab(id, btn) {
     fases:renderFases,
     stock:renderStock,operarios:renderOps,
     informes:()=>{setRptDate();renderInforme();},
-    links:renderLinks};
+    links:renderLinks,
+    alertas:()=>loadAlertas()};
   if(renders[id]) renders[id]();
 }
 
@@ -2787,13 +2855,90 @@ function pUpdatePartes(){
   const c=TEKLA.conjuntos.find(x=>x.conjunto===cj);
   if(!c)return;
   c.partes.forEach(p=>{
-    sel.innerHTML+=`<option value="${p.parte}" data-pu="${p.peso_unit}" data-plan="${p.cantidad}">${p.parte} — ${p.perfil}</option>`;
+    const cortado=getCortadoQty(cj,p.parte);
+    const sinCorte=cortado<=0;
+    const label=sinCorte
+      ? `⚠ ${p.parte} — ${p.perfil} [SIN CORTE]`
+      : `✓ ${p.parte} — ${p.perfil} (${cortado}/${p.cantidad} cortados)`;
+    sel.innerHTML+=`<option value="${p.parte}" data-pu="${p.peso_unit}" data-plan="${p.cantidad}" data-cortado="${cortado}" data-sin-corte="${sinCorte}">${label}</option>`;
   });
 }
 function toggleSoldExtra(){
   const fase = document.getElementById('p-fase')?.value;
   const el = document.getElementById('sold-extra-sup');
   if(el) el.style.display = fase==='Soldadura' ? '' : 'none';
+  pRenderRef();
+}
+
+// ── Tabla de referencia del conjunto ──────────────────
+function pRenderRef(){
+  const cj = document.getElementById('p-cj')?.value;
+  const fase = document.getElementById('p-fase')?.value||'Armado';
+  const card = document.getElementById('p-ref-card');
+  const tbody = document.getElementById('p-ref-tbody');
+  const titulo = document.getElementById('p-ref-titulo');
+  const resumen = document.getElementById('p-ref-resumen');
+  if(!card||!tbody) return;
+  if(!cj){ card.style.display='none'; return; }
+  const c = TEKLA.conjuntos.find(x=>x.conjunto===cj);
+  if(!c){ card.style.display='none'; return; }
+  card.style.display='';
+  titulo.textContent = `📋 ${cj} — Partes del conjunto (${c.partes.length} tipos)`;
+
+  let totalPlan=0, totalCortado=0, totalFase=0;
+  const rows = c.partes.map(p=>{
+    const cortado = getCortadoQty(cj, p.parte);
+    const armado  = ST.prods.filter(r=>r.conjunto===cj&&r.parte===p.parte&&r.fase==='Armado').reduce((s,r)=>s+r.qty,0);
+    const soldado = ST.prods.filter(r=>r.conjunto===cj&&r.parte===p.parte&&r.fase==='Soldadura').reduce((s,r)=>s+r.qty,0);
+    const ejFase  = fase==='Armado'?armado:fase==='Soldadura'?soldado:
+                    ST.prods.filter(r=>r.conjunto===cj&&r.parte===p.parte&&r.fase===fase).reduce((s,r)=>s+r.qty,0);
+    const pend    = Math.max(0, p.cantidad - ejFase);
+    const pct     = p.cantidad>0 ? Math.min(100, ejFase/p.cantidad*100) : 0;
+    totalPlan+=p.cantidad; totalCortado+=cortado; totalFase+=ejFase;
+
+    // Color fila según estado
+    const sinCorte = cortado<=0;
+    const completo = pend<=0;
+    const rowBg = completo?'#f0fdf4':sinCorte?'#fef2f2':'#fffbeb';
+    const pendColor = completo?'#166534':pend>0?'#b45309':'#374151';
+
+    return `<tr style="background:${rowBg}">
+      <td><strong>${p.parte}</strong></td>
+      <td style="font-size:11px;font-family:monospace">${p.perfil}</td>
+      <td class="r"><strong>${p.cantidad}</strong></td>
+      <td class="r" style="color:${cortado>=p.cantidad?'#166534':cortado>0?'#92400e':'#991b1b'};font-weight:700">${cortado}
+        ${cortado<=0?'<span style="font-size:9px;background:#fee2e2;color:#991b1b;border-radius:4px;padding:1px 4px;margin-left:2px">SIN CORTE</span>':''}
+      </td>
+      <td class="r" style="color:${armado>=p.cantidad?'#065f46':armado>0?'#92400e':'#6b7280'};font-weight:700">${armado}</td>
+      <td class="r" style="color:${soldado>=p.cantidad?'#1e40af':soldado>0?'#92400e':'#6b7280'};font-weight:700">${soldado}</td>
+      <td class="r"><span style="font-weight:800;color:${pendColor};background:${completo?'#d1fae5':pend>0?'#fff3cd':'#f3f4f6'};padding:2px 8px;border-radius:5px">${pend}</span></td>
+      <td class="r">
+        <div style="display:flex;align-items:center;gap:4px;justify-content:flex-end">
+          <div style="background:#e5e7eb;border-radius:3px;height:6px;width:50px;overflow:hidden">
+            <div style="height:100%;background:${pct>=100?'#22c55e':pct>0?'#f59e0b':'#d1d5db'};width:${pct.toFixed(0)}%"></div>
+          </div>
+          <span style="font-size:10px;color:#6b7280">${pct.toFixed(0)}%</span>
+        </div>
+      </td>
+      <td class="c no-print">
+        <button class="btn btn-p btn-sm" onclick="pSeleccionarParte('${p.parte}')" 
+          ${sinCorte&&fase!=='Armado'?'disabled style="opacity:.4;cursor:not-allowed"':''}>
+          + Registrar
+        </button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  tbody.innerHTML = rows;
+  const pctTotal = totalPlan>0?(totalFase/totalPlan*100):0;
+  resumen.textContent = `${fase} — ${totalFase}/${totalPlan} uds (${pctTotal.toFixed(0)}%)`;
+}
+
+function pSeleccionarParte(parte){
+  const sel = document.getElementById('p-parte');
+  if(sel){ sel.value=parte; pCalcPeso(); }
+  // Scroll al formulario
+  document.getElementById('p-fecha')?.scrollIntoView({behavior:'smooth',block:'center'});
 }
 function pCalcPeso(){
   const sel=document.getElementById('p-parte');
@@ -2802,9 +2947,30 @@ function pCalcPeso(){
   const qty=parseFloat(document.getElementById('p-qty').value)||0;
   document.getElementById('p-peso').value=qty&&pu?(qty*pu).toFixed(2):'';
   if(opt&&opt.value){
-    const plan=opt.dataset.plan||0;
-    document.getElementById('p-info-txt').textContent=`Plan total: ${plan} uds`;
-    document.getElementById('p-parte-info').style.display='block';
+    const plan=parseInt(opt.dataset.plan||0);
+    const cortado=parseInt(opt.dataset.cortado||0);
+    const sinCorte=opt.dataset.sinCorte==='true';
+    const fase=document.getElementById('p-fase')?.value||'';
+    const infoEl=document.getElementById('p-parte-info');
+    const txtEl=document.getElementById('p-info-txt');
+    infoEl.style.display='block';
+    if(sinCorte && fase!=='Corte'){
+      infoEl.style.background='#fee2e2';
+      infoEl.style.border='1.5px solid #fca5a5';
+      infoEl.style.borderRadius='8px';
+      txtEl.innerHTML=`<span style="color:#991b1b;font-weight:800;">⛔ SECUENCIA INVÁLIDA — Esta parte no tiene cortes registrados.</span><br>
+        <span style="color:#991b1b;font-size:11px;">Debes registrar el corte antes de avanzar a ${fase}.</span>`;
+    } else if(cortado>0 && qty>cortado){
+      infoEl.style.background='#fff3cd';
+      infoEl.style.border='1.5px solid #fbbf24';
+      infoEl.style.borderRadius='8px';
+      txtEl.innerHTML=`<span style="color:#92400e;font-weight:800;">⚠ Cantidad supera lo cortado.</span> Cortado: <strong>${cortado}</strong> uds · Plan: <strong>${plan}</strong> uds`;
+    } else {
+      infoEl.style.background='var(--su)';
+      infoEl.style.border='none';
+      infoEl.style.borderRadius='7px';
+      txtEl.innerHTML=`Plan total: <strong>${plan}</strong> uds · Cortado: <strong style="color:#166534">${cortado}</strong> uds`;
+    }
   }
 }
 function addProd(){
@@ -2815,6 +2981,70 @@ function addProd(){
   const fase=document.getElementById('p-fase').value;
   const opId=document.getElementById('p-op').value;
   if(!fecha||!cj||!parte||qty<=0){toast('⚠ Completa todos los campos');return;}
+  // ── Validación de secuencia de fabricación ──────────────
+  const esPL = (parte||'').toUpperCase().startsWith('PR') && 
+               TEKLA.conjuntos.find(x=>x.conjunto===cj)?.partes
+               .find(x=>x.parte===parte)?.perfil?.toUpperCase().startsWith('PL');
+
+  if(fase==='Armado'){
+    const cortado=getCortadoQty(cj,parte);
+    if(cortado<=0){
+      toast(`⛔ ${parte} no tiene cortes — registra el corte primero`);
+      pRenderRef(); return;
+    }
+  } else if(fase==='Soldadura'){
+    // Verificar que TODO el conjunto esté armado
+    const c=TEKLA.conjuntos.find(x=>x.conjunto===cj);
+    if(c){
+      const sinArmar=c.partes.filter(p=>{
+        const armado=ST.prods.filter(r=>r.conjunto===cj&&r.parte===p.parte&&r.fase==='Armado').reduce((s,r)=>s+r.qty,0);
+        return armado<p.cantidad;
+      });
+      if(sinArmar.length>0){
+        const lista=sinArmar.map(p=>`${p.parte} (${ST.prods.filter(r=>r.conjunto===cj&&r.parte===p.parte&&r.fase==='Armado').reduce((s,r)=>s+r.qty,0)}/${p.cantidad})`).join(', ');
+        toast(`⛔ Conjunto incompleto — partes sin armar: ${sinArmar.length}`);
+        const infoEl=document.getElementById('p-parte-info');
+        if(infoEl){
+          infoEl.style.display='block'; infoEl.style.background='#fee2e2';
+          infoEl.style.border='1.5px solid #fca5a5'; infoEl.style.borderRadius='8px';
+          document.getElementById('p-info-txt').innerHTML=`<span style="color:#991b1b;font-weight:800;">⛔ No puedes soldar — el conjunto no está completamente armado.</span><br>
+            <span style="color:#991b1b;font-size:11px;">Partes pendientes de armar: <strong>${lista}</strong></span>`;
+        }
+        pRenderRef(); return;
+      }
+    }
+  } else if(fase==='Perforaciones'){
+    // Placas PL pueden perforarse libremente (laser/pantógrafo)
+    // Para el resto, verificar soldadura completa del conjunto
+    if(!esPL){
+      const c=TEKLA.conjuntos.find(x=>x.conjunto===cj);
+      if(c){
+        const sinSoldar=c.partes.filter(p=>{
+          const perfPL=p.perfil?.toUpperCase().startsWith('PL');
+          if(perfPL) return false; // excluir placas
+          const soldado=ST.prods.filter(r=>r.conjunto===cj&&r.parte===p.parte&&r.fase==='Soldadura').reduce((s,r)=>s+r.qty,0);
+          return soldado<p.cantidad;
+        });
+        if(sinSoldar.length>0){
+          toast(`⛔ Conjunto no soldado completamente — ${sinSoldar.length} partes pendientes`);
+          pRenderRef(); return;
+        }
+      }
+    }
+  } else if(fase==='Limpieza Mecánica'||fase==='Pintura'){
+    const fasePrevia=fase==='Pintura'?'Limpieza Mecánica':'Soldadura';
+    const c=TEKLA.conjuntos.find(x=>x.conjunto===cj);
+    if(c){
+      const sinFase=c.partes.filter(p=>{
+        const ej=ST.prods.filter(r=>r.conjunto===cj&&r.parte===p.parte&&r.fase===fasePrevia).reduce((s,r)=>s+r.qty,0);
+        return ej<p.cantidad;
+      });
+      if(sinFase.length>0){
+        toast(`⛔ ${fasePrevia} incompleta — ${sinFase.length} partes pendientes`);
+        pRenderRef(); return;
+      }
+    }
+  }
   const op=ST.ops.find(o=>o.id==opId);
   const peso=parseFloat(document.getElementById('p-peso').value)||0;
   const prodRec={id:Date.now(),fecha,turno:document.getElementById('p-turno').value,
@@ -2827,7 +3057,15 @@ function addProd(){
   ST.prods.push(prodRec); addExec(cj,parte,fase,qty);
   saveAll();
   if(GAS.configured()) GAS.post('addRegistro',prodRec).catch(()=>{});
-  clearProd(); renderProd(); renderDashboard();
+  renderProd(); renderDashboard();
+  // Mantener conjunto seleccionado y actualizar tabla referencia
+  const cjSel=document.getElementById('p-cj'); if(cjSel) cjSel.value=cj;
+  pUpdatePartes(); pRenderRef();
+  document.getElementById('p-parte').value='';
+  document.getElementById('p-qty').value='';
+  document.getElementById('p-peso').value='';
+  document.getElementById('p-obs').value='';
+  document.getElementById('p-parte-info').style.display='none';
   toast(`✓ ${fase}: ${cj}/${parte} — ${qty} uds`);
 }
 function clearProd(){['p-cj','p-parte','p-fase','p-op','p-qty','p-peso','p-cal','p-obs'].forEach(id=>{const el=document.getElementById(id);if(el)el.value=el.tagName==='SELECT'?el.options[0]?.value||'':'';}); document.getElementById('p-parte-info').style.display='none';}
@@ -3488,6 +3726,94 @@ async function checkPendingSolicitudes(){
   } catch(e){}
 }
 
+// ======================= ALERTAS =======================
+let _alertas = [];
+
+async function loadAlertas(){
+  try {
+    if(GAS.configured()){
+      const data = await GAS.get('getAlertas');
+      if(Array.isArray(data)) { _alertas = data; }
+    }
+    // Merge local alertas from localStorage (if any were saved locally)
+    renderAlertas();
+    updateAlertasBadge();
+  } catch(e){ renderAlertas(); }
+}
+
+function updateAlertasBadge(){
+  const badge = document.getElementById('badge-alertas');
+  const btn = document.getElementById('tab-alertas');
+  if(_alertas.length>0 && badge){
+    badge.textContent = _alertas.length;
+    badge.style.display = 'inline';
+    if(btn) btn.style.color = '#fff';
+  }
+}
+
+function renderAlertas(){
+  const q=(document.getElementById('al-q')?.value||'').toLowerCase();
+  const tipo=document.getElementById('al-tipo')?.value||'';
+  const fase=document.getElementById('al-fase')?.value||'';
+
+  const filtered = _alertas.filter(a=>
+    (!q||(a.opNom+a.cj+a.pr+a.perfil).toLowerCase().includes(q))&&
+    (!tipo||a.tipo===tipo)&&
+    (!fase||a.fase===fase)
+  ).sort((a,b)=>b.id-a.id);
+
+  const totalIntentos = _alertas.length;
+  const totalBloqueados = _alertas.filter(a=>a.tipo==='intento_bloqueado').length;
+  const totalAjustados = _alertas.filter(a=>a.tipo==='cantidad_ajustada').length;
+  const operariosInvolucrados = [...new Set(_alertas.map(a=>a.opNom))].length;
+
+  document.getElementById('kpi-alertas').innerHTML = `
+    <div class="kpi k-warn" style="background:#fee2e2;border-color:#fca5a5;">
+      <div class="kpi-lbl" style="color:#991b1b;">Total alertas</div>
+      <div class="kpi-val" style="color:#991b1b;">${totalIntentos}</div>
+      <div class="kpi-sub" style="color:#991b1b;">registros de intento</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-lbl">Bloqueados al 100%</div>
+      <div class="kpi-val" style="color:#991b1b;">${totalBloqueados}</div>
+      <div class="kpi-sub">intentos bloqueados</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-lbl">Cantidad ajustada</div>
+      <div class="kpi-val" style="color:#b45309;">${totalAjustados}</div>
+      <div class="kpi-sub">cantidades reducidas</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-lbl">Operarios involucrados</div>
+      <div class="kpi-val">${operariosInvolucrados}</div>
+      <div class="kpi-sub">personas con alertas</div>
+    </div>`;
+
+  const tipoBadge = t => t==='intento_bloqueado'
+    ? '<span class="badge b-rej">🚫 Bloqueado</span>'
+    : '<span class="badge b-warn" style="background:#fff3cd;color:#92400e;">⚠ Ajustado</span>';
+
+  document.getElementById('al-tbody').innerHTML = filtered.length
+    ? filtered.map(a=>`<tr style="background:${a.tipo==='intento_bloqueado'?'#fff5f5':'#fffbeb'}">
+        <td style="font-size:11px">${a.fecha||'—'}</td>
+        <td style="font-size:11px">${a.hora||'—'}</td>
+        <td><strong>${a.opNom||'—'}</strong><br><span style="font-size:10px;color:var(--gm)">${a.opRol||''}</span></td>
+        <td>${a.fase||'—'}</td>
+        <td><strong>${a.cj||'—'}</strong> / <span style="color:var(--oa)">${a.pr||'—'}</span></td>
+        <td style="font-size:11px;font-family:monospace">${a.perfil||'—'}</td>
+        <td class="r"><strong>${a.plan||0}</strong></td>
+        <td class="r" style="color:#166534;font-weight:700">${a.yaHecho||0}</td>
+        <td class="r" style="color:#991b1b;font-weight:800;font-size:14px">${a.qtyIntentada||0}</td>
+        <td class="r"><span style="background:#fee2e2;color:#991b1b;font-weight:800;padding:2px 8px;border-radius:5px">+${a.exceso||0}</span></td>
+        <td>${tipoBadge(a.tipo)}</td>
+      </tr>`).join('')
+    : '<tr><td colspan="11" style="text-align:center;padding:2rem;color:var(--gm);">Sin alertas registradas</td></tr>';
+
+  document.getElementById('al-total').textContent = filtered.length
+    ? `Mostrando ${filtered.length} de ${_alertas.length} alertas`
+    : '';
+}
+
 // ======================= UTILS =======================
 function today(){return new Date().toISOString().split('T')[0];}
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.style.opacity='1';setTimeout(()=>t.style.opacity='0',3000);}
@@ -3576,6 +3902,10 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   // Check pending corrections
   checkPendingSolicitudes();
   setInterval(checkPendingSolicitudes, 60000);
+
+  // Load alertas
+  loadAlertas();
+  setInterval(loadAlertas, 60000);
 
   // Auto-refresh every 30 seconds - picks up worker registros automatically
   let _refreshCnt = 0;
