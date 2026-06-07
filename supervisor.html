@@ -1469,14 +1469,35 @@ const ST = {
 
 
 // Helper: extraer sobrantes reales desde sob_por_plancha
+// Worker guarda: {hay, sobPeso, esp, ancho, largo, qty, dest, colada, mat}
+// Supervisor guarda: {tipo, peso, esp, ancho, largo, qty, dest, colada, grado}
 function getSobrantesDeCorte(c){
   const arr=(()=>{try{const v=c.sob_por_plancha;if(typeof v==='string'&&v.startsWith('['))return JSON.parse(v);return[];}catch(e){return[];}})();
-  if(arr.length>0) return arr.filter(s=>(s.hay||'si')!=='no'&&Number(s.peso||s.sobPeso||0)>0)
-    .map(s=>({peso:Number(s.peso||s.sobPeso||0),dest:s.dest||'stock',
-              esp:s.esp||0,ancho:s.ancho||0,largo:s.largo||0,colada:s.colada||c.pl_num||'—',grado:s.grado||c.pl_mat||'—'}));
-  // fallback viejo
+  if(arr.length>0){
+    return arr
+      .filter(s=>(s.hay||'si')!=='no' && Number(s.sobPeso||s.peso||0)>0)
+      .map(s=>({
+        peso: Number(s.sobPeso||s.peso||0),
+        dest: s.dest||'stock',
+        esp:  s.esp||0,
+        ancho:s.ancho||0,
+        largo:s.largo||0,
+        qty:  s.qty||1,
+        colada: s.colada||s.num||c.pl_num||'—',
+        grado:  s.mat||s.grado||c.pl_mat||'—',
+        ref:  s.ref||''
+      }));
+  }
+  // fallback: campos planos sob_* del registro
   const peso=Number(c.sob_peso||c.sobPeso||0);
-  if(peso>0) return [{peso,dest:c.sob_dest||c.destSob||'stock',esp:c.sob_esp||0,ancho:c.sob_ancho||0,largo:c.sob_largo||0,colada:c.pl_num||'—',grado:c.pl_mat||'—'}];
+  const hay=c.sob_hay||'no';
+  if(peso>0&&hay==='si') return [{
+    peso, dest:c.sob_dest||'stock',
+    esp:c.sob_esp||0, ancho:c.sob_ancho||0, largo:c.sob_largo||0,
+    qty:c.sob_qty||1,
+    colada:c.sob_colada||c.pl_num||'—',
+    grado:c.sob_mat||c.pl_mat||'—', ref:c.sob_ref||''
+  }];
   return [];
 }
 // Helper: get executed qty for a parte across all records (cortes count as "Corte" phase)
@@ -2939,15 +2960,14 @@ function renderStock(){
 
     if(sobArr.length>0){
       sobArr.forEach((s,i)=>{
-        // Worker guarda: {hay, sobPeso, esp, ancho, largo, dest, colada}
-        // Supervisor guarda: {tipo, peso, esp, ancho, largo, dest, colada}
-        const hay = s.hay||'si';
+        const hay=s.hay||'si';
         if(hay==='no') return;
-        const peso = Number(s.peso||s.sobPeso||0);
+        // Worker usa sobPeso, supervisor usa peso
+        const peso=Number(s.sobPeso||s.peso||0);
         if(peso<=0) return;
-        const dest = s.dest||s.sob_dest||'stock';
-        const colada = s.colada||s.sob_colada||c.pl_num||'—';
-        const grado = s.grado||s.mat||s.sob_mat||c.pl_mat||'—';
+        const dest=s.dest||'stock';
+        const colada=s.colada||s.num||c.pl_num||'—';
+        const grado=s.mat||s.grado||c.pl_mat||'—';
         items.push({
           id:c.id+'_'+i, fecha:c.fecha, cj:c.conjunto||c.cj, parte:c.parte||c.pr,
           colada, grado,
@@ -2957,18 +2977,17 @@ function renderStock(){
         });
       });
     } else {
-      // Fallback: formato viejo campos planos
-      const peso = Number(c.sob_peso||c.sobPeso||0);
-      const dest = c.sob_dest||c.destSob||'stock';
-      if(peso>0){
+      // Fallback: campos planos sob_* (registros muy viejos)
+      const peso=Number(c.sob_peso||c.sobPeso||0);
+      const hay=c.sob_hay||'no';
+      if(peso>0&&hay==='si'){
         items.push({
           id:c.id+'_0', fecha:c.fecha, cj:c.conjunto||c.cj, parte:c.parte||c.pr,
-          colada:c.sob_colada||c.sobColada||c.pl_num||'—',
-          grado:c.sob_mat||c.sobGrado||c.pl_mat||'—',
-          esp:c.sob_esp||c.sobEsp||0, ancho:c.sob_ancho||c.sobAncho||0,
-          largo:c.sob_largo||c.sobLargo||0,
-          qty:c.sob_qty||c.sobQty||1, peso, dest,
-          ref:c.sob_ref||c.sobRef||'', tipo:'plancha',
+          colada:c.sob_colada||c.pl_num||'—',
+          grado:c.sob_mat||c.pl_mat||'—',
+          esp:c.sob_esp||0, ancho:c.sob_ancho||0, largo:c.sob_largo||0,
+          qty:c.sob_qty||1, peso, dest:c.sob_dest||'stock',
+          ref:c.sob_ref||'', tipo:'plancha',
         });
       }
     }
