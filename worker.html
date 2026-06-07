@@ -153,6 +153,14 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);min-height
         Descarga un archivo y envíaselo al supervisor por WhatsApp
       </div>
     </div>
+    <div style="margin-top:.625rem;padding-top:.625rem;border-top:1px solid var(--bd)">
+      <button onclick="limpiarDatosLocales()" style="width:100%;padding:.625rem;background:#fff;color:#991b1b;border:1.5px solid #fca5a5;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">
+        🗑 Limpiar mis datos locales
+      </button>
+      <div style="font-size:10px;color:var(--gr);text-align:center;margin-top:.375rem">
+        Borra la copia guardada en este celular. Los datos en Google Sheets no se eliminan.
+      </div>
+    </div>
   </div>
 </div>
 
@@ -2744,6 +2752,25 @@ async function guardarOtras(){
   document.getElementById('ok-detail').innerHTML=det;
   loadMyRecs().then(()=>{ document.getElementById('ok-hist').innerHTML=renderHistItems(_cache.filter(r=>r.fecha===todayISO())); });
   renderHomeHist();go('sc-ok');
+}
+
+// ======= LIMPIAR DATOS LOCALES =======
+function limpiarDatosLocales(){
+  if(!confirm('¿Limpiar todos los datos guardados en este celular?\n\nEsto borra los registros locales. Los datos ya enviados a Google Sheets NO se eliminan.')) return;
+  if(!confirm('Confirma: ¿borrar datos locales de este celular?')) return;
+  try {
+    // Limpiar todo el localStorage relacionado con la app
+    const keys = Object.keys(localStorage).filter(k =>
+      k.startsWith('prodapp_') || k.startsWith('wk_') ||
+      k.startsWith('alertas_') || k === 'pendingSync' || k === 'pendingCorrecciones'
+    );
+    keys.forEach(k => localStorage.removeItem(k));
+    // Recargar la página para empezar limpio
+    alert('✓ Datos locales eliminados. La app se reiniciará.');
+    location.reload();
+  } catch(e) {
+    alert('Error al limpiar: ' + e.message);
+  }
 }
 
 // ======= ALERTA SOBREPASO =======
