@@ -1342,7 +1342,7 @@ function _doExportExcel(){
     const planchas=(() => { try{return JSON.parse(r.pl_planchas||'[]');}catch(e){return [];} })();
     const m0=planchas[0]||{};
     const totalMat=planchas.reduce((s,p)=>s+(p.peso||0),0)||Number(r.pl_peso||0);
-    const totalSob=(() => { try{const s=JSON.parse(r.sob_por_plancha||'[]');return s.reduce((a,x)=>a+(x.peso||x.sobPeso||0),0);}catch(e){return Number(r.sob_peso||0);} })();
+    const totalSob=(()=>{ try{const v=r.sob_peso;if(typeof v==='string'&&v.startsWith('['))return JSON.parse(v).reduce((a,x)=>a+Number(x.peso||0),0);}catch(e){}; return Number(r.sobPeso||0); })();
     const desp=Number(r.desperdicio||0);
     cortesData.push([
       r.fecha||'', r.hora||'', r.conjunto||r.cj||'', r.parte||r.pr||'', r.perfil||'',
@@ -1467,6 +1467,18 @@ const ST = {
   exec: {},      // cumulative executed quantities per parte per fase
 };
 
+
+// Helper: extraer sobrantes reales desde sob_por_plancha
+function getSobrantesDeCorte(c){
+  const arr=(()=>{try{const v=c.sob_por_plancha;if(typeof v==='string'&&v.startsWith('['))return JSON.parse(v);return[];}catch(e){return[];}})();
+  if(arr.length>0) return arr.filter(s=>(s.hay||'si')!=='no'&&Number(s.peso||s.sobPeso||0)>0)
+    .map(s=>({peso:Number(s.peso||s.sobPeso||0),dest:s.dest||'stock',
+              esp:s.esp||0,ancho:s.ancho||0,largo:s.largo||0,colada:s.colada||c.pl_num||'—',grado:s.grado||c.pl_mat||'—'}));
+  // fallback viejo
+  const peso=Number(c.sob_peso||c.sobPeso||0);
+  if(peso>0) return [{peso,dest:c.sob_dest||c.destSob||'stock',esp:c.sob_esp||0,ancho:c.sob_ancho||0,largo:c.sob_largo||0,colada:c.pl_num||'—',grado:c.pl_mat||'—'}];
+  return [];
+}
 // Helper: get executed qty for a parte across all records (cortes count as "Corte" phase)
 function getExec(conjunto, parte, fase) {
   const key = `${conjunto}||${parte}||${fase}`;
@@ -1532,7 +1544,7 @@ function renderDashboard() {
   const partesTotal = allPartes().reduce((s,p)=>s+p.cantidad,0);
   const totalCortado = ST.cortes.reduce((s,c)=>s+c.qty,0);
   const totalProd = ST.prods.reduce((s,p)=>s+p.qty,0);
-  const totalStock = ST.cortes.filter(c=>c.destSob==='stock'||c.sob_dest==='stock').reduce((s,c)=>s+(c.sobPeso||c.sob_peso||0),0);
+  const totalStock = ST.cortes.reduce((s,c)=>s+getSobrantesDeCorte(c).filter(x=>x.dest==='stock').reduce((a,x)=>a+x.peso,0),0);
   const totalDesp = ST.cortes.reduce((s,c)=>s+(c.desperdicio||0),0);
   const totalKgEjec = ST.cortes.reduce((s,c)=>s+(c.pesoParts||c.pesoPzas||0),0);
   const pendPartes = allPartes().reduce((s,p)=>s+Math.max(0,p.cantidad-getCortadoQty(p.conjunto,p.parte)),0);
@@ -1666,11 +1678,12 @@ function renderDashboard() {
         <div><span style="font-weight:700;color:var(--sd);">${r.qty} uds</span> <span style="color:var(--gm);font-size:10px;">${r.fecha}</span></div>
       </div>`).join('') : '<div style="color:var(--gm);text-align:center;padding:.75rem;">Sin registros aún.</div>';
 
-  const stockItems = ST.cortes.filter(c=>(c.destSob==='stock'||c.sob_dest==='stock')&&(c.sobPeso||c.sob_peso||0)>0);
+  const stockItems = [];
+  ST.cortes.forEach(c=>{ getSobrantesDeCorte(c).filter(x=>x.dest==='stock').forEach(x=>stockItems.push({...x,ref:c.sob_ref||''})); });
   document.getElementById('dash-stock-mini').innerHTML = stockItems.length
-    ? stockItems.slice(0,5).map(c=>`<div style="padding:5px 0;border-bottom:1px solid var(--gl);font-size:12px;">
-        <span class="stock-tag">STOCK</span> <strong>${c.sobColada||c.sob_colada||c.colada||'—'}</strong> · ${c.sobGrado||c.material||''} · <strong>${(c.sobPeso||c.sob_peso||0).toFixed(1)} kg</strong>
-        <span style="color:var(--gm);font-size:10px;float:right">${c.sobRef||c.sob_ref||'—'}</span>
+    ? stockItems.slice(0,5).map(s=>`<div style="padding:5px 0;border-bottom:1px solid var(--gl);font-size:12px;">
+        <span class="stock-tag">STOCK</span> <strong>${s.colada}</strong> · ${s.grado} · <strong>${s.peso.toFixed(1)} kg</strong>
+        <span style="color:var(--gm);font-size:10px;float:right">${s.esp||''}×${s.ancho||''}×${s.largo||''} mm</span>
       </div>`).join('') : '<div style="color:var(--gm);font-size:12px;">Sin sobrantes registrados.</div>';
 }
 
@@ -2916,39 +2929,48 @@ function renderStock(){
   const q=(document.getElementById('st-q')?.value||'').toLowerCase();
   const destFilt=document.getElementById('st-dest')?.value||'';
 
-  // Construir lista de sobrantes desde nuevo formato (sob_por_plancha) y viejo
+  // sob_por_plancha = array de sobrantes reales con dimensiones (worker y supervisor nuevo)
+  // Campos por item: {planchaIdx, hay, sobPeso, esp, ancho, largo, dest, colada, qty}
+  // Formato supervisor nuevo: {tipo, esp, ancho, largo, qty, dest, colada, peso}
   const items=[];
   ST.cortes.forEach(c=>{
-    // Nuevo formato: array sob_por_plancha
-    const sobArr=(()=>{ try{return JSON.parse(c.sob_por_plancha||'[]');}catch(e){return [];} })();
+    // 1. Intentar leer sob_por_plancha (formato correcto)
+    const sobArr=(()=>{ try{ const v=c.sob_por_plancha; if(typeof v==='string'&&v.startsWith('[')) return JSON.parse(v); return []; }catch(e){return [];} })();
+
     if(sobArr.length>0){
       sobArr.forEach((s,i)=>{
-        const peso=s.peso||s.sobPeso||0;
+        // Worker guarda: {hay, sobPeso, esp, ancho, largo, dest, colada}
+        // Supervisor guarda: {tipo, peso, esp, ancho, largo, dest, colada}
+        const hay = s.hay||'si';
+        if(hay==='no') return;
+        const peso = Number(s.peso||s.sobPeso||0);
         if(peso<=0) return;
-        const dest=s.dest||s.sob_dest||'stock';
-        const colada=s.colada||s.sob_colada||c.pl_num||'—';
-        const grado=s.mat||s.sob_mat||c.pl_mat||'—';
+        const dest = s.dest||s.sob_dest||'stock';
+        const colada = s.colada||s.sob_colada||c.pl_num||'—';
+        const grado = s.grado||s.mat||s.sob_mat||c.pl_mat||'—';
         items.push({
           id:c.id+'_'+i, fecha:c.fecha, cj:c.conjunto||c.cj, parte:c.parte||c.pr,
           colada, grado,
           esp:s.esp||0, ancho:s.ancho||0, largo:s.largo||0,
-          qty:s.qty||1, peso, dest, ref:s.ref||'',
-          tipo:c.pl_tipo||'plancha',
+          qty:s.qty||1, peso, dest, ref:s.ref||c.sob_ref||'',
+          tipo:s.tipo||'plancha',
         });
       });
-    } else if(Number(c.sob_peso||c.sobPeso||0)>0){
-      // Formato viejo
-      const peso=Number(c.sob_peso||c.sobPeso||0);
-      const dest=c.sob_dest||c.destSob||'stock';
-      items.push({
-        id:c.id+'_0', fecha:c.fecha, cj:c.conjunto||c.cj, parte:c.parte||c.pr,
-        colada:c.sob_colada||c.sobColada||c.pl_num||'—',
-        grado:c.sob_mat||c.sobGrado||c.pl_mat||'—',
-        esp:c.sob_esp||c.sobEsp||0, ancho:c.sob_ancho||c.sobAncho||0,
-        largo:c.sob_largo||c.sobLargo||0,
-        qty:c.sob_qty||c.sobQty||1, peso, dest,
-        ref:c.sob_ref||c.sobRef||'', tipo:c.pl_tipo||'plancha',
-      });
+    } else {
+      // Fallback: formato viejo campos planos
+      const peso = Number(c.sob_peso||c.sobPeso||0);
+      const dest = c.sob_dest||c.destSob||'stock';
+      if(peso>0){
+        items.push({
+          id:c.id+'_0', fecha:c.fecha, cj:c.conjunto||c.cj, parte:c.parte||c.pr,
+          colada:c.sob_colada||c.sobColada||c.pl_num||'—',
+          grado:c.sob_mat||c.sobGrado||c.pl_mat||'—',
+          esp:c.sob_esp||c.sobEsp||0, ancho:c.sob_ancho||c.sobAncho||0,
+          largo:c.sob_largo||c.sobLargo||0,
+          qty:c.sob_qty||c.sobQty||1, peso, dest,
+          ref:c.sob_ref||c.sobRef||'', tipo:'plancha',
+        });
+      }
     }
   });
 
@@ -3274,7 +3296,7 @@ function renderInforme(){
   const totCorteQty=cortes.reduce((s,c)=>s+c.qty,0);
   const totProdQty=prods.reduce((s,p)=>s+p.qty,0);
   const totKgCorte=cortes.reduce((s,c)=>s+c.pesoParts,0);
-  const totStock=cortes.filter(c=>c.destSob==='stock').reduce((s,c)=>s+c.sobPeso,0);
+  const totStock=cortes.reduce((s,c)=>s+getSobrantesDeCorte(c).filter(x=>x.dest==='stock').reduce((a,x)=>a+x.peso,0),0);
   const totDesp=cortes.reduce((s,c)=>s+c.desperdicio,0);
   const byFase={};
   FASES.forEach(f=>{
@@ -3343,7 +3365,7 @@ function renderInformeCharts(cortes, prods, byFase) {
     },{plugins:{legend:{display:false}},
       scales:{x:{grid:{display:false},ticks:{font:{size:9}}},y:{grid:{color:'#eee'},ticks:{font:{size:9}},beginAtZero:true}}});
     const kgP=cortes.reduce((s,c)=>s+(c.pesoParts||c.pesoPzas||0),0);
-    const kgS=cortes.filter(c=>c.destSob==='stock'||c.sob_dest==='stock').reduce((s,c)=>s+(c.sobPeso||c.sob_peso||0),0);
+    const kgS=cortes.reduce((s,c)=>s+getSobrantesDeCorte(c).filter(x=>x.dest==='stock').reduce((a,x)=>a+x.peso,0),0);
     const kgD=cortes.reduce((s,c)=>s+(c.desperdicio||0),0);
     if(kgP+kgS+kgD>0) mkChart('rpt-chart-material','doughnut',{
       labels:['Piezas','Sobrante','Desperdicio'],
