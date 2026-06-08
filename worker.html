@@ -265,13 +265,38 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);min-height
       <div style="font-size:11px;color:#1e40af;background:#eef4ff;border-radius:8px;padding:8px 10px;margin-bottom:.75rem">
         ℹ Ingresa la cantidad real de piezas cortadas para cada sub-pieza de forma independiente.
       </div>
+
+      <!-- Panel progreso vigas -->
+      <div id="wk-prog-vigas" style="display:none;background:#1a2b4a;border-radius:10px;padding:.875rem;margin-bottom:.75rem;color:#fff">
+        <div style="font-size:10px;font-weight:700;opacity:.7;text-transform:uppercase;margin-bottom:.625rem">📊 Progreso del plan</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:.625rem">
+          <div style="background:rgba(255,255,255,.08);border-radius:8px;padding:8px;text-align:center">
+            <div style="font-size:9px;opacity:.6;margin-bottom:2px">PLAN VIGAS</div>
+            <div id="wk-prog-plan" style="font-size:22px;font-weight:800;color:#93c5fd">—</div>
+          </div>
+          <div style="background:rgba(134,239,172,.15);border-radius:8px;padding:8px;text-align:center">
+            <div style="font-size:9px;opacity:.6;margin-bottom:2px">VIGAS LISTAS</div>
+            <div id="wk-prog-hechas" style="font-size:22px;font-weight:800;color:#86efac">0</div>
+          </div>
+          <div style="background:rgba(252,165,165,.15);border-radius:8px;padding:8px;text-align:center">
+            <div style="font-size:9px;opacity:.6;margin-bottom:2px">FALTAN</div>
+            <div id="wk-prog-faltan" style="font-size:22px;font-weight:800;color:#fca5a5">—</div>
+          </div>
+        </div>
+        <div style="background:rgba(255,255,255,.08);border-radius:6px;height:8px;overflow:hidden;margin-bottom:.625rem">
+          <div id="wk-prog-bar" style="height:100%;background:#86efac;border-radius:6px;transition:width .3s;width:0%"></div>
+        </div>
+        <!-- Sub-piezas faltantes -->
+        <div id="wk-prog-subpiezas" style="font-size:11px;opacity:.8"></div>
+      </div>
+
       <div id="wk-subpiezas-list"></div>
       <button onclick="wkAddSubPieza()" style="width:100%;padding:.5rem;background:#eef4ff;color:#1e40af;border:1.5px dashed #93c5fd;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:.5rem">
         + Agregar sub-pieza
       </button>
       <div id="wk-desp-total" style="display:none;background:#1e40af;border-radius:8px;padding:8px 12px;margin-bottom:.5rem">
         <div style="display:flex;justify-content:space-between;align-items:center">
-          <span style="font-size:12px;color:#bfdbfe">Total plancha</span>
+          <span style="font-size:12px;color:#bfdbfe">Total plancha este registro</span>
           <span id="wk-desp-total-kg" style="font-size:15px;font-weight:700;color:#fff">0.0 kg</span>
         </div>
       </div>
@@ -2017,6 +2042,7 @@ function wkInitSubPiezas(){
     wkSubPiezas = [{nombre:'Sub-pieza 1', esp:0, ancho:0, largo:selParte?.long||0, qty:0, colada:'', peso:0}];
   }
   wkRenderSubPiezas();
+  wkRecalcDesp();
 }
 
 function wkAddSubPieza(){
@@ -2125,6 +2151,73 @@ function wkRecalcDesp(){
   const totalKg=document.getElementById('wk-desp-total-kg');
   if(totalBox) totalBox.style.display=totalPeso>0?'block':'none';
   if(totalKg) totalKg.textContent=totalPeso.toFixed(2)+' kg';
+
+  // Calcular progreso de vigas
+  if(selParte && selCj){
+    const planVigas = selParte.plan;
+    const piezasHI = PIEZAS_HI[selParte.perfil];
+
+    // Vigas ya cortadas en registros anteriores (acumulado histórico)
+    const yaCorte = _cache.filter(r=>r.cj===selCj.cj&&r.pr===selParte.pr&&r.fase==='Corte');
+
+    // Calcular vigas completadas por sub-pieza considerando historial + este registro
+    let vigasCompletas = planVigas; // empezar con el plan, reducir
+    const subpiezasInfo = [];
+
+    wkSubPiezas.forEach((s,i)=>{
+      if(!s.nombre) return;
+      const qtyPorViga = piezasHI ? (piezasHI[i]?.qty||1) : 1;
+      // Cantidad ya cortada en historial para este nombre de sub-pieza
+      let yaQty = 0;
+      yaCorte.forEach(r=>{
+        const piezas=(()=>{try{return JSON.parse(r.pl_cortes_por_plancha||'[]');}catch(e){return[];}})();
+        piezas.forEach(p=>{ if(p.nombre===s.nombre||p.descompuesto) yaQty+=p.qty||0; });
+      });
+      const esteRegistro = s.qty||0;
+      const totalQty = yaQty + esteRegistro;
+      const vigasEsta = Math.floor(totalQty/qtyPorViga);
+      const faltanPiezas = Math.max(0, planVigas*qtyPorViga - totalQty);
+      const faltanVigas = Math.max(0, planVigas - vigasEsta);
+      vigasCompletas = Math.min(vigasCompletas, vigasEsta);
+      subpiezasInfo.push({
+        nombre: s.nombre,
+        totalQty, qtyPorViga, vigasEsta, faltanPiezas, faltanVigas,
+        planTotal: planVigas*qtyPorViga
+      });
+    });
+
+    const faltanVigas = Math.max(0, planVigas - vigasCompletas);
+    const pct = planVigas>0?Math.min(100,(vigasCompletas/planVigas*100)):0;
+
+    const progPanel = document.getElementById('wk-prog-vigas');
+    if(progPanel && wkSubPiezas.some(s=>s.qty>0)){
+      progPanel.style.display='';
+      const el=id=>document.getElementById(id);
+      if(el('wk-prog-plan')) el('wk-prog-plan').textContent=planVigas;
+      if(el('wk-prog-hechas')) el('wk-prog-hechas').textContent=vigasCompletas;
+      if(el('wk-prog-faltan')) el('wk-prog-faltan').textContent=faltanVigas;
+      if(el('wk-prog-bar')) el('wk-prog-bar').style.width=pct.toFixed(0)+'%';
+
+      // Sub-piezas faltantes
+      const subEl=el('wk-prog-subpiezas');
+      if(subEl && subpiezasInfo.length>0){
+        subEl.innerHTML = '<div style="margin-bottom:4px;opacity:.6;font-size:10px;text-transform:uppercase">Sub-piezas faltantes:</div>'+
+          subpiezasInfo.map(sp=>`
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid rgba(255,255,255,.08)">
+              <span>${sp.nombre}</span>
+              <span>
+                <span style="color:#86efac">${sp.totalQty}/${sp.planTotal}</span>
+                <span style="margin-left:6px;background:rgba(252,165,165,.25);border-radius:4px;padding:1px 6px;color:#fca5a5">
+                  faltan ${sp.faltanPiezas} pzas (${sp.faltanVigas} vigas)
+                </span>
+              </span>
+            </div>`).join('');
+      }
+    } else if(progPanel){
+      progPanel.style.display='none';
+    }
+  }
+
   wkRecalc();
 }
 function wkChgPiezaForma(i){ wkPiezas[i]={...wkPiezas[i],forma:document.getElementById(`wp-forma-${i}`)?.value||'rectangular'}; wkRenderPiezas(); }
