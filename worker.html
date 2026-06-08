@@ -2306,7 +2306,10 @@ function wkUpdSob(i){
 // ── Balance ─────────────────────────────────────────
 function wkRecalc(){
   const totalMat =wkMateriales.reduce((s,m)=>s+(m.peso||wkCalcPesoMat(m)),0);
-  const totalPzas=wkPiezas.reduce((s,p)=>s+(p.peso||wkCalcPesoPieza(p)),0);
+  // En modo descompuesto usar wkSubPiezas, sino wkPiezas normal
+  const totalPzas=_descompActivo
+    ? wkSubPiezas.reduce((s,p)=>s+(p.peso||0),0)
+    : wkPiezas.reduce((s,p)=>s+(p.peso||wkCalcPesoPieza(p)),0);
   const totalSob =wkSobrantes.reduce((s,sb)=>s+(sb.peso||wkCalcPesoSob(sb)),0);
   const desp=Math.max(0,totalMat-totalPzas-totalSob);
   const aprov=totalMat>0?(totalPzas/totalMat*100):0;
