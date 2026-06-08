@@ -1478,8 +1478,16 @@ function importarDatosOperario() {
         // Import cortes
         (data.cortes || []).forEach(r => {
           if (!existIds.has(r.id)) {
+            // Normalizar campos
+            r.conjunto = r.conjunto||r.cj||'';
+            r.parte    = r.parte||r.pr||'—';
+            r.cj       = r.conjunto;
+            r.pr       = r.parte;
+            r.qty      = Number(r.qty)||0;
+            r.pesoParts= Number(r.pesoParts||r.pesoPzas||0);
+            r.desperdicio = Number(r.desperdicio||0);
             ST.cortes.push(r);
-            addExec(r.conjunto||r.cj, r.parte||r.pr||'—', 'Corte', r.qty);
+            addExec(r.conjunto, r.parte, 'Corte', r.qty);
             existIds.add(r.id);
             importedCortes++;
           }
@@ -1487,8 +1495,13 @@ function importarDatosOperario() {
         // Import prods
         (data.prods || []).forEach(r => {
           if (!existIds.has(r.id)) {
+            r.conjunto = r.conjunto||r.cj||'';
+            r.parte    = r.parte||r.pr||'—';
+            r.cj       = r.conjunto;
+            r.pr       = r.parte;
+            r.qty      = Number(r.qty)||0;
             ST.prods.push(r);
-            addExec(r.conjunto||r.cj, r.parte||r.pr||'—', r.fase, r.qty);
+            addExec(r.conjunto, r.parte, r.fase, r.qty);
             existIds.add(r.id);
             importedProds++;
           }
