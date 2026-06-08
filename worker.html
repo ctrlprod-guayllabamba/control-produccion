@@ -237,10 +237,51 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);min-height
   <div class="card" style="margin-top:.75rem">
     <div class="card-t" style="color:#065f46">✂ Piezas cortadas</div>
     <div style="font-size:11px;color:#6b7280;margin-bottom:.625rem">Registra cada subparte con sus dimensiones</div>
-    <div id="wk-pzas-list"></div>
-    <button onclick="wkAddPieza()" style="width:100%;padding:.625rem;background:#f0fdf4;color:#065f46;border:1.5px dashed #86efac;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:.5rem">
-      + Agregar pieza / subparte
-    </button>
+
+    <!-- Toggle descomposición en sub-piezas -->
+    <div id="wk-toggle-desp" style="display:none;background:#eef4ff;border:1.5px solid #bfdbfe;border-radius:10px;padding:10px 14px;margin-bottom:.75rem">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <div style="font-size:13px;font-weight:700;color:#1e40af">Descomponer en sub-piezas</div>
+          <div style="font-size:11px;color:#3b82f6;margin-top:1px">Para perfiles I/H formados por patines y alma</div>
+        </div>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+          <input type="checkbox" id="wk-chk-desp" onchange="wkToggleDescomp()" style="width:18px;height:18px;cursor:pointer">
+          <span id="wk-chk-lbl" style="font-size:12px;color:#1e40af">Activar</span>
+        </label>
+      </div>
+    </div>
+
+    <!-- Vista normal de piezas -->
+    <div id="wk-pzas-normal">
+      <div id="wk-pzas-list"></div>
+      <button onclick="wkAddPieza()" style="width:100%;padding:.625rem;background:#f0fdf4;color:#065f46;border:1.5px dashed #86efac;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:.5rem">
+        + Agregar pieza / subparte
+      </button>
+    </div>
+
+    <!-- Vista descompuesta en sub-piezas HI -->
+    <div id="wk-pzas-desp" style="display:none">
+      <div style="font-size:11px;color:#1e40af;margin-bottom:.5rem">Cantidad de vigas a registrar:</div>
+      <div style="display:flex;gap:6px;align-items:center;margin-bottom:.875rem">
+        <button onclick="wkAdjVigas(-1)" style="width:44px;height:44px;border-radius:10px;border:1.5px solid #d1d5db;background:#f9fafb;font-size:22px;cursor:pointer">−</button>
+        <input type="number" id="wk-qty-vigas" value="1" min="1" inputmode="numeric"
+          style="flex:1;text-align:center;font-size:32px;font-weight:800;border:2px solid #1e40af;border-radius:10px;padding:.25rem;color:#1e40af"
+          oninput="wkRecalcDesp()">
+        <button onclick="wkAdjVigas(1)" style="width:44px;height:44px;border-radius:10px;border:1.5px solid #d1d5db;background:#f9fafb;font-size:22px;cursor:pointer">+</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-bottom:.875rem">
+        ${[1,5,10,25].map(n=>`<button onclick="wkAdjVigas(${n})" style="padding:5px;background:#eef4ff;color:#1e40af;border:1px solid #bfdbfe;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer">+${n}</button>`).join('')}
+      </div>
+      <div id="wk-subpiezas-list"></div>
+      <button onclick="wkAddSubPieza()" style="width:100%;padding:.5rem;background:#eef4ff;color:#1e40af;border:1.5px dashed #93c5fd;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:.5rem">
+        + Agregar sub-pieza
+      </button>
+      <div id="wk-desp-total" style="display:none;background:#1e40af;border-radius:8px;padding:8px 12px;display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:12px;color:#bfdbfe">Total plancha</span>
+        <span id="wk-desp-total-kg" style="font-size:15px;font-weight:700;color:#fff">0.0 kg</span>
+      </div>
+    </div>
   </div>
 
   <!-- ③ SOBRANTES -->
@@ -1054,6 +1095,15 @@ function selectParte(prId){
     wkMateriales=[{tipo:'plancha',qty:1,grado:'A588-50'}];
     wkPiezas=[{forma:'rectangular',qty:0,largo:selParte.long||0}];
     wkSobrantes=[{tipo:'plancha',qty:1,dest:'stock'}];
+    // Reset descomposición
+    _descompActivo=false; wkSubPiezas=[];
+    const chkDesp=document.getElementById('wk-chk-desp');
+    if(chkDesp) chkDesp.checked=false;
+    document.getElementById('wk-pzas-normal').style.display='';
+    document.getElementById('wk-pzas-desp').style.display='none';
+    // Mostrar toggle solo para perfiles HI
+    const toggleDesp=document.getElementById('wk-toggle-desp');
+    if(toggleDesp) toggleDesp.style.display=PIEZAS_HI[selParte.perfil]?'':'none';
     const yaHecho=totalExec(selCj.cj,selParte.pr,'Corte');
     const plan=selParte.plan; const pu=selParte.pu;
     const pend=Math.max(0,plan-yaHecho);
@@ -1945,6 +1995,152 @@ function wkPiezaHTML(p,i){
 
 function wkAddPieza(){ wkPiezas.push({forma:'rectangular',qty:0}); wkRenderPiezas(); }
 function wkRmPieza(i){ wkPiezas.splice(i,1); wkRenderPiezas(); }
+
+// ── Sub-piezas descompuestas (vigas HI) ─────────────────────
+let wkSubPiezas = []; // [{nombre, esp, ancho, largo, qtyPorViga, colada, peso}]
+let _descompActivo = false;
+
+function wkToggleDescomp(){
+  const chk = document.getElementById('wk-chk-desp');
+  _descompActivo = chk?.checked || false;
+  document.getElementById('wk-pzas-normal').style.display = _descompActivo ? 'none' : '';
+  document.getElementById('wk-pzas-desp').style.display   = _descompActivo ? '' : 'none';
+  document.getElementById('wk-chk-lbl').textContent = _descompActivo ? 'Activado' : 'Activar';
+  if(_descompActivo && wkSubPiezas.length===0) wkInitSubPiezas();
+  wkRecalc();
+}
+
+function wkInitSubPiezas(){
+  // Pre-cargar desde PIEZAS_HI si aplica
+  const piezasHI = PIEZAS_HI[selParte?.perfil];
+  if(piezasHI){
+    wkSubPiezas = piezasHI.map((p,i)=>({
+      nombre: p.tipo==='Alma'?'Alma':p.tipo==='Patín'?'Patín':'Sub-pieza '+(i+1),
+      esp: p.esp, ancho: p.ancho, largo: selParte.long||0,
+      qtyPorViga: p.qty, colada: '', peso: 0
+    }));
+  } else {
+    wkSubPiezas = [{nombre:'Sub-pieza 1', esp:0, ancho:0, largo:selParte?.long||0, qtyPorViga:1, colada:'', peso:0}];
+  }
+  wkRenderSubPiezas();
+}
+
+function wkAddSubPieza(){
+  const n = wkSubPiezas.length+1;
+  wkSubPiezas.push({nombre:'Sub-pieza '+n, esp:0, ancho:0, largo:selParte?.long||0, qtyPorViga:1, colada:'', peso:0});
+  wkRenderSubPiezas();
+}
+
+function wkRmSubPieza(i){ wkSubPiezas.splice(i,1); wkRenderSubPiezas(); wkRecalcDesp(); }
+
+function wkAdjVigas(n){
+  const el=document.getElementById('wk-qty-vigas');
+  if(el) el.value=Math.max(1,(parseInt(el.value||1)+n));
+  wkRecalcDesp();
+}
+
+function wkRenderSubPiezas(){
+  const cont=document.getElementById('wk-subpiezas-list'); if(!cont) return;
+  const vigas=parseInt(document.getElementById('wk-qty-vigas')?.value)||1;
+  cont.innerHTML=wkSubPiezas.map((s,i)=>{
+    const totalQty=(s.qtyPorViga||1)*vigas;
+    const peso=s.esp&&s.ancho&&s.largo ? s.esp*s.ancho*s.largo*D*totalQty : 0;
+    wkSubPiezas[i].peso=peso;
+    const colors=[
+      {bg:'#E6F1FB',bd:'#B5D4F4',hd:'#0C447C',ac:'#185FA5',lt:'#B5D4F4'},
+      {bg:'#EAF3DE',bd:'#C0DD97',hd:'#27500A',ac:'#3B6D11',lt:'#C0DD97'},
+      {bg:'#FAEEDA',bd:'#FAC775',hd:'#633806',ac:'#854F0B',lt:'#FAC775'},
+      {bg:'#FBEAF0',bd:'#F4C0D1',hd:'#4B1528',ac:'#993556',lt:'#F4C0D1'},
+    ];
+    const c=colors[i%colors.length];
+    return `<div style="border:0.5px solid ${c.bd};border-radius:12px;padding:12px;background:${c.bg};margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="font-size:12px;font-weight:700;color:${c.hd}">Sub-pieza ${i+1}</span>
+          <input type="text" value="${s.nombre}" placeholder="Nombre"
+            style="font-size:12px;border:0.5px solid ${c.bd};border-radius:4px;padding:3px 8px;background:white;color:${c.hd};width:90px"
+            oninput="wkSubPiezas[${i}].nombre=this.value">
+        </div>
+        ${wkSubPiezas.length>1?`<button onclick="wkRmSubPieza(${i})" style="background:#fee2e2;color:#991b1b;border:none;border-radius:6px;padding:2px 8px;font-size:12px;cursor:pointer">✕</button>`:''}
+      </div>
+      <input type="text" id="wsp-colada-${i}" value="${s.colada||''}" placeholder="N° Colada (opcional)"
+        style="width:100%;padding:6px;border:0.5px solid ${c.bd};border-radius:6px;font-size:12px;background:white;margin-bottom:8px"
+        oninput="wkSubPiezas[${i}].colada=this.value">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr;gap:5px;margin-bottom:8px">
+        <div style="background:white;border:0.5px solid ${c.bd};border-radius:6px;padding:6px;text-align:center">
+          <div style="font-size:10px;color:${c.ac};margin-bottom:2px">Esp (mm)</div>
+          <input type="number" id="wsp-esp-${i}" value="${s.esp||''}" inputmode="numeric" placeholder="12"
+            style="width:100%;border:none;text-align:center;font-size:15px;font-weight:700;color:${c.hd};background:transparent;outline:none"
+            oninput="wkUpdSubPieza(${i})">
+        </div>
+        <div style="background:white;border:0.5px solid ${c.bd};border-radius:6px;padding:6px;text-align:center">
+          <div style="font-size:10px;color:${c.ac};margin-bottom:2px">Ancho (mm)</div>
+          <input type="number" id="wsp-ancho-${i}" value="${s.ancho||''}" inputmode="numeric" placeholder="300"
+            style="width:100%;border:none;text-align:center;font-size:15px;font-weight:700;color:${c.hd};background:transparent;outline:none"
+            oninput="wkUpdSubPieza(${i})">
+        </div>
+        <div style="background:white;border:0.5px solid ${c.bd};border-radius:6px;padding:6px;text-align:center">
+          <div style="font-size:10px;color:${c.ac};margin-bottom:2px">Largo (mm)</div>
+          <input type="number" id="wsp-largo-${i}" value="${s.largo||''}" inputmode="numeric" placeholder="3000"
+            style="width:100%;border:none;text-align:center;font-size:15px;font-weight:700;color:${c.hd};background:transparent;outline:none"
+            oninput="wkUpdSubPieza(${i})">
+        </div>
+        <div style="background:white;border:0.5px solid ${c.bd};border-radius:6px;padding:6px;text-align:center">
+          <div style="font-size:10px;color:${c.ac};margin-bottom:2px">× viga</div>
+          <input type="number" id="wsp-qpv-${i}" value="${s.qtyPorViga||1}" inputmode="numeric" min="1"
+            style="width:100%;border:none;text-align:center;font-size:15px;font-weight:700;color:${c.hd};background:transparent;outline:none"
+            oninput="wkUpdSubPieza(${i})">
+        </div>
+        <div style="background:${c.ac};border-radius:6px;padding:6px;text-align:center">
+          <div style="font-size:10px;color:${c.lt};margin-bottom:2px">Total pzas</div>
+          <div id="wsp-total-${i}" style="font-size:15px;font-weight:700;color:white">${totalQty}</div>
+        </div>
+      </div>
+      <div style="background:${c.ac};border-radius:6px;padding:6px 10px;display:flex;justify-content:space-between">
+        <span style="font-size:11px;color:${c.lt}">Peso calculado</span>
+        <span id="wsp-peso-${i}" style="font-size:13px;font-weight:700;color:white">${peso>0?peso.toFixed(1)+' kg':'—'}</span>
+      </div>
+    </div>`;
+  }).join('');
+  wkRecalcDesp();
+}
+
+function wkUpdSubPieza(i){
+  const s=wkSubPiezas[i]; if(!s) return;
+  s.esp   = parseFloat(document.getElementById(`wsp-esp-${i}`)?.value)||0;
+  s.ancho = parseFloat(document.getElementById(`wsp-ancho-${i}`)?.value)||0;
+  s.largo = parseFloat(document.getElementById(`wsp-largo-${i}`)?.value)||0;
+  s.qtyPorViga = parseFloat(document.getElementById(`wsp-qpv-${i}`)?.value)||1;
+  const vigas=parseInt(document.getElementById('wk-qty-vigas')?.value)||1;
+  const totalQty=s.qtyPorViga*vigas;
+  const peso=s.esp&&s.ancho&&s.largo ? s.esp*s.ancho*s.largo*D*totalQty : 0;
+  s.peso=peso;
+  const totEl=document.getElementById(`wsp-total-${i}`);
+  const pesoEl=document.getElementById(`wsp-peso-${i}`);
+  if(totEl) totEl.textContent=totalQty;
+  if(pesoEl) pesoEl.textContent=peso>0?peso.toFixed(1)+' kg':'—';
+  wkRecalcDesp();
+}
+
+function wkRecalcDesp(){
+  const vigas=parseInt(document.getElementById('wk-qty-vigas')?.value)||1;
+  // Actualizar totales de cada sub-pieza
+  wkSubPiezas.forEach((s,i)=>{
+    const totalQty=s.qtyPorViga*vigas;
+    const peso=s.esp&&s.ancho&&s.largo ? s.esp*s.ancho*s.largo*D*totalQty : 0;
+    s.peso=peso;
+    const totEl=document.getElementById(`wsp-total-${i}`);
+    const pesoEl=document.getElementById(`wsp-peso-${i}`);
+    if(totEl) totEl.textContent=totalQty;
+    if(pesoEl) pesoEl.textContent=peso>0?peso.toFixed(1)+' kg':'—';
+  });
+  const totalPeso=wkSubPiezas.reduce((s,p)=>s+p.peso,0);
+  const totalBox=document.getElementById('wk-desp-total');
+  const totalKg=document.getElementById('wk-desp-total-kg');
+  if(totalBox) totalBox.style.display=totalPeso>0?'flex':'none';
+  if(totalKg) totalKg.textContent=totalPeso.toFixed(2)+' kg';
+  wkRecalc();
+}
 function wkChgPiezaForma(i){ wkPiezas[i]={...wkPiezas[i],forma:document.getElementById(`wp-forma-${i}`)?.value||'rectangular'}; wkRenderPiezas(); }
 function wkAdjPieza(i,n){ const el=document.getElementById(`wp-qty-${i}`); if(el){el.value=Math.max(0,(parseInt(el.value||0)+n)); wkUpdPieza(i);} }
 
@@ -2061,6 +2257,54 @@ function wkRecalc(){
 function wkGuardarCorte(){
   if(!W){ alert('Selecciona tu nombre primero'); return; }
   if(!selCj||!selParte){ alert('Selecciona conjunto y parte'); return; }
+
+  // Modo descompuesto
+  if(_descompActivo){
+    const vigas=parseInt(document.getElementById('wk-qty-vigas')?.value)||0;
+    if(vigas<=0){ alert('Ingresa la cantidad de vigas'); return; }
+    if(wkSubPiezas.every(s=>!s.peso||s.peso<=0)){ alert('Ingresa las dimensiones de al menos una sub-pieza'); return; }
+    const totalMat=wkMateriales.reduce((s,m)=>s+(m.peso||wkCalcPesoMat(m)),0);
+    const totalSob=wkSobrantes.reduce((s,sb)=>s+(sb.peso||wkCalcPesoSob(sb)),0);
+    const totalPesoDesp=wkSubPiezas.reduce((s,p)=>s+p.peso,0);
+    const desp=parseFloat(Math.max(0,totalMat-totalPesoDesp-totalSob).toFixed(2));
+    const m0=wkMateriales[0]||{};
+    const sob0=wkSobrantes[0]||{};
+    // Construir piezas array desde subpiezas para compatibilidad
+    const piezasArr=wkSubPiezas.map(s=>({
+      forma:'rectangular', nombre:s.nombre, esp:s.esp, ancho:s.ancho, largo:s.largo,
+      qty:s.qtyPorViga*vigas, qtyPorViga:s.qtyPorViga, colada:s.colada||'',
+      peso:s.peso, descompuesto:true
+    }));
+    const rec={
+      id:Date.now(), tipo:'corte', fecha:todayISO(), hora:timeNow(),
+      opId:W.id, opNom:`${W.nom} ${W.ape}`, opRol:W.rol,
+      fase:'Corte', cj:selCj.cj, pr:selParte.pr, perfil:selParte.perfil,
+      qty:vigas, pesoPzas:totalPesoDesp, calidad, obs:document.getElementById('ct-obs')?.value.trim()||'',
+      pl_planchas:JSON.stringify(wkMateriales),
+      pl_tipo:m0.tipo||'plancha', pl_num:m0.colada||'—', pl_mat:m0.grado||'—',
+      pl_esp:m0.esp||0, pl_ancho:m0.ancho||0, pl_largo:m0.largo||0,
+      pl_qty:m0.qty||1, pl_peso:totalMat,
+      pl_cortes_por_plancha:JSON.stringify(piezasArr),
+      descompuesto:true, vigas, subpiezas:JSON.stringify(wkSubPiezas),
+      sob_por_plancha:JSON.stringify(wkSobrantes),
+      sob_hay:totalSob>0?'si':'no', sob_peso:totalSob,
+      sob_esp:sob0.esp||0, sob_ancho:sob0.ancho||0, sob_largo:sob0.largo||0,
+      sob_qty:sob0.qty||1, sob_colada:sob0.colada||'—',
+      sob_mat:m0.grado||'—', sob_dest:sob0.dest||'stock', desperdicio:desp,
+    };
+    saveRec(rec);
+    wkMateriales=[{tipo:'plancha',qty:1,grado:'A588-50'}];
+    wkPiezas=[{forma:'rectangular',qty:0}]; wkSobrantes=[{tipo:'plancha',qty:1,dest:'stock'}];
+    wkSubPiezas=[]; _descompActivo=false;
+    document.getElementById('ok-detail').innerHTML=
+      `✂ <strong>Corte descompuesto</strong> · ${selCj.cj}/${selParte.pr} · <strong>${vigas} vigas</strong><br>
+       📋 ${wkSubPiezas.length||piezasArr.length} sub-piezas · Mat: ${totalMat.toFixed(1)} kg · Desp: ${desp.toFixed(1)} kg`;
+    loadMyRecs().then(()=>{
+      document.getElementById('ok-hist').innerHTML=renderHistItems(_cache.filter(r=>r.fecha===todayISO()));
+    });
+    renderHomeHist(); go('sc-ok'); return;
+  }
+
   const totalPzas=wkPiezas.reduce((s,p)=>s+(p.qty||0),0);
   if(totalPzas<=0){ alert('Ingresa al menos una pieza cortada'); return; }
 
