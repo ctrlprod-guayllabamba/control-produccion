@@ -1511,6 +1511,13 @@ function importarDatosOperario() {
           if (!ST.ops.find(o => o.id === op.id)) ST.ops.push(op);
         });
         saveAll();
+        // Enviar al GAS para que quede persistido
+        if(GAS.configured()){
+          const nuevosCortes = (data.cortes||[]);
+          const nuevosProds  = (data.prods||[]);
+          nuevosCortes.forEach(r=>GAS.post('addRegistro',r).catch(()=>{}));
+          nuevosProds.forEach(r=>GAS.post('addRegistro',r).catch(()=>{}));
+        }
         renderDashboard();
         renderPendientes();
         toast(`✓ Importado: ${importedCortes} cortes + ${importedProds} producciones`);
