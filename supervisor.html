@@ -1472,6 +1472,7 @@ function importarDatosOperario() {
     const reader = new FileReader();
     reader.onload = ev => {
       try {
+        _importando = true; // pausar auto-sync
         const data = JSON.parse(ev.target.result);
         let importedCortes = 0, importedProds = 0;
         const existIds = new Set([...ST.cortes.map(r=>r.id), ...ST.prods.map(r=>r.id)]);
@@ -1513,16 +1514,28 @@ function importarDatosOperario() {
         saveAll();
         // Enviar al GAS para que quede persistido
         if(GAS.configured()){
-          const nuevosCortes = (data.cortes||[]);
-          const nuevosProds  = (data.prods||[]);
-          nuevosCortes.forEach(r=>GAS.post('addRegistro',r).catch(()=>{}));
-          nuevosProds.forEach(r=>GAS.post('addRegistro',r).catch(()=>{}));
+          const todosRecs = [...(data.cortes||[]), ...(data.prods||[])];
+          // Enviar de uno en uno con delay para no saturar el GAS
+          todosRecs.reduce((promesa, r) => {
+            return promesa.then(() => 
+              GAS.post('addRegistro', r)
+                .catch(()=>{})
+                .then(()=>new Promise(res=>setTimeout(res, 300)))
+            );
+          }, Promise.resolve())
+          .then(()=>{
+            _importando = false; // reanudar auto-sync
+            toast('✅ Registros guardados en Google Sheets');
+            const si = document.getElementById('sync-indicator');
+            if(si) si.textContent = '🟢 Registros guardados en Google Sheets';
+            loadFromServer().then(()=>{renderDashboard();renderPendientes();});
+          });
         }
         renderDashboard();
         renderPendientes();
-        toast(`✓ Importado: ${importedCortes} cortes + ${importedProds} producciones`);
+        toast(`✓ Importado: ${importedCortes} cortes + ${importedProds} producciones — enviando al servidor...`);
         const si = document.getElementById('sync-indicator');
-        if(si) si.textContent = `✅ ${importedCortes+importedProds} registros importados de ${file.name}`;
+        if(si) si.textContent = `⏳ Enviando ${importedCortes+importedProds} registros al servidor...`;
       } catch(e) {
         toast('⚠ Error al leer el archivo: ' + e.message);
       }
@@ -3964,8 +3977,9 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   // Auto-refresh every 30 seconds - picks up worker registros automatically
   let _refreshCnt = 0;
   let _refreshBusy = false;
+  let _importando = false; // flag para pausar auto-sync durante importación
   setInterval(async () => {
-    if(_refreshBusy) return; // evitar llamadas apiladas si GAS tarda
+    if(_refreshBusy || _importando) return;
     _refreshBusy = true;
     _refreshCnt++;
     try {
