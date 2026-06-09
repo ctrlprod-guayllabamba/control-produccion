@@ -3253,8 +3253,8 @@ function openModalFase(cj, parte, fase) {
     <div style="font-size:11px;font-weight:800;color:#1a2b4a;margin-bottom:.5rem;">Registros de ejecución</div>
     ${recs.length ? `<div class="tw"><table><thead><tr><th>Fecha</th><th>Operario</th><th class="r">Qty</th>${fase==='Corte'?'<th class="r">Kg partes</th><th class="r">Sobrante</th><th class="r">Desp.</th>':'<th class="r">Kg</th>'}<th>Obs.</th></tr></thead>
     <tbody>${recs.map(r=>fase==='Corte'
-      ? `<tr><td>${r.fecha}</td><td>${r.opNom}</td><td class="r">${r.qty}</td><td class="r">${r.pesoParts.toFixed(1)}</td><td class="r"><span class="stock-tag">${r.sobPeso.toFixed(1)}</span></td><td class="r" style="color:#991b1b;">${r.desperdicio.toFixed(1)}</td><td style="font-size:10px;">${r.obs||'—'}</td></tr>`
-      : `<tr><td>${r.fecha}</td><td>${r.opNom}</td><td class="r">${r.qty}</td><td class="r">${r.kg.toFixed(1)}</td><td style="font-size:10px;">${r.obs||'—'}</td></tr>`
+      ? `<tr><td>${r.fecha||'—'}</td><td>${r.opNom||'—'}</td><td class="r">${r.qty||0}</td><td class="r">${Number(r.pesoParts||r.pesoPzas||0).toFixed(1)}</td><td class="r"><span class="stock-tag">${Number(r.sobPeso||r.sob_peso||0).toFixed(1)}</span></td><td class="r" style="color:#991b1b;">${Number(r.desperdicio||0).toFixed(1)}</td><td style="font-size:10px;">${r.obs||'—'}</td></tr>`
+      : `<tr><td>${r.fecha||'—'}</td><td>${r.opNom||'—'}</td><td class="r">${r.qty||0}</td><td class="r">${Number(r.kg||r.pesoPzas||0).toFixed(1)}</td><td style="font-size:10px;">${r.obs||'—'}</td></tr>`
     ).join('')}</tbody></table></div>`
     : '<div style="text-align:center;padding:1.5rem;color:#6c757d;font-size:12px;">Sin registros de ejecución para esta fase</div>'}
     <div class="act-row" style="margin-top:.75rem;">
