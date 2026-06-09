@@ -1313,9 +1313,11 @@ async function loadFromServer(){
         GAS.post('bulkOperarios', ST.ops).catch(()=>{});
       }
 
-      // Cargar registros — Array.isArray para distinguir [] válido de null/error
+      // Cargar registros — solo sobreescribir si GAS tiene datos
+      // Si GAS devuelve [] pero localStorage tiene datos, mantener localStorage
       const recs = await GAS.get('getRegistros');
-      if(Array.isArray(recs)){
+      if(Array.isArray(recs) && recs.length > 0){
+        // GAS tiene datos — usar GAS como fuente de verdad
         ST.cortes=[]; ST.prods=[]; ST.exec={};
         recs.forEach(r=>{
           r.conjunto = r.conjunto || r.cj || '';
@@ -1324,7 +1326,6 @@ async function loadFromServer(){
           r.pesoParts= Number(r.pesoParts||r.pesoPzas) || 0;
           r.sobPeso  = Number(r.sobPeso||r.sob_peso) || 0;
           r.desperdicio = Number(r.desperdicio) || 0;
-          // Tipo de material y figura irregular
           r.plTipo   = r.pl_tipo || 'plancha';
           r.esIrreg  = r.pl_irreg == 1 || r.pl_tipo === 'figura_irreg';
           r.irregDetalle = r.pl_irreg_detalle || '';
@@ -1335,6 +1336,18 @@ async function loadFromServer(){
           }
         });
         LS.save('cortes',ST.cortes); LS.save('prods',ST.prods);
+      } else if(Array.isArray(recs) && recs.length === 0){
+        // GAS vacío — mantener datos locales, intentar re-sincronizar
+        const localCortes = LS.load('cortes',[]);
+        const localProds  = LS.load('prods',[]);
+        if(localCortes.length > 0 || localProds.length > 0){
+          // Hay datos locales — mantenerlos y reenviar al GAS
+          _loadFromLS();
+          const todosLocal = [...localCortes, ...localProds];
+          todosLocal.forEach(r => GAS.post('addRegistro', r).catch(()=>{}));
+          if(si){ si.textContent=`🟡 Re-sincronizando ${todosLocal.length} registros...`; si.style.color='var(--warnt)'; }
+          return;
+        }
       }
       const tot=ST.cortes.length+ST.prods.length;
       if(si){ si.textContent=`🟢 Google conectado — ${tot} registros`; si.style.color='var(--gt)'; }
