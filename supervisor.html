@@ -1968,6 +1968,11 @@ function supCalcPesoSob(s){
   const t=s.tipo||'plancha', q=s.qty||1;
   let pu=0;
   if(t==='plancha'){ if(s.esp&&s.ancho&&s.largo) pu=s.esp*s.ancho*s.largo*D_SUP; }
+  else if(t==='forma_l'&&s.esp&&s.ancho&&s.largo){
+    const areaTotal=s.ancho*s.largo;
+    const areaCorte=(s.ancho_corte||0)*(s.largo_corte||0);
+    pu=s.esp*(areaTotal-areaCorte)*D_SUP;
+  }
   else if(t==='perfil'){ if(s.kgm&&s.largo) pu=s.kgm*s.largo/1000; }
   else if(t==='manual') pu=s.pesoManual||0;
   return parseFloat((pu*q).toFixed(3));
@@ -2241,7 +2246,8 @@ function supSobranteHTML(s,i){
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <span style="font-size:12px;font-weight:700;color:#166534">📦 Sobrante ${i+1}</span>
         <select id="ss-tipo-${i}" style="font-size:12px;border:1px solid #86efac;border-radius:6px;padding:2px 6px;background:#f0fdf4" onchange="supChgSobTipo(${i})">
-          <option value="plancha" ${s.tipo==='plancha'?'selected':''}>Plancha / Placa</option>
+          <option value="plancha" ${s.tipo==='plancha'?'selected':''}>Plancha rect.</option>
+          <option value="forma_l" ${s.tipo==='forma_l'?'selected':''}>Forma en L</option>
           <option value="perfil" ${s.tipo==='perfil'?'selected':''}>Perfil (por largo)</option>
           <option value="manual" ${s.tipo==='manual'?'selected':''}>Peso manual</option>
         </select>
@@ -2261,6 +2267,20 @@ function supSobranteHTML(s,i){
       <div class="fg fix"><label>Largo (mm)</label><input type="number" id="ss-largo-${i}" value="${s.largo||''}" placeholder="mm" oninput="supUpdSob(${i})" style="border-color:#86efac"></div>
       <div class="fg fix" style="min-width:60px"><label>Cant.</label><input type="number" id="ss-qty-${i}" value="${s.qty||1}" min="1" oninput="supUpdSob(${i})" style="border-color:#86efac"></div>
       <div class="fg"><label>Ubicación</label><input type="text" id="ss-ref-${i}" value="${s.ref||''}" placeholder="Rack A-3..." style="border-color:#86efac"></div>
+    </div>`:s.tipo==='forma_l'?`<div>
+      <div style="font-size:11px;color:#065f46;font-weight:700;margin-bottom:4px">📐 Rectángulo envolvente</div>
+      <div class="frow" style="margin-bottom:4px">
+        <div class="fg fix"><label>Esp (mm)</label><input type="number" id="ss-esp-${i}" value="${s.esp||''}" placeholder="12" oninput="supUpdSob(${i})" style="border-color:#86efac"></div>
+        <div class="fg fix"><label>Ancho total (mm)</label><input type="number" id="ss-ancho-${i}" value="${s.ancho||''}" placeholder="2500" oninput="supUpdSob(${i})" style="border-color:#86efac"></div>
+        <div class="fg fix"><label>Largo total (mm)</label><input type="number" id="ss-largo-${i}" value="${s.largo||''}" placeholder="12000" oninput="supUpdSob(${i})" style="border-color:#86efac"></div>
+      </div>
+      <div style="font-size:11px;color:#92400e;font-weight:700;margin-bottom:4px">✂ Corte (zona que falta)</div>
+      <div class="frow">
+        <div class="fg fix"><label>Ancho corte (mm)</label><input type="number" id="ss-ancho-corte-${i}" value="${s.ancho_corte||''}" placeholder="1380" oninput="supUpdSob(${i})" style="border-color:#fcd34d"></div>
+        <div class="fg fix"><label>Largo corte (mm)</label><input type="number" id="ss-largo-corte-${i}" value="${s.largo_corte||''}" placeholder="9000" oninput="supUpdSob(${i})" style="border-color:#fcd34d"></div>
+        <div class="fg fix" style="min-width:60px"><label>Cant.</label><input type="number" id="ss-qty-${i}" value="${s.qty||1}" min="1" oninput="supUpdSob(${i})" style="border-color:#86efac"></div>
+        <div class="fg"><label>Ubicación</label><input type="text" id="ss-ref-${i}" value="${s.ref||''}" placeholder="Rack A-3..." style="border-color:#86efac"></div>
+      </div>
     </div>`:s.tipo==='perfil'?`<div class="frow">
       <div class="fg fix"><label>Largo sobrante (mm)</label><input type="number" id="ss-largo-${i}" value="${s.largo||''}" placeholder="mm" oninput="supUpdSob(${i})" style="border-color:#86efac"></div>
       <div class="fg fix" style="min-width:60px"><label>Cant.</label><input type="number" id="ss-qty-${i}" value="${s.qty||1}" min="1" oninput="supUpdSob(${i})" style="border-color:#86efac"></div>
@@ -2294,6 +2314,7 @@ function supUpdSob(i){
   s.matIdx=parseInt(document.getElementById(`ss-mat-${i}`)?.value)||0;
   s.dest=document.getElementById(`ss-dest-${i}`)?.value||'stock';
   s.esp=g(`ss-esp-${i}`); s.ancho=g(`ss-ancho-${i}`); s.largo=g(`ss-largo-${i}`);
+  s.ancho_corte=g(`ss-ancho-corte-${i}`); s.largo_corte=g(`ss-largo-corte-${i}`);
   s.qty=g(`ss-qty-${i}`)||1; s.kgm=g(`ss-kgm-${i}`);
   s.pesoManual=g(`ss-pm-${i}`); s.desc=sv2(`ss-desc-${i}`);
   const peso=supCalcPesoSob(s);
