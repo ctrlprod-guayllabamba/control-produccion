@@ -701,10 +701,67 @@ global.Chart = class {
       ✂ Piezas cortadas
       <span style="font-size:9px;font-weight:400;color:#6b7280;text-transform:none"> — registra cada subparte con sus dimensiones</span>
     </div>
-    <div id="sup-piezas-list"></div>
-    <button onclick="supAddPieza()" style="width:100%;padding:.5rem;background:#f0fdf4;color:#065f46;border:1.5px dashed #86efac;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:.5rem">
-      + Agregar pieza / subparte
-    </button>
+
+    <!-- Toggle descomposición -->
+    <div id="sup-toggle-desp" style="display:none;background:#eef4ff;border:1.5px solid #bfdbfe;border-radius:10px;padding:10px 14px;margin-bottom:.75rem">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <div style="font-size:13px;font-weight:700;color:#1e40af">Descomponer en sub-piezas</div>
+          <div style="font-size:11px;color:#3b82f6;margin-top:1px">Para perfiles I/H formados por patines y alma</div>
+        </div>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+          <input type="checkbox" id="sup-chk-desp" onchange="supToggleDescomp()" style="width:18px;height:18px;cursor:pointer">
+          <span id="sup-chk-lbl" style="font-size:12px;color:#1e40af;font-weight:700">Activar</span>
+        </label>
+      </div>
+    </div>
+
+    <!-- Vista normal -->
+    <div id="sup-piezas-normal">
+      <div id="sup-piezas-list"></div>
+      <button onclick="supAddPieza()" style="width:100%;padding:.5rem;background:#f0fdf4;color:#065f46;border:1.5px dashed #86efac;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:.5rem">
+        + Agregar pieza / subparte
+      </button>
+    </div>
+
+    <!-- Vista descompuesta -->
+    <div id="sup-piezas-desp" style="display:none">
+      <div style="font-size:11px;color:#1e40af;background:#eef4ff;border-radius:8px;padding:8px 10px;margin-bottom:.75rem">
+        ℹ Ingresa la cantidad real de piezas cortadas para cada sub-pieza de forma independiente.
+      </div>
+      <!-- Panel progreso -->
+      <div id="sup-prog-vigas" style="display:none;background:#1a2b4a;border-radius:10px;padding:.875rem;margin-bottom:.75rem;color:#fff">
+        <div style="font-size:10px;font-weight:700;opacity:.7;text-transform:uppercase;margin-bottom:.625rem">📊 Progreso del plan</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:.625rem">
+          <div style="background:rgba(255,255,255,.08);border-radius:8px;padding:8px;text-align:center">
+            <div style="font-size:9px;opacity:.6;margin-bottom:2px">PLAN VIGAS</div>
+            <div id="sup-prog-plan" style="font-size:22px;font-weight:800;color:#93c5fd">—</div>
+          </div>
+          <div style="background:rgba(134,239,172,.15);border-radius:8px;padding:8px;text-align:center">
+            <div style="font-size:9px;opacity:.6;margin-bottom:2px">VIGAS LISTAS</div>
+            <div id="sup-prog-hechas" style="font-size:22px;font-weight:800;color:#86efac">0</div>
+          </div>
+          <div style="background:rgba(252,165,165,.15);border-radius:8px;padding:8px;text-align:center">
+            <div style="font-size:9px;opacity:.6;margin-bottom:2px">FALTAN</div>
+            <div id="sup-prog-faltan" style="font-size:22px;font-weight:800;color:#fca5a5">—</div>
+          </div>
+        </div>
+        <div style="background:rgba(255,255,255,.08);border-radius:6px;height:8px;overflow:hidden;margin-bottom:.5rem">
+          <div id="sup-prog-bar" style="height:100%;background:#86efac;border-radius:6px;transition:width .3s;width:0%"></div>
+        </div>
+        <div id="sup-prog-subpiezas" style="font-size:11px;opacity:.8"></div>
+      </div>
+      <div id="sup-subpiezas-list"></div>
+      <button onclick="supAddSubPieza()" style="width:100%;padding:.5rem;background:#eef4ff;color:#1e40af;border:1.5px dashed #93c5fd;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:.5rem">
+        + Agregar sub-pieza
+      </button>
+      <div id="sup-desp-total" style="display:none;background:#1e40af;border-radius:8px;padding:8px 12px;margin-bottom:.5rem">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:12px;color:#bfdbfe">Total plancha este registro</span>
+          <span id="sup-desp-total-kg" style="font-size:15px;font-weight:700;color:#fff">0.0 kg</span>
+        </div>
+      </div>
+    </div>
 
     <!-- Balance -->
     <div id="sup-balance-box" style="display:none;background:#1a2b4a;color:#fff;border-radius:10px;padding:.875rem;margin-bottom:.75rem">
@@ -1628,6 +1685,21 @@ function getCortadoQty(conjunto, parte) {
   return ST.cortes.filter(c=>c.conjunto===conjunto&&c.parte===parte).reduce((s,c)=>s+c.qty,0);
 }
 
+function getCortadoKg(conjunto, parte) {
+  return ST.cortes.filter(c=>c.conjunto===conjunto&&c.parte===parte)
+    .reduce((s,c)=>s+Number(c.pesoParts||c.pesoPzas||0),0);
+}
+
+function getAvanceCjKg(cj) {
+  // Avance del conjunto como % de kg cortados vs kg plan total
+  const c = TEKLA.conjuntos.find(c=>c.conjunto===cj);
+  if(!c) return {pct:0, kgEjec:0, kgPlan:0};
+  const kgPlan = c.peso_total || c.partes.reduce((s,p)=>s+(p.peso_total||0),0);
+  const kgEjec = c.partes.reduce((s,p)=>s+getCortadoKg(cj,p.parte),0);
+  const pct = kgPlan>0 ? Math.min(100, kgEjec/kgPlan*100) : 0;
+  return {pct, kgEjec, kgPlan};
+}
+
 // Get all partes flattened
 function allPartes() {
   const res = [];
@@ -1681,36 +1753,38 @@ function renderDashboard() {
   const totalProd = ST.prods.reduce((s,p)=>s+p.qty,0);
   const totalStock = ST.cortes.reduce((s,c)=>s+getSobrantesDeCorte(c).filter(x=>x.dest==='stock').reduce((a,x)=>a+x.peso,0),0);
   const totalDesp = ST.cortes.reduce((s,c)=>s+(c.desperdicio||0),0);
-  const totalKgEjec = ST.cortes.reduce((s,c)=>s+(c.pesoParts||c.pesoPzas||0),0);
+  const totalKgEjec = ST.cortes.reduce((s,c)=>s+Number(c.pesoParts||c.pesoPzas||0),0);
   const pendPartes = allPartes().reduce((s,p)=>s+Math.max(0,p.cantidad-getCortadoQty(p.conjunto,p.parte)),0);
-  const pctGlobal = partesTotal>0?Math.min(100,(partesTotal-pendPartes)/partesTotal*100):0;
+  // Avance global por kg
+  const pctGlobalKg = totalKgPlan>0?Math.min(100,(totalKgEjec/totalKgPlan*100)):0;
+  const pctGlobal = pctGlobalKg;
 
   // == KPIs ==
   document.getElementById('kpi-main').innerHTML = `
     <div class="kpi k-blue"><div class="kpi-lbl">Partes Tekla</div><div class="kpi-val">${partesTotal.toLocaleString()}</div><div class="kpi-sub">${TEKLA.conjuntos.length} conjuntos</div></div>
     <div class="kpi k-warn"><div class="kpi-lbl">⚠ Pendientes</div><div class="kpi-val">${pendPartes.toLocaleString()}</div><div class="kpi-sub">por fabricar</div></div>
-    <div class="kpi k-orange"><div class="kpi-lbl">Avance global</div><div class="kpi-val">${pctGlobal.toFixed(1)}%</div><div class="kpi-sub">${(partesTotal-pendPartes).toLocaleString()} ejecutadas</div></div>
+    <div class="kpi k-orange"><div class="kpi-lbl">Avance global</div><div class="kpi-val">${pctGlobal.toFixed(1)}%</div><div class="kpi-sub">${totalKgEjec.toFixed(0)} kg de ${totalKgPlan.toFixed(0)} kg</div></div>
     <div class="kpi k-green"><div class="kpi-lbl">Kg ejecutados</div><div class="kpi-val">${(totalKgEjec/1000).toFixed(1)}t</div><div class="kpi-sub">de ${(totalKgPlan/1000).toFixed(0)}t plan</div></div>
     <div class="kpi"><div class="kpi-lbl">Stock sobrante</div><div class="kpi-val">${totalStock.toFixed(0)}</div><div class="kpi-sub">kg reutilizable</div></div>
     <div class="kpi k-warn" style="background:#f8d7da;border-color:#f5c6cb;"><div class="kpi-lbl" style="color:#721c24;">Desperdicio</div><div class="kpi-val" style="color:#721c24;">${totalDesp.toFixed(0)}</div><div class="kpi-sub" style="color:#721c24;">kg total</div></div>`;
   if(document.getElementById('dash-pct-global'))
     document.getElementById('dash-pct-global').textContent = pctGlobal.toFixed(1)+'% avance';
 
-  // == CHART 1: Avance por conjunto (barras horizontal) ==
+  // == CHART 1: Avance por conjunto (% kg cortado vs plan) ==
   const cjLabels = TEKLA.conjuntos.map(c=>c.conjunto);
-  const cjPlan   = TEKLA.conjuntos.map(c=>c.cantidad);
-  const cjEjec   = TEKLA.conjuntos.map(c=>ST.cortes.filter(x=>(x.conjunto||x.cj)===c.conjunto).reduce((s,x)=>s+x.qty,0));
+  const cjPlan   = TEKLA.conjuntos.map(c=>100); // 100% es el máximo
+  const cjEjec   = TEKLA.conjuntos.map(c=>getAvanceCjKg(c.conjunto).pct);
   mkChart('chart-conjuntos','bar',{
     labels: cjLabels,
     datasets:[
-      {label:'Planificado', data:cjPlan, backgroundColor:'#d6e4f7', borderColor:'#4a7ab5', borderWidth:1, borderRadius:3},
-      {label:'Ejecutado',   data:cjEjec, backgroundColor:'#e8631a', borderColor:'#c4521a', borderWidth:1, borderRadius:3},
+      {label:'Plan (100%)', data:cjPlan, backgroundColor:'#d6e4f7', borderColor:'#4a7ab5', borderWidth:1, borderRadius:3},
+      {label:'Ejecutado (%kg)', data:cjEjec, backgroundColor:'#e8631a', borderColor:'#c4521a', borderWidth:1, borderRadius:3},
     ]
   },{
     indexAxis:'y',
-    plugins:{legend:{position:'top'}},
+    plugins:{legend:{position:'top'},tooltip:{callbacks:{label:ctx=>`${ctx.dataset.label}: ${ctx.parsed.x.toFixed(1)}%`}}},
     scales:{
-      x:{grid:{color:'#f0f2f6'}, ticks:{font:{size:10}}},
+      x:{grid:{color:'#f0f2f6'}, ticks:{font:{size:10},callback:v=>v+'%'}, max:100},
       y:{grid:{display:false}, ticks:{font:{size:10}}}
     }
   });
@@ -1914,6 +1988,7 @@ function renderTekla() {
   TEKLA.conjuntos.forEach(c=>{
     const match=(!tp||c.perfil===tp)&&c.partes.some(p=>!q||(c.conjunto+p.parte+p.perfil).toLowerCase().includes(q))&&(!mat||c.material===mat);
     if(!match)return; cjCount++;
+    const cjAv=getAvanceCjKg(c.conjunto);
     rows+=`<tr class="row-cj">
       <td colspan="2"><strong>${c.conjunto}</strong></td>
       <td colspan="2">${typeBadge(c.perfil)}</td>
@@ -1923,13 +1998,21 @@ function renderTekla() {
       <td>${c.material}</td>
       <td class="r">${c.peso_unit.toFixed(2)}</td>
       <td class="r"><strong>${c.peso_total.toFixed(0)}</strong></td>
-      <td class="r">—</td><td class="r">—</td>
+      <td class="r" style="color:#166534;font-weight:700">${cjAv.kgEjec.toFixed(0)} kg</td>
+      <td class="r">
+        <div style="background:#e5e7eb;border-radius:3px;height:5px;overflow:hidden;margin-bottom:2px">
+          <div style="background:${cjAv.pct>=100?'#166534':'#e8631a'};height:100%;width:${Math.min(100,cjAv.pct).toFixed(0)}%;border-radius:3px"></div>
+        </div>
+        <span style="font-weight:800;color:${cjAv.pct>=100?'#166534':'#b45309'}">${cjAv.pct.toFixed(1)}%</span>
+      </td>
       <td class="c no-print"><button class="btn btn-g btn-sm" onclick="openModal('${c.conjunto}')">Ver</button></td>
     </tr>`;
     c.partes.forEach(p=>{
       if(q&&!(c.conjunto+p.parte+p.perfil).toLowerCase().includes(q))return;
       const ej=getCortadoQty(c.conjunto,p.parte);
+      const ejKg=getCortadoKg(c.conjunto,p.parte);
       const pend=Math.max(0,p.cantidad-ej);
+      const pct=p.peso_total>0?Math.min(100,ejKg/p.peso_total*100):0;
       rows+=`<tr class="row-parte">
         <td>${c.conjunto}</td><td>${p.parte}</td>
         <td class="mono">${p.perfil}</td><td>—</td>
@@ -1939,8 +2022,13 @@ function renderTekla() {
         <td>${p.material}</td>
         <td class="r">${p.peso_unit.toFixed(2)}</td>
         <td class="r">${p.peso_total.toFixed(0)}</td>
-        <td class="r" style="color:#166534;font-weight:700;">${ej}</td>
-        <td class="r"><span style="font-weight:800;color:${pend>0?'#b45309':'#166534'}">${pend}</span></td>
+        <td class="r" style="color:#166534;font-weight:700;">${ej} <span style="font-size:10px;color:#6b7280">(${ejKg.toFixed(0)} kg)</span></td>
+        <td class="r"><span style="font-weight:800;color:${pend>0?'#b45309':'#166534'}">${pend}</span>
+          <div style="background:#e5e7eb;border-radius:4px;height:4px;margin-top:3px;overflow:hidden">
+            <div style="background:${pct>=100?'#166534':'#e8631a'};height:100%;width:${pct.toFixed(0)}%;border-radius:4px"></div>
+          </div>
+          <span style="font-size:10px;color:${pct>=100?'#166534':'#b45309'}">${pct.toFixed(1)}%</span>
+        </td>
         <td class="c no-print"></td>
       </tr>`;
     });
@@ -2231,6 +2319,167 @@ function supAddPieza(){
 }
 function supRmPieza(i){ supPiezas.splice(i,1); supRenderPiezas(); }
 
+// ── Descomposición sub-piezas supervisor ─────────────────────
+let supSubPiezas = [];
+let _supDescompActivo = false;
+const PIEZAS_HI_SUP = {
+  'HI300-10-12*300': [{tipo:'Alma',esp:10,ancho:276,qty:1},{tipo:'Patín',esp:12,ancho:300,qty:2}],
+  'HI250-10-20*300': [{tipo:'Alma',esp:10,ancho:210,qty:1},{tipo:'Patín',esp:20,ancho:300,qty:2}],
+  'HI250-10-20*250': [{tipo:'Alma',esp:10,ancho:210,qty:1},{tipo:'Patín',esp:20,ancho:250,qty:2}],
+  'HI234-8-12*180':  [{tipo:'Alma',esp:8, ancho:210,qty:1},{tipo:'Patín',esp:12,ancho:180,qty:2}],
+};
+
+function supToggleDescomp(){
+  const chk=document.getElementById('sup-chk-desp');
+  _supDescompActivo=chk?.checked||false;
+  document.getElementById('sup-piezas-normal').style.display=_supDescompActivo?'none':'';
+  document.getElementById('sup-piezas-desp').style.display=_supDescompActivo?'':'none';
+  document.getElementById('sup-chk-lbl').textContent=_supDescompActivo?'Activado':'Activar';
+  if(_supDescompActivo&&supSubPiezas.length===0) supInitSubPiezas();
+  supRecalc();
+}
+
+function supInitSubPiezas(){
+  const sel=document.getElementById('c-parte');
+  const perfil=sel?.options[sel.selectedIndex]?.text?.match(/HI[\d\-\*]+/)?.[0]||'';
+  const piezasHI=PIEZAS_HI_SUP[perfil]||[];
+  const largo=parseFloat(document.getElementById('c-parte')?.options[document.getElementById('c-parte').selectedIndex]?.dataset?.lng||3000);
+  if(piezasHI.length>0){
+    supSubPiezas=piezasHI.map(p=>({nombre:p.tipo,esp:p.esp,ancho:p.ancho,largo,qtyPorViga:p.qty,qty:0,colada:'',peso:0}));
+  } else {
+    supSubPiezas=[{nombre:'Sub-pieza 1',esp:0,ancho:0,largo:3000,qtyPorViga:1,qty:0,colada:'',peso:0}];
+  }
+  supRenderSubPiezas();
+}
+
+function supAddSubPieza(){
+  const n=supSubPiezas.length+1;
+  supSubPiezas.push({nombre:'Sub-pieza '+n,esp:0,ancho:0,largo:3000,qtyPorViga:1,qty:0,colada:'',peso:0});
+  supRenderSubPiezas();
+}
+
+function supRmSubPieza(i){ supSubPiezas.splice(i,1); supRenderSubPiezas(); supRecalcDesp(); }
+
+function supRenderSubPiezas(){
+  const cont=document.getElementById('sup-subpiezas-list'); if(!cont) return;
+  const colors=[
+    {bg:'#E6F1FB',bd:'#B5D4F4',hd:'#0C447C',ac:'#185FA5',lt:'#B5D4F4'},
+    {bg:'#EAF3DE',bd:'#C0DD97',hd:'#27500A',ac:'#3B6D11',lt:'#C0DD97'},
+    {bg:'#FAEEDA',bd:'#FAC775',hd:'#633806',ac:'#854F0B',lt:'#FAC775'},
+    {bg:'#FBEAF0',bd:'#F4C0D1',hd:'#4B1528',ac:'#993556',lt:'#F4C0D1'},
+  ];
+  cont.innerHTML=supSubPiezas.map((s,i)=>{
+    const c=colors[i%colors.length];
+    const qty=s.qty||0;
+    const peso=s.esp&&s.ancho&&s.largo&&qty?s.esp*s.ancho*s.largo*D_SUP*qty:0;
+    supSubPiezas[i].peso=peso;
+    return `<div style="border:1.5px solid ${c.bd};border-radius:10px;padding:.875rem;margin-bottom:.625rem;background:${c.bg}">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
+        <div style="display:flex;gap:6px;align-items:center">
+          <span style="font-size:12px;font-weight:700;color:${c.hd}">Sub-pieza ${i+1}</span>
+          <input type="text" value="${s.nombre}" placeholder="Nombre"
+            style="font-size:12px;border:0.5px solid ${c.bd};border-radius:4px;padding:3px 8px;background:white;color:${c.hd};width:100px"
+            oninput="supSubPiezas[${i}].nombre=this.value">
+        </div>
+        ${supSubPiezas.length>1?`<button onclick="supRmSubPieza(${i})" style="background:#fee2e2;color:#991b1b;border:none;border-radius:6px;padding:2px 8px;font-size:12px;cursor:pointer">✕</button>`:''}
+      </div>
+      <input type="text" value="${s.colada||''}" placeholder="N° Colada (opcional)"
+        style="width:100%;padding:6px;border:1px solid ${c.bd};border-radius:6px;font-size:12px;background:white;margin-bottom:.5rem"
+        oninput="supSubPiezas[${i}].colada=this.value">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:.5rem">
+        <div><label style="font-size:10px;color:${c.ac}">Esp (mm)</label>
+          <input type="number" id="ssp-esp-${i}" value="${s.esp||''}" placeholder="12"
+            style="width:100%;padding:7px;border:1.5px solid ${c.bd};border-radius:8px;font-size:16px;font-weight:700;text-align:center"
+            oninput="supUpdSubPieza(${i})"></div>
+        <div><label style="font-size:10px;color:${c.ac}">Ancho (mm)</label>
+          <input type="number" id="ssp-ancho-${i}" value="${s.ancho||''}" placeholder="300"
+            style="width:100%;padding:7px;border:1.5px solid ${c.bd};border-radius:8px;font-size:16px;font-weight:700;text-align:center"
+            oninput="supUpdSubPieza(${i})"></div>
+        <div><label style="font-size:10px;color:${c.ac}">Largo (mm)</label>
+          <input type="number" id="ssp-largo-${i}" value="${s.largo||''}" placeholder="3000"
+            style="width:100%;padding:7px;border:1.5px solid ${c.bd};border-radius:8px;font-size:16px;font-weight:700;text-align:center"
+            oninput="supUpdSubPieza(${i})"></div>
+      </div>
+      <div style="font-size:10px;color:${c.ac};font-weight:700;margin-bottom:4px">CANT. PIEZAS CORTADAS</div>
+      <div class="frow" style="margin-bottom:4px">
+        <input type="number" id="ssp-qty-${i}" value="${qty||''}" placeholder="0"
+          style="flex:1;text-align:center;font-size:24px;font-weight:800;border:2px solid ${c.ac};border-radius:10px;padding:.25rem;color:${c.hd}"
+          oninput="supUpdSubPieza(${i})">
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-bottom:.5rem">
+        ${[5,10,20,50].map(n=>`<button onclick="supAdjSubPieza(${i},${n})" style="padding:4px;background:white;color:${c.ac};border:0.5px solid ${c.bd};border-radius:6px;font-size:11px;font-weight:700;cursor:pointer">+${n}</button>`).join('')}
+      </div>
+      <div style="background:${c.ac};border-radius:6px;padding:6px 10px;display:flex;justify-content:space-between">
+        <span style="font-size:11px;color:${c.lt}">Peso calculado</span>
+        <span id="ssp-peso-${i}" style="font-size:13px;font-weight:700;color:white">${peso>0?`${qty} pzas · ${peso.toFixed(1)} kg`:'—'}</span>
+      </div>
+    </div>`;
+  }).join('');
+  supRecalcDesp();
+}
+
+function supUpdSubPieza(i){
+  const s=supSubPiezas[i]; if(!s) return;
+  s.esp=parseFloat(document.getElementById(`ssp-esp-${i}`)?.value)||0;
+  s.ancho=parseFloat(document.getElementById(`ssp-ancho-${i}`)?.value)||0;
+  s.largo=parseFloat(document.getElementById(`ssp-largo-${i}`)?.value)||0;
+  s.qty=parseFloat(document.getElementById(`ssp-qty-${i}`)?.value)||0;
+  const peso=s.esp&&s.ancho&&s.largo&&s.qty?s.esp*s.ancho*s.largo*D_SUP*s.qty:0;
+  s.peso=peso;
+  const el=document.getElementById(`ssp-peso-${i}`);
+  if(el) el.textContent=peso>0?`${s.qty} pzas · ${peso.toFixed(1)} kg`:'—';
+  supRecalcDesp();
+}
+
+function supAdjSubPieza(i,n){
+  const el=document.getElementById(`ssp-qty-${i}`);
+  if(el){el.value=Math.max(0,(parseInt(el.value||0)+n));supUpdSubPieza(i);}
+}
+
+function supRecalcDesp(){
+  const totalPeso=supSubPiezas.reduce((s,p)=>s+(p.peso||0),0);
+  const totalBox=document.getElementById('sup-desp-total');
+  const totalKg=document.getElementById('sup-desp-total-kg');
+  if(totalBox) totalBox.style.display=totalPeso>0?'':'none';
+  if(totalKg) totalKg.textContent=totalPeso.toFixed(2)+' kg';
+  // Progreso
+  const sel=document.getElementById('c-parte');
+  const opt=sel?.options[sel.selectedIndex];
+  const plan=parseInt(opt?.dataset?.plan||0);
+  if(plan>0&&supSubPiezas.some(s=>s.qty>0)){
+    const perfil=opt?.text?.match(/HI[\d\-\*]+/)?.[0]||'';
+    const piezasHI=PIEZAS_HI_SUP[perfil]||[];
+    let vigasMin=plan;
+    const info=supSubPiezas.map((s,i)=>{
+      const qpv=piezasHI[i]?.qty||1;
+      const vigas=Math.floor((s.qty||0)/qpv);
+      const faltanPzas=Math.max(0,plan*qpv-(s.qty||0));
+      vigasMin=Math.min(vigasMin,vigas);
+      return {nombre:s.nombre,qty:s.qty||0,planTotal:plan*qpv,faltanPzas,faltanVigas:Math.max(0,plan-vigas)};
+    });
+    const pct=plan>0?Math.min(100,vigasMin/plan*100):0;
+    const prog=document.getElementById('sup-prog-vigas');
+    if(prog){
+      prog.style.display='';
+      document.getElementById('sup-prog-plan').textContent=plan;
+      document.getElementById('sup-prog-hechas').textContent=vigasMin;
+      document.getElementById('sup-prog-faltan').textContent=Math.max(0,plan-vigasMin);
+      document.getElementById('sup-prog-bar').style.width=pct.toFixed(0)+'%';
+      const subEl=document.getElementById('sup-prog-subpiezas');
+      if(subEl) subEl.innerHTML='<div style="margin-bottom:4px;opacity:.6;font-size:10px;text-transform:uppercase">Sub-piezas faltantes:</div>'+
+        info.map(sp=>`<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid rgba(255,255,255,.08)">
+          <span>${sp.nombre}</span>
+          <span><span style="color:#86efac">${sp.qty}/${sp.planTotal}</span>
+          <span style="margin-left:6px;background:rgba(252,165,165,.2);border-radius:4px;padding:1px 6px;color:#fca5a5">faltan ${sp.faltanPzas} pzas (${sp.faltanVigas} vigas)</span></span>
+        </div>`).join('');
+    }
+  } else {
+    const prog=document.getElementById('sup-prog-vigas');
+    if(prog) prog.style.display='none';
+  }
+  supRecalc();
+}
+
 function supChgPiezaForma(i){
   const f=document.getElementById(`sp-forma-${i}`)?.value||'rectangular';
   supPiezas[i]={...supPiezas[i],forma:f};
@@ -2405,6 +2654,11 @@ function supRecalc(){
 
 function clearCorte(){
   supMateriales=[]; supPiezas=[]; supSobrantes=[];
+  _supDescompActivo=false; supSubPiezas=[];
+  const chk=document.getElementById('sup-chk-desp');if(chk)chk.checked=false;
+  const toggleDiv=document.getElementById('sup-toggle-desp');if(toggleDiv)toggleDiv.style.display='none';
+  document.getElementById('sup-piezas-normal').style.display='';
+  document.getElementById('sup-piezas-desp').style.display='none';
   ['c-fecha','c-turno','c-op','c-cj','c-parte','c-qty','c-cal','c-obs','c-desp','c-aprovech'].forEach(id=>{
     const el=document.getElementById(id);
     if(el){if(el.tagName==='SELECT')el.selectedIndex=0; else el.value='';}
@@ -2451,6 +2705,20 @@ function onParteChange() {
   if(!opt||!opt.value){document.getElementById('c-parte-info').style.display='none';return;}
   document.getElementById('c-parte-info').style.display='block';
   updateParteInfo();
+  // Mostrar toggle descomposición solo para perfiles HI
+  const perfil=opt.text||'';
+  const esHI=Object.keys(PIEZAS_HI_SUP).some(k=>perfil.includes(k));
+  const toggleDiv=document.getElementById('sup-toggle-desp');
+  if(toggleDiv) toggleDiv.style.display=esHI?'':'none';
+  // Reset descomposición al cambiar de parte
+  if(!esHI && _supDescompActivo){
+    _supDescompActivo=false; supSubPiezas=[];
+    const chk=document.getElementById('sup-chk-desp');
+    if(chk) chk.checked=false;
+    document.getElementById('sup-piezas-normal').style.display='';
+    document.getElementById('sup-piezas-desp').style.display='none';
+    document.getElementById('sup-chk-lbl').textContent='Activar';
+  }
 }
 
 function updateParteInfo(){
@@ -2745,9 +3013,66 @@ function addCorte() {
   const fecha=document.getElementById('c-fecha').value;
   const cj=document.getElementById('c-cj').value;
   const parte=document.getElementById('c-parte').value;
-  const qty=parseFloat(document.getElementById('c-qty').value)||0;
-  if(!fecha||!cj||!parte||qty<=0){toast('⚠ Completa: fecha, conjunto, parte y cantidad');return;}
+  if(!fecha||!cj||!parte){toast('⚠ Completa: fecha, conjunto y parte');return;}
   if(!supMateriales.length){toast('⚠ Registra al menos un material');return;}
+
+  // Modo descompuesto
+  if(_supDescompActivo){
+    if(supSubPiezas.every(s=>!s.qty||s.qty<=0)){toast('⚠ Ingresa la cantidad de piezas de al menos una sub-pieza');return;}
+    const sel=document.getElementById('c-parte');
+    const opt=sel.options[sel.selectedIndex];
+    const perfil=opt?.text?.match(/HI[\d\-\*]+/)?.[0]||'';
+    const piezasHI=PIEZAS_HI_SUP[perfil]||[];
+    const vigasMin=piezasHI.length>0
+      ?Math.min(...supSubPiezas.map((s,i)=>Math.floor((s.qty||0)/(piezasHI[i]?.qty||1))))
+      :Math.min(...supSubPiezas.map(s=>s.qty||0));
+    const totalMat=supMateriales.reduce((s,m)=>s+(m.peso||supCalcPesoMat(m)),0);
+    const totalPesoDesp=supSubPiezas.reduce((s,p)=>s+(p.peso||0),0);
+    const totalSob=supSobrantes.reduce((s,sb)=>s+(sb.peso||supCalcPesoSob(sb)),0);
+    const desp=parseFloat(Math.max(0,totalMat-totalPesoDesp-totalSob).toFixed(2));
+    const opId=document.getElementById('c-op').value;
+    const op=ST.ops.find(o=>o.id==opId);
+    const m0=supMateriales[0]||{};
+    const sob0=supSobrantes[0]||{};
+    const piezasArr=supSubPiezas.filter(s=>s.qty>0).map(s=>({
+      forma:'rectangular',nombre:s.nombre,esp:s.esp,ancho:s.ancho,largo:s.largo,
+      qty:s.qty,colada:s.colada||'',peso:s.peso,descompuesto:true
+    }));
+    const rec={
+      id:Date.now(),fecha,turno:document.getElementById('c-turno').value,
+      tipo:'corte',fase:'Corte',conjunto:cj,cj,parte,pr:parte,
+      perfil:document.getElementById('c-parte').options[document.getElementById('c-parte').selectedIndex]?.text?.split('—')[1]?.trim()||'',
+      qty:Math.max(0,vigasMin),pesoParts:totalPesoDesp,pesoPzas:totalPesoDesp,
+      calidad:document.getElementById('c-cal').value,
+      obs:document.getElementById('c-obs').value.trim(),
+      opId,opNom:op?`${op.nom} ${op.ape}`:'—',opRol:op?.rol||'Cortador',
+      pl_planchas:JSON.stringify(supMateriales),
+      pl_tipo:m0.tipo||'plancha',pl_num:m0.colada||'—',pl_mat:m0.grado||'—',
+      pl_esp:m0.esp||0,pl_ancho:m0.ancho||0,pl_largo:m0.largo||0,
+      pl_qty:m0.qty||1,pl_peso:totalMat,
+      pl_cortes_por_plancha:JSON.stringify(piezasArr),
+      descompuesto:true,subpiezas:JSON.stringify(supSubPiezas),
+      sob_por_plancha:JSON.stringify(supSobrantes),
+      sob_hay:totalSob>0?'si':'no',sob_peso:totalSob,
+      sob_esp:sob0.esp||0,sob_ancho:sob0.ancho||0,sob_largo:sob0.largo||0,
+      sob_qty:sob0.qty||1,sob_colada:sob0.colada||'—',
+      sob_mat:m0.grado||'—',sob_dest:sob0.dest||'stock',
+      sob_ref:sob0.ref||'',desperdicio:desp,
+    };
+    ST.cortes.push(rec);addExec(cj,parte,'Corte',rec.qty);
+    saveAll();
+    if(GAS.configured()) GAS.post('addRegistro',rec).catch(()=>{});
+    _supDescompActivo=false;supSubPiezas=[];
+    const chk=document.getElementById('sup-chk-desp');if(chk)chk.checked=false;
+    document.getElementById('sup-piezas-normal').style.display='';
+    document.getElementById('sup-piezas-desp').style.display='none';
+    clearCorte();renderCorteHist();renderDashboard();
+    toast(`✓ Corte descompuesto: ${cj}/${parte} — ${rec.qty} vigas · ${piezasArr.length} sub-piezas · ${totalPesoDesp.toFixed(1)} kg`);
+    return;
+  }
+
+  const qty=parseFloat(document.getElementById('c-qty').value)||0;
+  if(qty<=0){toast('⚠ Completa: cantidad');return;}
 
   const sel=document.getElementById('c-parte');
   const opt=sel.options[sel.selectedIndex];
