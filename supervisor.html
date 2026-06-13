@@ -2239,7 +2239,7 @@ function supMatHTML(m,i){
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <span style="font-size:12px;font-weight:700;color:#1e40af">📋 Material ${i+1}</span>
         <select id="sm-tipo-${i}" style="font-size:12px;border:1px solid #bfdbfe;border-radius:6px;padding:2px 6px" onchange="supChgMatTipo(${i})">
-          ${Object.entries({plancha:'Plancha',angulo:'Ángulo L',ipe:'Viga I/HEB/HI',upn:'Canal U',tubo_rect:'Tubo rect.',tubo_cuad:'Tubo cuad.',tubo_circ:'Tubo circ.',barra_red:'Barra red.',barra_cuad:'Barra cuad.',correa_g:'Correa G/Z',manual:'Peso manual'}).map(([v,l])=>`<option value="${v}" ${m.tipo===v?'selected':''}>${l}</option>`).join('')}
+          ${Object.entries({plancha:'Plancha',desde_stock:'⟳ Desde stock',angulo:'Ángulo L',ipe:'Viga I/HEB/HI',upn:'Canal U',tubo_rect:'Tubo rect.',tubo_cuad:'Tubo cuad.',tubo_circ:'Tubo circ.',barra_red:'Barra red.',barra_cuad:'Barra cuad.',correa_g:'Correa G/Z',manual:'Peso manual'}).map(([v,l])=>`<option value="${v}" ${m.tipo===v?'selected':''}>${l}</option>`).join('')}
         </select>
         <input type="text" id="sm-colada-${i}" value="${m.colada||''}" placeholder="N° Colada" style="font-size:11px;border:1px solid #d1d5db;border-radius:6px;padding:2px 8px;width:120px" oninput="supUpdMat(${i})">
         <input type="text" id="sm-grado-${i}" value="${m.grado||'A588-50'}" placeholder="Grado acero" style="font-size:11px;border:1px solid #d1d5db;border-radius:6px;padding:2px 8px;width:90px" oninput="supUpdMat(${i})">
