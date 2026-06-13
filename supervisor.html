@@ -2046,10 +2046,17 @@ function renderTekla() {
     </tr>`;
     c.partes.forEach(p=>{
       if(q&&!(c.conjunto+p.parte+p.perfil).toLowerCase().includes(q))return;
-      const ej=getCortadoQty(c.conjunto,p.parte);
       const ejKg=getCortadoKg(c.conjunto,p.parte);
-      const pend=Math.max(0,p.cantidad-ej);
       const pct=p.peso_total>0?Math.min(100,ejKg/p.peso_total*100):0;
+      // Para vigas completas usar getVigasCompletas del conjunto
+      const {vigasCompletas, vigasPlan, detalle} = getVigasCompletas(c.conjunto);
+      const parteDetalle = detalle.find(d=>d.parte===p.parte);
+      // Ejecutado = vigas completas del conjunto (limitado por la parte más atrasada)
+      const ejVigas = vigasCompletas;
+      const pend = Math.max(0, vigasPlan - ejVigas);
+      // También mostrar piezas cortadas de esta parte específica
+      const piezasCortadas = parteDetalle ? parteDetalle.cortado : getCortadoQty(c.conjunto, p.parte);
+      const piezasFaltan = parteDetalle ? parteDetalle.faltanPiezas : Math.max(0, p.cantidad - piezasCortadas);
       rows+=`<tr class="row-parte">
         <td>${c.conjunto}</td><td>${p.parte}</td>
         <td class="mono">${p.perfil}</td><td>—</td>
@@ -2059,12 +2066,16 @@ function renderTekla() {
         <td>${p.material}</td>
         <td class="r">${p.peso_unit.toFixed(2)}</td>
         <td class="r">${p.peso_total.toFixed(0)}</td>
-        <td class="r" style="color:#166534;font-weight:700;">${ej} <span style="font-size:10px;color:#6b7280">(${ejKg.toFixed(0)} kg)</span></td>
-        <td class="r"><span style="font-weight:800;color:${pend>0?'#b45309':'#166534'}">${pend}</span>
+        <td class="r" style="color:#166534;font-weight:700;">
+          ${ejVigas} vigas
+          <div style="font-size:10px;color:#6b7280">${piezasCortadas}/${p.cantidad} pzas · ${ejKg.toFixed(0)} kg</div>
+        </td>
+        <td class="r">
+          <span style="font-weight:800;color:${pend>0?'#b45309':'#166534'}">${pend} vigas</span>
           <div style="background:#e5e7eb;border-radius:4px;height:4px;margin-top:3px;overflow:hidden">
             <div style="background:${pct>=100?'#166534':'#e8631a'};height:100%;width:${pct.toFixed(0)}%;border-radius:4px"></div>
           </div>
-          <span style="font-size:10px;color:${pct>=100?'#166534':'#b45309'}">${pct.toFixed(1)}%</span>
+          <span style="font-size:10px;color:${pend>0?'#b45309':'#166534'}">${pct.toFixed(1)}% kg · faltan ${piezasFaltan} pzas</span>
         </td>
         <td class="c no-print"></td>
       </tr>`;
@@ -4652,3 +4663,4 @@ document.addEventListener('DOMContentLoaded', async ()=>{
 </script>
 </body>
 </html>
+
