@@ -4370,13 +4370,23 @@ async function verSolicitudes(){
 
 async function corregirRegistro(corrId, recId){
   // Buscar el registro en ST.cortes
-  const r = ST.cortes.find(x=>String(x.id)===String(recId));
-  if(!r){ toast('⚠ Registro no encontrado — puede estar en GAS. Recarga primero.'); return; }
-  // Abrir modal de edición de sobrantes (mismo que ✏ Sob.)
+  let r = ST.cortes.find(x=>String(x.id)===String(recId));
+  if(!r){
+    // Intentar recargar del servidor
+    toast('🔄 Buscando registro en el servidor...');
+    await loadFromServer();
+    r = ST.cortes.find(x=>String(x.id)===String(recId));
+  }
+  if(!r){
+    toast('⚠ Registro no encontrado. Ve a Corte/Plancha → historial → botón ✏ Sob. para editar manualmente.');
+    return;
+  }
+  // Cerrar modal de solicitudes
+  document.querySelector('[id*="solicitudes"]')?.closest('.modal-overlay')?.remove();
+  // Abrir modal de edición de sobrantes
   editSobrante(r.id);
-  // Marcar corrección como procesada al guardar
+  // Al guardar, marcar corrección como procesada
   window._corrIdPendiente = corrId;
-  // Parchear saveSobrante para que también cierre la corrección
   const _origSave = window.saveSobrante;
   window.saveSobrante = async function(id){
     _origSave(id);
@@ -4386,7 +4396,7 @@ async function corregirRegistro(corrId, recId){
       window._corrIdPendiente = null;
     }
     verSolicitudes();
-    toast('✅ Registro corregido');
+    toast('✅ Registro corregido y solicitud cerrada');
   };
 }
 
