@@ -3279,7 +3279,7 @@ function renderCorteHist(){
         <span style="font-size:10px;color:${despColor}">${pct}%</span>
       </td>
       <td class="c no-print" style="white-space:nowrap">
-        <button class="btn btn-g btn-sm" style="margin-bottom:4px" onclick="editSobrante(${r.id})">✏ Sob.</button><br>
+        <button class="btn btn-g btn-sm" style="margin-bottom:4px" onclick="editRegistro(${r.id})">✏ Editar</button><br>
         <button class="btn btn-d btn-sm" onclick="delCorte(${r.id})">✕</button>
       </td>
     </tr>`;
@@ -3287,33 +3287,126 @@ function renderCorteHist(){
   :'<tr><td colspan="8" style="text-align:center;padding:1.5rem;color:var(--gm);">Sin cortes registrados</td></tr>';
 }
 
-function editSobrante(id){
+function editRegistro(id){
   const r=ST.cortes.find(x=>x.id===id); if(!r) return;
   const sobArr=(()=>{try{return JSON.parse(r.sob_por_plancha||'[]');}catch(e){return[];}})();
-  // Construir modal edición sobrante
-  const tipoOpts=['plancha','forma_l','perfil','manual'].map(t=>`<option value="${t}">${t==='plancha'?'Plancha rect.':t==='forma_l'?'Forma en L':t==='perfil'?'Perfil':'Manual'}</option>`).join('');
   const sobEdit = sobArr.length>0 ? sobArr : [{tipo:'plancha',esp:r.sob_esp||0,ancho:r.sob_ancho||0,largo:r.sob_largo||0,qty:r.sob_qty||1,colada:r.sob_colada||'',dest:r.sob_dest||'stock',peso:Number(r.sob_peso||0)}];
-  
+  const esDesp = r.descompuesto;
+  const subpiezas = (()=>{try{return JSON.parse(r.subpiezas||r.pl_cortes_por_plancha||'[]');}catch(e){return[];}})().filter(p=>p.descompuesto||r.descompuesto);
+
   const html=`<div style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center" id="sob-edit-modal">
-    <div style="background:white;border-radius:12px;padding:1.5rem;width:540px;max-width:95vw;max-height:90vh;overflow-y:auto">
+    <div style="background:white;border-radius:12px;padding:1.5rem;width:580px;max-width:95vw;max-height:90vh;overflow-y:auto">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
-        <h3 style="margin:0;font-size:16px">Editar sobrantes — ${r.conjunto||r.cj}/${r.parte||r.pr}</h3>
+        <h3 style="margin:0;font-size:16px">✏ Editar registro — ${r.conjunto||r.cj}/${r.parte||r.pr}</h3>
         <button onclick="document.getElementById('sob-edit-modal').remove()" style="background:none;border:none;font-size:20px;cursor:pointer">✕</button>
       </div>
+
+      ${esDesp && subpiezas.length>0 ? `
+      <!-- Sub-piezas cortadas -->
+      <div style="background:#eef4ff;border-radius:8px;padding:.75rem;margin-bottom:1rem">
+        <div style="font-size:13px;font-weight:700;color:#1e40af;margin-bottom:.5rem">✂ Piezas cortadas (descompuesto)</div>
+        ${subpiezas.map((p,i)=>`
+        <div style="background:white;border:1px solid #bfdbfe;border-radius:6px;padding:.5rem .75rem;margin-bottom:.375rem;display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:12px;font-weight:600;color:#1e40af">${p.nombre||'Sub-pieza '+(i+1)}</span>
+          <span style="font-size:11px;color:#6b7280">${p.esp}×${p.ancho}×${p.largo} mm</span>
+          <div style="display:flex;align-items:center;gap:6px">
+            <label style="font-size:11px;color:#6b7280">Cant:</label>
+            <input type="number" value="${p.qty||0}" min="0" id="sp-qty-edit-${i}"
+              style="width:70px;padding:4px;border:1.5px solid #93c5fd;border-radius:6px;font-size:14px;font-weight:700;text-align:center"
+              oninput="recalcEditDesp()">
+          </div>
+        </div>`).join('')}
+      </div>` : ''}
+
+      <!-- Sobrantes -->
+      <div style="font-size:13px;font-weight:700;color:#065f46;margin-bottom:.5rem">📦 Sobrantes</div>
       <div id="sob-edit-list">
         ${sobEdit.map((s,i)=>sobEditRow(s,i)).join('')}
       </div>
-      <button onclick="sobEditAddRow()" style="width:100%;padding:.5rem;background:#f0fdf4;color:#065f46;border:1.5px dashed #86efac;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;margin:.75rem 0">
+      <button onclick="sobEditAddRow()" style="width:100%;padding:.5rem;background:#f0fdf4;color:#065f46;border:1.5px dashed #86efac;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;margin:.5rem 0">
         + Agregar sobrante
       </button>
-      <button onclick="saveSobrante(${id})" style="width:100%;padding:.75rem;background:#1e40af;color:white;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer">
-        ✔ Guardar sobrantes
+
+      <!-- Balance -->
+      <div id="edit-balance" style="background:#1a2b4a;color:white;border-radius:8px;padding:.75rem;margin-bottom:.75rem;font-size:12px">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center">
+          <div><div style="opacity:.6">Material</div><div style="font-size:16px;font-weight:700">${Number(r.pl_peso||0).toFixed(1)} kg</div></div>
+          <div><div style="opacity:.6">Sobrante</div><div id="edit-bal-sob" style="font-size:16px;font-weight:700;color:#86efac">0.0 kg</div></div>
+          <div><div style="opacity:.6">Desperdicio</div><div id="edit-bal-desp" style="font-size:16px;font-weight:700;color:#fca5a5">${Number(r.desperdicio||0).toFixed(1)} kg</div></div>
+        </div>
+      </div>
+
+      <button onclick="saveRegistroEdit(${id},'${esDesp}')" style="width:100%;padding:.75rem;background:#1e40af;color:white;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer">
+        ✔ Guardar cambios
       </button>
     </div>
   </div>`;
   document.body.insertAdjacentHTML('beforeend',html);
   window._sobEditData = sobEdit.map(s=>({...s}));
+  window._subpiezasEdit = subpiezas.map(s=>({...s}));
+  recalcEditDesp();
 }
+
+function recalcEditDesp(){
+  const r=ST.cortes.find(x=>x.id===(window._editRecId||0));
+  const totalSob=(window._sobEditData||[]).reduce((a,s)=>a+(s.peso||0),0);
+  const sobEl=document.getElementById('edit-bal-sob');
+  const despEl=document.getElementById('edit-bal-desp');
+  if(sobEl) sobEl.textContent=totalSob.toFixed(1)+' kg';
+}
+
+function saveRegistroEdit(id, esDesp){
+  const r=ST.cortes.find(x=>x.id===id); if(!r) return;
+  const sobs=window._sobEditData||[];
+
+  // Actualizar sub-piezas si es descompuesto
+  if(esDesp==='true' && window._subpiezasEdit){
+    window._subpiezasEdit.forEach((sp,i)=>{
+      const el=document.getElementById(`sp-qty-edit-${i}`);
+      if(el) sp.qty=parseInt(el.value)||0;
+    });
+    // Recalcular pesos sub-piezas
+    const D=7.85e-6;
+    window._subpiezasEdit.forEach(sp=>{
+      sp.peso = sp.esp&&sp.ancho&&sp.largo&&sp.qty ? sp.esp*sp.ancho*sp.largo*D*sp.qty : 0;
+    });
+    // Actualizar qty del registro = vigas completas
+    const piezasHI_keys=['HI300','HI250','HI234'];
+    const esHI = piezasHI_keys.some(k=>(r.perfil||'').includes(k));
+    if(esHI){
+      const PIEZAS_HI_ref={'HI300-10-12*300':[{qty:1},{qty:2}],'HI250-10-20*300':[{qty:1},{qty:2}],'HI234-8-12*180':[{qty:1},{qty:2}]};
+      const ref=Object.entries(PIEZAS_HI_ref).find(([k])=>(r.perfil||'').includes(k.split('-')[0]))?.[1]||[];
+      const vigas=ref.length>0
+        ? Math.min(...window._subpiezasEdit.map((sp,i)=>Math.floor(sp.qty/(ref[i]?.qty||1))))
+        : Math.min(...window._subpiezasEdit.map(sp=>sp.qty||0));
+      r.qty = Math.max(0,vigas);
+    }
+    r.pesoPzas = window._subpiezasEdit.reduce((a,sp)=>a+sp.peso,0);
+    r.pesoParts = r.pesoPzas;
+    r.subpiezas = JSON.stringify(window._subpiezasEdit);
+    r.pl_cortes_por_plancha = JSON.stringify(window._subpiezasEdit.map(sp=>({...sp,descompuesto:true})));
+  }
+
+  // Actualizar sobrantes
+  r.sob_por_plancha=JSON.stringify(sobs);
+  r.sob_hay=sobs.some(s=>s.peso>0&&s.dest==='stock')?'si':'no';
+  r.sob_peso=sobs.filter(s=>s.dest==='stock').reduce((a,s)=>a+s.peso,0);
+
+  // Recalcular desperdicio
+  const totalMat=Number(r.pl_peso||0);
+  const totalPzas=Number(r.pesoParts||r.pesoPzas||0);
+  const totalSob=sobs.reduce((a,s)=>a+s.peso,0);
+  r.desperdicio=parseFloat(Math.max(0,totalMat-totalPzas-totalSob).toFixed(2));
+
+  saveAll();
+  if(GAS.configured()) GAS.post('addRegistro',r).catch(()=>{});
+  document.getElementById('sob-edit-modal')?.remove();
+  renderCorteHist(); renderDashboard(); renderStock();
+  toast('✓ Registro actualizado');
+}
+
+// Keep editSobrante as alias
+function editSobrante(id){ editRegistro(id); }
 
 function sobEditRow(s,i){
   const esL=s.tipo==='forma_l';
@@ -4663,4 +4756,3 @@ document.addEventListener('DOMContentLoaded', async ()=>{
 </script>
 </body>
 </html>
-
