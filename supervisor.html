@@ -1700,6 +1700,26 @@ function getAvanceCjKg(cj) {
   return {pct, kgEjec, kgPlan};
 }
 
+function getVigasCompletas(cj) {
+  // Vigas completas = mínimo entre todas las partes considerando qty por viga
+  const c = TEKLA.conjuntos.find(x=>x.conjunto===cj);
+  if(!c||!c.partes.length) return {vigasCompletas:0, vigasPlan:c?.cantidad||0, detalle:[]};
+  const vigasPlan = c.cantidad;
+  const PIEZAS_HI_KEYS = ['HI300','HI250','HI234'];
+  const detalle = c.partes.map(p=>{
+    const qtyPorViga = vigasPlan>0 ? p.cantidad/vigasPlan : 1;
+    const cortado = getCortadoQty(cj, p.parte);
+    const esHI = PIEZAS_HI_KEYS.some(k=>p.perfil&&p.perfil.includes(k));
+    // Para HI descompuestos, qty ya representa vigas completas
+    const vigasEsta = esHI ? cortado : Math.floor(cortado/qtyPorViga);
+    const faltanPiezas = Math.max(0, p.cantidad - cortado);
+    const faltanVigas = Math.max(0, vigasPlan - vigasEsta);
+    return {parte:p.parte, perfil:p.perfil, qtyPorViga, cortado, vigasEsta, faltanPiezas, faltanVigas, planTotal:p.cantidad, esHI};
+  });
+  const vigasCompletas = Math.max(0, Math.min(...detalle.map(d=>d.vigasEsta)));
+  return {vigasCompletas, vigasPlan, detalle};
+}
+
 // Get all partes flattened
 function allPartes() {
   const res = [];
@@ -1908,46 +1928,64 @@ function renderPendientes() {
 
   const rows = []; let totPend=0, totPendKg=0;
   TEKLA.conjuntos.forEach(c=>{
-    c.partes.forEach(p=>{
-      const ej = getTotalExec(c.conjunto, p.parte);
-      const pend = Math.max(0, p.cantidad - ej);
-      if(pend<=0) return;
-      if(q && !(c.conjunto+p.parte+p.perfil).toLowerCase().includes(q)) return;
-      if(ft && c.perfil!==ft) return;
-      const ejCorte = getCortadoQty(c.conjunto, p.parte);
-      const ejArm  = ST.prods.filter(r=>r.conjunto===c.conjunto&&r.parte===p.parte&&r.fase==='Armado').reduce((s,r)=>s+r.qty,0);
-      const ejSold = ST.prods.filter(r=>r.conjunto===c.conjunto&&r.parte===p.parte&&r.fase==='Soldadura').reduce((s,r)=>s+r.qty,0);
-      const ejPerf = ST.prods.filter(r=>r.conjunto===c.conjunto&&r.parte===p.parte&&r.fase==='Perforaciones').reduce((s,r)=>s+r.qty,0);
-      const ejLimp = ST.prods.filter(r=>r.conjunto===c.conjunto&&r.parte===p.parte&&r.fase==='Limpieza Mecánica').reduce((s,r)=>s+r.qty,0);
-      const ejPint = ST.prods.filter(r=>r.conjunto===c.conjunto&&r.parte===p.parte&&r.fase==='Pintura').reduce((s,r)=>s+r.qty,0);
-      totPend += pend; totPendKg += pend * p.peso_unit;
-      rows.push({conjunto:c.conjunto,tipo:c.perfil,parte:p.parte,perfil:p.perfil,
-        plan:p.cantidad,ej,pend,pendKg:pend*p.peso_unit,longitud:p.longitud,material:p.material,
-        ejCorte,ejArm,ejSold,ejPerf,ejLimp,ejPint});
+    // Calcular vigas completas del conjunto
+    const {vigasCompletas, vigasPlan, detalle} = getVigasCompletas(c.conjunto);
+    const pendVigas = Math.max(0, vigasPlan - vigasCompletas);
+    
+    // Filtrar
+    if(q && !c.conjunto.toLowerCase().includes(q) && !c.partes.some(p=>(p.parte+p.perfil).toLowerCase().includes(q))) return;
+    if(ft && c.perfil!==ft) return;
+    if(pendVigas<=0 && detalle.every(d=>d.faltanPiezas<=0)) return;
+
+    const ejCorte = vigasCompletas;
+    const kgAv = getAvanceCjKg(c.conjunto);
+    totPend += pendVigas;
+    totPendKg += pendVigas * c.peso_unit;
+    rows.push({
+      conjunto:c.conjunto, tipo:c.perfil, vigasPlan, vigasCompletas, pendVigas,
+      pendKg: pendVigas*c.peso_unit, kgPct: kgAv.pct, kgEjec: kgAv.kgEjec, kgPlan: kgAv.kgPlan,
+      detalle, ejCorte,
+      ejArm:  ST.prods.filter(r=>r.conjunto===c.conjunto&&r.fase==='Armado').reduce((s,r)=>s+r.qty,0),
+      ejSold: ST.prods.filter(r=>r.conjunto===c.conjunto&&r.fase==='Soldadura').reduce((s,r)=>s+r.qty,0),
+      ejPerf: ST.prods.filter(r=>r.conjunto===c.conjunto&&r.fase==='Perforaciones').reduce((s,r)=>s+r.qty,0),
+      ejPint: ST.prods.filter(r=>r.conjunto===c.conjunto&&r.fase==='Pintura').reduce((s,r)=>s+r.qty,0),
     });
   });
-  rows.sort((a,b)=>b.pend-a.pend);
+  rows.sort((a,b)=>b.pendVigas-a.pendVigas);
 
-  const totPlanAll = allPartes().reduce((s,p)=>s+p.cantidad,0);
-  const totEjAll   = allPartes().reduce((s,p)=>s+getTotalExec(p.conjunto||'',p.parte),0);
+  const totPlanAll = TEKLA.conjuntos.reduce((s,c)=>s+c.cantidad,0);
+  const totEjAll   = TEKLA.conjuntos.reduce((s,c)=>s+getVigasCompletas(c.conjunto).vigasCompletas,0);
 
   document.getElementById('kpi-pend').innerHTML = `
-    <div class="kpi k-warn"><div class="kpi-lbl">⚠ Pendientes fabricar</div><div class="kpi-val">${totPend.toLocaleString()}</div><div class="kpi-sub">unidades por ejecutar</div></div>
+    <div class="kpi k-warn"><div class="kpi-lbl">⚠ Pendientes fabricar</div><div class="kpi-val">${totPend.toLocaleString()}</div><div class="kpi-sub">vigas por completar</div></div>
     <div class="kpi k-blue"><div class="kpi-lbl">Peso pendiente</div><div class="kpi-val">${(totPendKg/1000).toFixed(1)}t</div><div class="kpi-sub">${totPendKg.toFixed(0)} kg</div></div>
-    <div class="kpi k-green"><div class="kpi-lbl">Ejecutado total</div><div class="kpi-val">${totEjAll.toLocaleString()}</div><div class="kpi-sub">de ${totPlanAll.toLocaleString()} plan</div></div>
-    <div class="kpi"><div class="kpi-lbl">Tipos con pendiente</div><div class="kpi-val">${rows.length}</div><div class="kpi-sub">tipos de parte</div></div>`;
+    <div class="kpi k-green"><div class="kpi-lbl">Ejecutado total</div><div class="kpi-val">${totEjAll.toLocaleString()}</div><div class="kpi-sub">de ${totPlanAll.toLocaleString()} vigas plan</div></div>
+    <div class="kpi"><div class="kpi-lbl">Conjuntos con pendiente</div><div class="kpi-val">${rows.length}</div><div class="kpi-sub">conjuntos</div></div>`;
 
-  document.getElementById('pend-cnt').textContent = `${rows.length} filas`;
+  document.getElementById('pend-cnt').textContent = `${rows.length} conjuntos`;
   document.getElementById('pend-tbody').innerHTML = rows.length ? rows.map(r=>`
     <tr class="pend-row">
       <td><strong>${r.conjunto}</strong></td>
-      <td><code style="font-size:11px;">${r.parte}</code></td>
-      <td style="font-size:11px;font-family:monospace;">${r.perfil}</td>
+      <td><code style="font-size:11px;">${r.detalle.map(d=>d.parte).join(', ')}</code></td>
+      <td style="font-size:11px;font-family:monospace;">${r.detalle.map(d=>d.perfil.slice(0,12)).join(', ')}</td>
       <td>${typeBadge(r.tipo)}</td>
-      <td class="r" style="font-weight:700;">${r.plan}</td>
-      <td class="r" style="color:#166534;font-weight:700;">${r.ej}</td>
-      <td class="r"><span style="font-size:13px;font-weight:800;color:#b45309;background:#fff3cd;padding:2px 8px;border-radius:5px;">${r.pend}</span></td>
-      <td class="r">${r.pendKg.toFixed(1)}</td>
+      <td class="r" style="font-weight:700;">${r.vigasPlan}</td>
+      <td class="r" style="color:#166534;font-weight:700;">${r.vigasCompletas}</td>
+      <td class="r"><span style="font-size:13px;font-weight:800;color:#b45309;background:#fff3cd;padding:2px 8px;border-radius:5px;">${r.pendVigas}</span></td>
+      <td class="r">
+        <div style="font-size:10px;color:#6b7280;">${r.kgEjec.toFixed(0)}/${r.kgPlan.toFixed(0)} kg</div>
+        <div style="background:#e5e7eb;border-radius:3px;height:4px;overflow:hidden;margin:2px 0">
+          <div style="background:${r.kgPct>=100?'#166534':'#e8631a'};height:100%;width:${Math.min(100,r.kgPct).toFixed(0)}%"></div>
+        </div>
+        <div style="font-size:10px;font-weight:700;color:${r.kgPct>=100?'#166534':'#b45309'}">${r.kgPct.toFixed(1)}%</div>
+      </td>
+      <td style="font-size:10px;">
+        ${r.detalle.map(d=>`<div style="display:flex;justify-content:space-between;gap:8px;padding:1px 0;border-bottom:1px solid #f3f4f6">
+          <span style="font-weight:600">${d.parte}</span>
+          <span style="color:#6b7280">${d.cortado}/${d.planTotal} pzas</span>
+          <span style="color:${d.faltanVigas>0?'#b45309':'#166534'};font-weight:700">${d.faltanVigas>0?'−'+d.faltanVigas+' vigas':'✓'}</span>
+        </div>`).join('')}
+      </td>
       <td class="r" style="font-size:10px;white-space:nowrap;">
         <span title="Corte" style="color:${r.ejCorte>0?'#166534':'#d1d5db'};font-weight:700;">✂${r.ejCorte}</span>
         <span title="Armado" style="color:${r.ejArm>0?'#166534':'#d1d5db'};margin-left:3px;">A${r.ejArm}</span>
@@ -1955,9 +1993,8 @@ function renderPendientes() {
         <span title="Perforaciones" style="color:${r.ejPerf>0?'#166534':'#d1d5db'};margin-left:3px;">P${r.ejPerf}</span>
         <span title="Pintura" style="color:${r.ejPint>0?'#166534':'#d1d5db'};margin-left:3px;">🎨${r.ejPint}</span>
       </td>
-      <td class="r">${r.longitud||'—'}</td>
       <td class="c no-print">
-        <button class="btn btn-p btn-sm" onclick="goToCorte('${r.conjunto}','${r.parte}')">✂ Cortar</button>
+        <button class="btn btn-p btn-sm" onclick="goToCorte('${r.conjunto}','${r.detalle[0]?.parte||''}')">✂ Cortar</button>
       </td>
     </tr>`).join('')
     : '<tr><td colspan="12" style="text-align:center;padding:2rem;color:var(--gm);">✓ Sin pendientes</td></tr>';
@@ -3525,28 +3562,60 @@ function renderFases() {
   // Kanban columns per fase
   const kanban = FASES.map(f=>{
     const fc = FASE_COLORS[f];
-    // Build cards for each conjunto/parte
     let cards = '';
-    TEKLA.conjuntos.forEach(c=>{
-      c.partes.forEach(p=>{
-        const ej = getExecFase(c.conjunto, p.parte, f);
-        const pend = Math.max(0, p.cantidad - ej);
-        const pct = p.cantidad>0 ? Math.min(100,ej/p.cantidad*100) : 0;
+    if(f==='Corte'){
+      // Para corte mostrar por conjunto con vigas completas
+      TEKLA.conjuntos.forEach(c=>{
+        const {vigasCompletas, vigasPlan, detalle} = getVigasCompletas(c.conjunto);
+        const pct = vigasPlan>0 ? Math.min(100,vigasCompletas/vigasPlan*100) : 0;
         const barColor = pct>=100 ? '#22c55e' : pct>0 ? '#f59e0b' : '#d1d5db';
         const textColor = pct>=100 ? '#166534' : pct>0 ? '#92400e' : '#6b7280';
-        cards += `<div style="background:#fff;border:1px solid #e5e7eb;border-radius:7px;padding:8px 10px;cursor:pointer;margin-bottom:6px;" onclick="openModalFase('${c.conjunto}','${p.parte}','${f}')">
+        const faltanVigas = Math.max(0, vigasPlan - vigasCompletas);
+        const kgAv = getAvanceCjKg(c.conjunto);
+        // Detalle mini de partes faltantes
+        const detalleHtml = detalle.map(d=>`
+          <div style="display:flex;justify-content:space-between;font-size:9px;color:#6b7280;padding:1px 0">
+            <span>${d.parte}</span>
+            <span style="color:${d.faltanVigas>0?'#b45309':'#166534'};font-weight:700">
+              ${d.vigasEsta}/${vigasPlan} ${d.faltanVigas>0?'(−'+d.faltanVigas+')':'✓'}
+            </span>
+          </div>`).join('');
+        cards += `<div style="background:#fff;border:1px solid #e5e7eb;border-radius:7px;padding:8px 10px;cursor:pointer;margin-bottom:6px;" onclick="openModal('${c.conjunto}')">
           <div style="font-size:11px;font-weight:700;color:#1a2b4a;">${c.conjunto}</div>
-          <div style="font-size:10px;color:#6c757d;margin-bottom:4px;">${p.parte} · ${p.perfil.length>18?p.perfil.slice(0,18)+'…':p.perfil}</div>
+          <div style="font-size:10px;color:#6c757d;margin-bottom:4px;">${c.partes.length} partes · ${kgAv.pct.toFixed(1)}% kg</div>
           <div style="background:#e5e7eb;border-radius:3px;height:5px;overflow:hidden;margin-bottom:4px;">
             <div style="height:100%;border-radius:3px;background:${barColor};width:${pct.toFixed(0)}%"></div>
           </div>
-          <div style="display:flex;justify-content:space-between;font-size:10px;">
-            <span style="color:${textColor};font-weight:700;">${ej}/${p.cantidad}</span>
-            <span style="color:${pend>0?'#b45309':'#166534'};font-weight:800;">${pend>0?'⚠ '+pend+' pend.':'✓ OK'}</span>
+          <div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:4px;">
+            <span style="color:${textColor};font-weight:700;">${vigasCompletas}/${vigasPlan} vigas</span>
+            <span style="color:${faltanVigas>0?'#b45309':'#166534'};font-weight:800;">${faltanVigas>0?'⚠ '+faltanVigas+' pend.':'✓ OK'}</span>
           </div>
+          <div style="border-top:1px solid #f3f4f6;padding-top:4px">${detalleHtml}</div>
         </div>`;
       });
-    });
+    } else {
+      // Para otras fases mantener vista por parte
+      TEKLA.conjuntos.forEach(c=>{
+        c.partes.forEach(p=>{
+          const ej = getExecFase(c.conjunto, p.parte, f);
+          const pend = Math.max(0, p.cantidad - ej);
+          const pct = p.cantidad>0 ? Math.min(100,ej/p.cantidad*100) : 0;
+          const barColor = pct>=100 ? '#22c55e' : pct>0 ? '#f59e0b' : '#d1d5db';
+          const textColor = pct>=100 ? '#166534' : pct>0 ? '#92400e' : '#6b7280';
+          cards += `<div style="background:#fff;border:1px solid #e5e7eb;border-radius:7px;padding:8px 10px;cursor:pointer;margin-bottom:6px;" onclick="openModalFase('${c.conjunto}','${p.parte}','${f}')">
+            <div style="font-size:11px;font-weight:700;color:#1a2b4a;">${c.conjunto}</div>
+            <div style="font-size:10px;color:#6c757d;margin-bottom:4px;">${p.parte} · ${p.perfil.length>18?p.perfil.slice(0,18)+'…':p.perfil}</div>
+            <div style="background:#e5e7eb;border-radius:3px;height:5px;overflow:hidden;margin-bottom:4px;">
+              <div style="height:100%;border-radius:3px;background:${barColor};width:${pct.toFixed(0)}%"></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:10px;">
+              <span style="color:${textColor};font-weight:700;">${ej}/${p.cantidad}</span>
+              <span style="color:${pend>0?'#b45309':'#166534'};font-weight:800;">${pend>0?'⚠ '+pend+' pend.':'✓ OK'}</span>
+            </div>
+          </div>`;
+        });
+      });
+    }
     return `<div style="border-radius:10px;border:1px solid #dee2e6;overflow:hidden;">
       <div style="background:${fc.hdr};color:#fff;padding:8px 12px;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;text-align:center;">${f}</div>
       <div style="padding:8px;background:${fc.bg};max-height:560px;overflow-y:auto;">${cards}</div>
