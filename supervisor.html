@@ -2098,6 +2098,7 @@ let supSobrantes  = [];
 function supCalcPesoMat(m){
   const t=m.tipo||'plancha', q=m.qty||1;
   let pu=0;
+  if(t==='desde_stock') return m.peso||0;
   if(t==='plancha'){ if(m.esp&&m.ancho&&m.largo) pu=m.esp*m.ancho*m.largo*D_SUP; }
   else if(t==='angulo'){ if(m.a1&&m.esp&&m.largo) pu=(m.a1+(m.a2||m.a1)-m.esp)*m.esp*D_SUP*1000; }
   else if(['ipe','upn','heb'].includes(t)){
@@ -2150,7 +2151,7 @@ function supRenderMateriales(){
 
 function supMatHTML(m,i){
   const tipos={
-    plancha:'Plancha / Placa', angulo:'Ángulo L',
+    plancha:'Plancha / Placa', desde_stock:'⟳ Desde stock', angulo:'Ángulo L',
     ipe:'Perfil IPE/HEB/HI', upn:'Canal U/UPN',
     tubo_rect:'Tubo rectangular', tubo_cuad:'Tubo cuadrado',
     tubo_circ:'Tubo circular', barra_red:'Barra redonda',
@@ -2222,6 +2223,14 @@ function supMatHTML(m,i){
       <div class="fg"><label>Descripción</label><input type="text" id="sm-desc-${i}" value="${m.desc||''}" placeholder="Ej: Platina 80×8 mm"></div>
       <div class="fg fix"><label>Peso total (kg)</label><input type="number" id="sm-pm-${i}" value="${m.pesoManual||''}" placeholder="0.0" oninput="supUpdMat(${i})"></div>
     </div>`,
+    desde_stock: `<div style="margin-top:.375rem">
+      <label style="font-size:11px;color:#065f46;font-weight:700">Selecciona sobrante del stock</label>
+      <select id="sm-stock-${i}" style="width:100%;padding:8px;border:1.5px solid #86efac;border-radius:8px;font-size:13px;margin-bottom:6px" onchange="supSelStock(${i})">
+        <option value="">-- Selecciona --</option>
+        ${supStockDisponible().map((s,si)=>`<option value="${si}">${s.colada} · ${s.esp}×${s.ancho}×${s.largo}mm · ${s.tipo==='forma_l'?'⌐ Forma en L':'Plancha'} · ${s.peso.toFixed(1)}kg</option>`).join('')}
+      </select>
+      ${m.stockRef ? `<div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:8px;font-size:12px;color:#065f46">✅ <strong>${m.colada||'—'}</strong> · ${m.esp}×${m.ancho}×${m.largo}mm · <strong>${(m.peso||0).toFixed(1)} kg</strong></div>` : '<div style="font-size:11px;color:#6b7280">Selecciona un sobrante para usar como materia prima</div>'}
+    </div>`,
   };
 
   const peso=supCalcPesoMat(m);
@@ -2242,6 +2251,49 @@ function supMatHTML(m,i){
       ${peso>0?`→ ${peso.toFixed(2)} kg`:''}
     </div>
   </div>`;
+}
+
+function supStockDisponible(){
+  const items=[];
+  const seen=new Set();
+  ST.cortes.forEach(c=>{
+    const sobs=(()=>{try{return JSON.parse(c.sob_por_plancha||'[]');}catch(e){return[];}})();
+    sobs.forEach((s,si)=>{
+      const peso=Number(s.sobPeso||s.peso||0);
+      if(peso<=0||s.dest==='waste') return;
+      const key=c.id+'_'+si;
+      if(seen.has(key)) return;
+      seen.add(key);
+      items.push({
+        _key:key, _recId:c.id, _sobIdx:si,
+        colada:s.colada||c.pl_num||'—',
+        grado:s.grado||s.mat||c.pl_mat||'A588-50',
+        tipo:s.tipo||'plancha',
+        esp:s.esp||0, ancho:s.ancho||0, largo:s.largo||0,
+        ancho_corte:s.ancho_corte||0, largo_corte:s.largo_corte||0,
+        qty:s.qty||1, peso,
+      });
+    });
+  });
+  return items;
+}
+
+function supSelStock(i){
+  const sel=document.getElementById(`sm-stock-${i}`);
+  const idx=parseInt(sel?.value);
+  if(isNaN(idx)||idx<0) return;
+  const stocks=supStockDisponible();
+  const s=stocks[idx]; if(!s) return;
+  supMateriales[i]={
+    ...supMateriales[i],
+    tipo:'desde_stock',
+    stockRef:s._key, stockRecId:s._recId, stockSobIdx:s._sobIdx,
+    colada:s.colada, grado:s.grado,
+    esp:s.esp, ancho:s.ancho, largo:s.largo,
+    ancho_corte:s.ancho_corte, largo_corte:s.largo_corte,
+    qty:1, peso:s.peso, tipoOrig:s.tipo,
+  };
+  supRenderMateriales();
 }
 
 function supAddMaterial(){
