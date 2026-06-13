@@ -3219,7 +3219,6 @@ function renderCorteHist(){
     const sobPorPl = (() => { try { return JSON.parse(r.sob_por_plancha||'[]'); } catch(e){ return []; } })();
     if(sobPorPl.length > 0){
       const conSob = sobPorPl.filter(s=>{
-        // Soportar ambos formatos: nuevo (s.peso) y viejo (s.sobPeso, s.hay)
         const peso = s.peso || s.sobPeso || 0;
         const dest = s.dest || s.sob_dest || 'stock';
         return peso > 0 && dest !== 'waste';
@@ -3230,9 +3229,10 @@ function renderCorteHist(){
           const colada = s.colada || s.sob_colada || '—';
           const dest = s.dest || s.sob_dest || 'stock';
           const esp = s.esp || '?', ancho = s.ancho || '?', largo = s.largo || '?';
+          const esL = s.tipo==='forma_l';
           return `<div style="border:1px solid #bbf7d0;border-radius:6px;padding:4px 6px;margin-bottom:3px;background:#f0fdf4;font-size:11px">
             <span style="color:#166534;font-weight:700">📦 ${peso.toFixed(1)} kg</span>
-            <span style="color:#6b7280;margin-left:4px">${esp}×${ancho}×${largo} mm</span>
+            <span style="color:#6b7280;margin-left:4px">${esL?'⌐ Forma en L · ':''}${esp}×${ancho}×${largo} mm</span>
             <span style="font-size:10px;color:#3730a3;display:block">📋 ${colada} · ${dest==='stock'?'Stock':'Desperdicio'}</span>
           </div>`;
         }).join('');
@@ -3267,8 +3267,145 @@ function renderCorteHist(){
         <span style="font-weight:700;color:${despColor}">${desp.toFixed(1)} kg</span><br>
         <span style="font-size:10px;color:${despColor}">${pct}%</span>
       </td>
-      <td class="c no-print"><button class="btn btn-d btn-sm" onclick="delCorte(${r.id})">✕</button></td>
+      <td class="c no-print" style="white-space:nowrap">
+        <button class="btn btn-g btn-sm" style="margin-bottom:4px" onclick="editSobrante(${r.id})">✏ Sob.</button><br>
+        <button class="btn btn-d btn-sm" onclick="delCorte(${r.id})">✕</button>
+      </td>
     </tr>`;
+  }).join('')
+  :'<tr><td colspan="8" style="text-align:center;padding:1.5rem;color:var(--gm);">Sin cortes registrados</td></tr>';
+}
+
+function editSobrante(id){
+  const r=ST.cortes.find(x=>x.id===id); if(!r) return;
+  const sobArr=(()=>{try{return JSON.parse(r.sob_por_plancha||'[]');}catch(e){return[];}})();
+  // Construir modal edición sobrante
+  const tipoOpts=['plancha','forma_l','perfil','manual'].map(t=>`<option value="${t}">${t==='plancha'?'Plancha rect.':t==='forma_l'?'Forma en L':t==='perfil'?'Perfil':'Manual'}</option>`).join('');
+  const sobEdit = sobArr.length>0 ? sobArr : [{tipo:'plancha',esp:r.sob_esp||0,ancho:r.sob_ancho||0,largo:r.sob_largo||0,qty:r.sob_qty||1,colada:r.sob_colada||'',dest:r.sob_dest||'stock',peso:Number(r.sob_peso||0)}];
+  
+  const html=`<div style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center" id="sob-edit-modal">
+    <div style="background:white;border-radius:12px;padding:1.5rem;width:540px;max-width:95vw;max-height:90vh;overflow-y:auto">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+        <h3 style="margin:0;font-size:16px">Editar sobrantes — ${r.conjunto||r.cj}/${r.parte||r.pr}</h3>
+        <button onclick="document.getElementById('sob-edit-modal').remove()" style="background:none;border:none;font-size:20px;cursor:pointer">✕</button>
+      </div>
+      <div id="sob-edit-list">
+        ${sobEdit.map((s,i)=>sobEditRow(s,i)).join('')}
+      </div>
+      <button onclick="sobEditAddRow()" style="width:100%;padding:.5rem;background:#f0fdf4;color:#065f46;border:1.5px dashed #86efac;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;margin:.75rem 0">
+        + Agregar sobrante
+      </button>
+      <button onclick="saveSobrante(${id})" style="width:100%;padding:.75rem;background:#1e40af;color:white;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer">
+        ✔ Guardar sobrantes
+      </button>
+    </div>
+  </div>`;
+  document.body.insertAdjacentHTML('beforeend',html);
+  window._sobEditData = sobEdit.map(s=>({...s}));
+}
+
+function sobEditRow(s,i){
+  const esL=s.tipo==='forma_l';
+  return `<div style="border:1px solid #e5e7eb;border-radius:8px;padding:.75rem;margin-bottom:.5rem" id="sob-row-${i}">
+    <div style="display:flex;gap:8px;margin-bottom:.5rem;align-items:center">
+      <select onchange="sobEditChgTipo(${i},this.value)" style="flex:1;padding:6px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+        <option value="plancha" ${s.tipo==='plancha'?'selected':''}>Plancha rect.</option>
+        <option value="forma_l" ${s.tipo==='forma_l'?'selected':''}>⌐ Forma en L</option>
+        <option value="manual" ${s.tipo==='manual'?'selected':''}>Peso manual</option>
+      </select>
+      <select onchange="window._sobEditData[${i}].dest=this.value" style="flex:1;padding:6px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+        <option value="stock" ${s.dest==='stock'?'selected':''}>Stock</option>
+        <option value="waste" ${s.dest==='waste'?'selected':''}>Desperdicio</option>
+      </select>
+      <button onclick="sobEditDelRow(${i})" style="background:#fee2e2;color:#991b1b;border:none;border-radius:6px;padding:4px 8px;cursor:pointer">✕</button>
+    </div>
+    <input type="text" placeholder="N° Colada" value="${s.colada||''}" oninput="window._sobEditData[${i}].colada=this.value"
+      style="width:100%;padding:6px;border:1px solid #d1d5db;border-radius:6px;font-size:12px;margin-bottom:.5rem">
+    <div style="display:grid;grid-template-columns:${esL?'1fr 1fr 1fr':'1fr 1fr 1fr 1fr'};gap:6px">
+      <div><label style="font-size:10px;color:#6b7280">Esp (mm)</label>
+        <input type="number" value="${s.esp||''}" placeholder="12" oninput="window._sobEditData[${i}].esp=+this.value;sobEditCalcPeso(${i})"
+          style="width:100%;padding:6px;border:1px solid #d1d5db;border-radius:6px;font-size:14px;font-weight:700"></div>
+      <div><label style="font-size:10px;color:#6b7280">Ancho total (mm)</label>
+        <input type="number" value="${s.ancho||''}" placeholder="2500" oninput="window._sobEditData[${i}].ancho=+this.value;sobEditCalcPeso(${i})"
+          style="width:100%;padding:6px;border:1px solid #d1d5db;border-radius:6px;font-size:14px;font-weight:700"></div>
+      <div><label style="font-size:10px;color:#6b7280">Largo total (mm)</label>
+        <input type="number" value="${s.largo||''}" placeholder="6000" oninput="window._sobEditData[${i}].largo=+this.value;sobEditCalcPeso(${i})"
+          style="width:100%;padding:6px;border:1px solid #d1d5db;border-radius:6px;font-size:14px;font-weight:700"></div>
+      ${!esL?`<div><label style="font-size:10px;color:#6b7280">Cant.</label>
+        <input type="number" value="${s.qty||1}" min="1" oninput="window._sobEditData[${i}].qty=+this.value;sobEditCalcPeso(${i})"
+          style="width:100%;padding:6px;border:1px solid #d1d5db;border-radius:6px;font-size:14px"></div>`:''}
+    </div>
+    ${esL?`<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:6px">
+      <div><label style="font-size:10px;color:#e67e22">Ancho corte (mm)</label>
+        <input type="number" value="${s.ancho_corte||''}" placeholder="1380" oninput="window._sobEditData[${i}].ancho_corte=+this.value;sobEditCalcPeso(${i})"
+          style="width:100%;padding:6px;border:1.5px solid #fcd34d;border-radius:6px;font-size:14px;font-weight:700"></div>
+      <div><label style="font-size:10px;color:#e67e22">Largo corte (mm)</label>
+        <input type="number" value="${s.largo_corte||''}" placeholder="3000" oninput="window._sobEditData[${i}].largo_corte=+this.value;sobEditCalcPeso(${i})"
+          style="width:100%;padding:6px;border:1.5px solid #fcd34d;border-radius:6px;font-size:14px;font-weight:700"></div>
+      <div><label style="font-size:10px;color:#6b7280">Cant.</label>
+        <input type="number" value="${s.qty||1}" min="1" oninput="window._sobEditData[${i}].qty=+this.value;sobEditCalcPeso(${i})"
+          style="width:100%;padding:6px;border:1px solid #d1d5db;border-radius:6px;font-size:14px"></div>
+    </div>`:''}
+    <div id="sob-peso-${i}" style="margin-top:6px;background:#065f46;color:white;border-radius:6px;padding:4px 10px;font-size:13px;font-weight:700;text-align:right">
+      ${s.peso>0?s.peso.toFixed(1)+' kg':'—'}
+    </div>
+  </div>`;
+}
+
+function sobEditCalcPeso(i){
+  const s=window._sobEditData[i]; if(!s) return;
+  const D=7.85e-6;
+  let peso=0;
+  if(s.tipo==='forma_l'&&s.esp&&s.ancho&&s.largo){
+    const area=s.ancho*s.largo-(s.ancho_corte||0)*(s.largo_corte||0);
+    peso=s.esp*area*D*(s.qty||1);
+  } else if(s.esp&&s.ancho&&s.largo){
+    peso=s.esp*s.ancho*s.largo*D*(s.qty||1);
+  }
+  s.peso=parseFloat(peso.toFixed(3));
+  const el=document.getElementById(`sob-peso-${i}`);
+  if(el) el.textContent=peso>0?peso.toFixed(1)+' kg':'—';
+}
+
+function sobEditChgTipo(i,tipo){
+  window._sobEditData[i].tipo=tipo;
+  // Re-render row
+  const list=document.getElementById('sob-edit-list');
+  if(list){
+    const rows=list.querySelectorAll('[id^="sob-row-"]');
+    rows[i].outerHTML=sobEditRow(window._sobEditData[i],i);
+  }
+}
+
+function sobEditDelRow(i){
+  window._sobEditData.splice(i,1);
+  const list=document.getElementById('sob-edit-list');
+  if(list) list.innerHTML=window._sobEditData.map((s,idx)=>sobEditRow(s,idx)).join('');
+}
+
+function sobEditAddRow(){
+  window._sobEditData.push({tipo:'plancha',esp:0,ancho:0,largo:0,qty:1,colada:'',dest:'stock',peso:0});
+  const list=document.getElementById('sob-edit-list');
+  if(list) list.innerHTML=window._sobEditData.map((s,idx)=>sobEditRow(s,idx)).join('');
+}
+
+function saveSobrante(id){
+  const r=ST.cortes.find(x=>x.id===id); if(!r) return;
+  const sobs=window._sobEditData||[];
+  r.sob_por_plancha=JSON.stringify(sobs);
+  r.sob_hay=sobs.some(s=>s.peso>0&&s.dest==='stock')?'si':'no';
+  r.sob_peso=sobs.filter(s=>s.dest==='stock').reduce((a,s)=>a+s.peso,0);
+  // Recalc desperdicio
+  const totalMat=Number(r.pl_peso||0);
+  const totalPzas=Number(r.pesoParts||r.pesoPzas||0);
+  const totalSob=sobs.reduce((a,s)=>a+s.peso,0);
+  r.desperdicio=parseFloat(Math.max(0,totalMat-totalPzas-totalSob).toFixed(2));
+  saveAll();
+  if(GAS.configured()) GAS.post('addRegistro',r).catch(()=>{});
+  document.getElementById('sob-edit-modal')?.remove();
+  renderCorteHist(); renderDashboard(); renderStock();
+  toast('✓ Sobrantes actualizados');
+}
   }).join('')
   :'<tr><td colspan="8" style="text-align:center;padding:1.5rem;color:var(--gm);">Sin cortes registrados</td></tr>';
 }
@@ -4208,13 +4345,17 @@ async function verSolicitudes(){
           <div><strong>Registro:</strong> ${c.fase} — ${c.cj}/${c.pr} — ${c.qty} uds</div>
           <div style="margin-top:.25rem;"><strong>Motivo:</strong> ${c.motivo}</div>
         </div>
-        <div style="display:flex;gap:8px;">
-          <button onclick="aprobarCorreccion('${c.id}','${c.recId}')" 
-            style="flex:1;padding:.625rem;background:#166534;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">
-            ✅ Aprobar — Eliminar registro
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button onclick="corregirRegistro('${c.id}','${c.recId}')" 
+            style="flex:1;padding:.625rem;background:#1e40af;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;min-width:120px;">
+            ✏ Corregir registro
+          </button>
+          <button onclick="eliminarRegistro('${c.id}','${c.recId}')" 
+            style="flex:1;padding:.625rem;background:#166534;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;min-width:120px;">
+            🗑 Eliminar registro
           </button>
           <button onclick="rechazarCorreccion('${c.id}')"
-            style="flex:1;padding:.625rem;background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">
+            style="flex:1;padding:.625rem;background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;min-width:120px;">
             ❌ Rechazar
           </button>
         </div>
@@ -4225,6 +4366,44 @@ async function verSolicitudes(){
   } catch(e){
     document.getElementById('solicitudes-list').innerHTML='<div style="text-align:center;padding:2rem;color:#dc2626;">Error al cargar solicitudes: '+e.message+'</div>';
   }
+}
+
+async function corregirRegistro(corrId, recId){
+  // Buscar el registro en ST.cortes
+  const r = ST.cortes.find(x=>String(x.id)===String(recId));
+  if(!r){ toast('⚠ Registro no encontrado — puede estar en GAS. Recarga primero.'); return; }
+  // Abrir modal de edición de sobrantes (mismo que ✏ Sob.)
+  editSobrante(r.id);
+  // Marcar corrección como procesada al guardar
+  window._corrIdPendiente = corrId;
+  // Parchear saveSobrante para que también cierre la corrección
+  const _origSave = window.saveSobrante;
+  window.saveSobrante = async function(id){
+    _origSave(id);
+    window.saveSobrante = _origSave;
+    if(window._corrIdPendiente){
+      try { await GAS.post('aprobarCorreccion', {corrId: window._corrIdPendiente, recId, supervisorNom:'Supervisor', accion:'corregido'}); } catch(e){}
+      window._corrIdPendiente = null;
+    }
+    verSolicitudes();
+    toast('✅ Registro corregido');
+  };
+}
+
+async function eliminarRegistro(corrId, recId){
+  if(!confirm('¿Eliminar este registro completamente?')) return;
+  try {
+    await GAS.post('aprobarCorreccion', {corrId, recId, supervisorNom:'Supervisor', accion:'eliminado'});
+    // Eliminar localmente
+    const r=ST.cortes.find(x=>String(x.id)===String(recId));
+    if(r){ addExec(r.conjunto||r.cj, r.parte||r.pr, 'Corte', -r.qty); }
+    ST.cortes=ST.cortes.filter(x=>String(x.id)!==String(recId));
+    saveAll();
+    toast('🗑 Registro eliminado');
+    verSolicitudes();
+    await loadFromServer();
+    renderDashboard(); renderCorteHist();
+  } catch(e){ toast('⚠ Error: '+e.message); }
 }
 
 async function aprobarCorreccion(corrId, recId){
