@@ -3163,6 +3163,49 @@ function setCal(v){
 const FCLS={Corte:'fc',Armado:'fa',Soldadura:'fsold',Perforaciones:'fperf','Limpieza Mecánica':'flim',Pintura:'fpin'};
 const FICON={Corte:'✂',Armado:'🔧',Soldadura:'🔥',Perforaciones:'🔩','Limpieza Mecánica':'🧹',Pintura:'🎨'};
 
+function formaLSVG_wk(esp, ancho, largo, ancho_corte, largo_corte){
+  const maxW=240, maxH=200;
+  const sc=Math.min(maxW/ancho, maxH/largo)*0.65;
+  const W=Math.round(ancho*sc), H=Math.round(largo*sc);
+  const CW=Math.round(ancho_corte*sc), CH=Math.round(largo_corte*sc);
+  const ox=38, oy=22;
+  const vw=W+ox+28, vh=H+oy+28;
+  return `<svg viewBox="0 0 ${vw} ${vh}" xmlns="http://www.w3.org/2000/svg" style="width:100%;background:#1a1a2e;border-radius:6px;margin-top:6px">
+    <g transform="translate(${ox},${oy})">
+      <rect x="0" y="0" width="${CW}" height="${CH}" fill="#1a1a2e" stroke="#cc0000" stroke-width="1"/>
+      <clipPath id="wfl${esp}${ancho}"><rect x="0" y="0" width="${CW}" height="${CH}"/></clipPath>
+      <g clip-path="url(#wfl${esp}${ancho})">
+        ${Array.from({length:10},(_,i)=>`<line x1="${i*16-16}" y1="0" x2="${CW}" y2="${CH}" stroke="#cc0000" stroke-width="0.8"/>
+        <line x1="0" y1="${i*16}" x2="${CW}" y2="${CH}" stroke="#cc0000" stroke-width="0.8"/>`).join('')}
+      </g>
+      <polygon points="0,${CH} ${CW},${CH} ${CW},0 ${W},0 ${W},${H} 0,${H}" fill="none" stroke="#00cc44" stroke-width="1.5"/>
+      <line x1="0" y1="-10" x2="${CW}" y2="-10" stroke="#ff0000" stroke-width="0.7"/>
+      <line x1="0" y1="-13" x2="0" y2="-7" stroke="#ff0000" stroke-width="0.7"/>
+      <line x1="${CW}" y1="-13" x2="${CW}" y2="-7" stroke="#ff0000" stroke-width="0.7"/>
+      <text x="${CW/2}" y="-13" text-anchor="middle" font-size="8" fill="#ff0000">${ancho_corte}</text>
+      <line x1="${CW}" y1="-10" x2="${W}" y2="-10" stroke="#ff0000" stroke-width="0.7"/>
+      <line x1="${W}" y1="-13" x2="${W}" y2="-7" stroke="#ff0000" stroke-width="0.7"/>
+      <text x="${CW+(W-CW)/2}" y="-13" text-anchor="middle" font-size="8" fill="#ff0000">${ancho-ancho_corte}</text>
+      <line x1="-12" y1="0" x2="-12" y2="${CH}" stroke="#ff0000" stroke-width="0.7"/>
+      <line x1="-15" y1="0" x2="-9" y2="0" stroke="#ff0000" stroke-width="0.7"/>
+      <line x1="-15" y1="${CH}" x2="-9" y2="${CH}" stroke="#ff0000" stroke-width="0.7"/>
+      <text x="-20" y="${CH/2}" text-anchor="middle" font-size="8" fill="#ff0000" transform="rotate(-90,-20,${CH/2})">${largo_corte}</text>
+      <line x1="-12" y1="${CH}" x2="-12" y2="${H}" stroke="#ff0000" stroke-width="0.7"/>
+      <line x1="-15" y1="${H}" x2="-9" y2="${H}" stroke="#ff0000" stroke-width="0.7"/>
+      <text x="-20" y="${CH+(H-CH)/2}" text-anchor="middle" font-size="8" fill="#ff0000" transform="rotate(-90,-20,${CH+(H-CH)/2})">${largo-largo_corte}</text>
+      <line x1="0" y1="${H+12}" x2="${W}" y2="${H+12}" stroke="#ff0000" stroke-width="0.7"/>
+      <line x1="0" y1="${H+9}" x2="0" y2="${H+15}" stroke="#ff0000" stroke-width="0.7"/>
+      <line x1="${W}" y1="${H+9}" x2="${W}" y2="${H+15}" stroke="#ff0000" stroke-width="0.7"/>
+      <text x="${W/2}" y="${H+22}" text-anchor="middle" font-size="8" fill="#ff0000">${ancho}</text>
+      <line x1="${W+12}" y1="0" x2="${W+12}" y2="${H}" stroke="#ff0000" stroke-width="0.7"/>
+      <line x1="${W+9}" y1="0" x2="${W+15}" y2="0" stroke="#ff0000" stroke-width="0.7"/>
+      <line x1="${W+9}" y1="${H}" x2="${W+15}" y2="${H}" stroke="#ff0000" stroke-width="0.7"/>
+      <text x="${W+22}" y="${H/2}" text-anchor="middle" font-size="8" fill="#ff0000" transform="rotate(90,${W+22},${H/2})">${largo}</text>
+      <text x="${CW+(W-CW)/2}" y="${CH+(H-CH)/2}" text-anchor="middle" font-size="11" fill="#00cc44" font-weight="bold">${esp}mm</text>
+    </g>
+  </svg>`;
+}
+
 function renderHistItems(recs){
   if(!recs.length)return'<div style="text-align:center;color:var(--gr);font-size:13px;padding:.75rem">Nada registrado aún.</div>';
   return[...recs].reverse().map(r=>{
@@ -3170,7 +3213,19 @@ function renderHistItems(recs){
     let extra='';
     if(r.tipo==='corte'){
       extra+=`<div style="font-size:11px;color:#92400e;margin-top:3px">📋 ${r.pl_num||'—'} · ${r.pl_esp||'?'}×${r.pl_ancho||'?'}×${r.pl_largo||'?'} mm</div>`;
-      if(r.sob_hay==='si'&&r.sob_peso)extra+=`<div style="font-size:11px;color:var(--g);margin-top:1px">📦 Sob: ${r.sob_peso} kg</div>`;
+      // Sobrantes
+      const sobs=(()=>{try{return JSON.parse(r.sob_por_plancha||'[]');}catch(e){return[];}})();
+      sobs.forEach((s,si)=>{
+        if((s.hay||'si')==='no') return;
+        const ps=Number(s.sobPeso||s.peso||0); if(ps<=0) return;
+        const esL=s.tipo==='forma_l'&&s.ancho_corte>0&&s.largo_corte>0;
+        const svgId=`wfl_${r.id}_${si}`;
+        extra+=`<div style="font-size:11px;color:var(--g);margin-top:3px;cursor:${esL?'pointer':'default'}" ${esL?`onclick="document.getElementById('${svgId}').style.display=document.getElementById('${svgId}').style.display==='none'?'':'none'"`:''}">
+          📦 ${esL?'⌐ Forma en L · ':''}Sob: ${ps.toFixed(1)} kg${esL?' 👆 toca para ver':''}
+        </div>`;
+        if(esL) extra+=`<div id="${svgId}" style="display:none">${formaLSVG_wk(s.esp,s.ancho,s.largo,s.ancho_corte,s.largo_corte)}</div>`;
+      });
+      if(!sobs.length&&r.sob_hay==='si'&&r.sob_peso) extra+=`<div style="font-size:11px;color:var(--g);margin-top:1px">📦 Sob: ${r.sob_peso} kg</div>`;
       if(r.desperdicio)extra+=`<div style="font-size:11px;color:var(--r);margin-top:1px">🗑 Desp: ${r.desperdicio} kg</div>`;
     }
     if(r.sold_ml)extra+=`<div style="font-size:11px;color:#1e40af;margin-top:2px">🔥 ${r.sold_ml} ml · ${r.sold_tipo||''}</div>`;
