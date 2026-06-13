@@ -3406,9 +3406,7 @@ function saveSobrante(id){
   renderCorteHist(); renderDashboard(); renderStock();
   toast('✓ Sobrantes actualizados');
 }
-  }).join('')
-  :'<tr><td colspan="8" style="text-align:center;padding:1.5rem;color:var(--gm);">Sin cortes registrados</td></tr>';
-}
+
 function delCorte(id){
   const r=ST.cortes.find(x=>x.id===id);
   if(r){addExec(r.conjunto||r.cj,r.parte||r.pr,'Corte',-r.qty);}
