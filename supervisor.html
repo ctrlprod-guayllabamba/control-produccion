@@ -4088,16 +4088,17 @@ function renderStock(){
   const byMat={};
   items.forEach(s=>{
     const k=s.grado||'—';
-    if(!byMat[k]) byMat[k]={stock:0,waste:0};
+    if(!byMat[k]) byMat[k]={stock:0,waste:0,totalPlancha:0};
     if(s.dest==='stock') byMat[k].stock+=s.peso;
     else byMat[k].waste+=s.peso;
   });
   ST.cortes.forEach(c=>{
     const desp=Number(c.desperdicio||0);
-    if(desp<=0) return;
+    const plPeso=Number(c.pl_peso||0);
     const k=c.pl_mat||c.material||'—';
-    if(!byMat[k]) byMat[k]={stock:0,waste:0};
-    byMat[k].waste+=desp;
+    if(!byMat[k]) byMat[k]={stock:0,waste:0,totalPlancha:0};
+    if(desp>0) byMat[k].waste+=desp;
+    if(plPeso>0) byMat[k].totalPlancha+=plPeso;
   });
 
   document.getElementById('st-resumen').innerHTML='<div class="tw"><table><thead><tr><th>Material</th><th class="r">Stock (kg)</th><th class="r">Desperdicio (kg)</th><th class="r">% Desperdicio</th></tr></thead><tbody>'+
@@ -4105,7 +4106,7 @@ function renderStock(){
       <tr><td><strong>${mat}</strong></td>
       <td class="r" style="color:#166534;font-weight:700;">${v.stock.toFixed(1)}</td>
       <td class="r" style="color:var(--rt);font-weight:700;">${v.waste.toFixed(1)}</td>
-      <td class="r">${v.stock+v.waste>0?((v.waste/(v.stock+v.waste))*100).toFixed(1):'—'}%</td></tr>`).join('')+
+      <td class="r">${v.totalPlancha>0?((v.waste/v.totalPlancha)*100).toFixed(1):'—'}%</td></tr>`).join('')+
     '</tbody></table></div>';
 }
 
