@@ -1682,7 +1682,38 @@ function addExec(conjunto, parte, fase, qty) {
 
 // Get total executed for a parte in Corte (from cortes)
 function getCortadoQty(conjunto, parte) {
-  return ST.cortes.filter(c=>c.conjunto===conjunto&&c.parte===parte).reduce((s,c)=>s+c.qty,0);
+  return ST.cortes.filter(c=>c.conjunto===conjunto&&c.parte===parte).reduce((s,c)=>{
+    // Para registros descompuestos usar qty_subpiezas si existe
+    if(c.descompuesto && c.qty_subpiezas){
+      try{
+        const subs=JSON.parse(c.qty_subpiezas||'[]');
+        // Retornar el mínimo de vigas completas calculado correctamente
+        const PIEZAS_POR_VIGA={'Alma':1,'Patín':2,'Patin':2};
+        const vigas=subs.map(sp=>Math.floor((sp.qty||0)/(PIEZAS_POR_VIGA[sp.nombre]||1)));
+        return s+(vigas.length>0?Math.min(...vigas):c.qty);
+      }catch(e){ return s+c.qty; }
+    }
+    return s+c.qty;
+  },0);
+}
+
+// Obtener qty real de una sub-pieza específica (para panel de progreso por sub-pieza)
+function getSubpiezaQty(conjunto, parte, nombreSubpieza) {
+  return ST.cortes.filter(c=>c.conjunto===conjunto&&c.parte===parte&&c.descompuesto).reduce((s,c)=>{
+    if(c.qty_subpiezas){
+      try{
+        const subs=JSON.parse(c.qty_subpiezas||'[]');
+        const match=subs.find(sp=>sp.nombre===nombreSubpieza);
+        return s+(match?match.qty:0);
+      }catch(e){}
+    }
+    // Fallback: leer pl_cortes_por_plancha
+    try{
+      const piezas=JSON.parse(c.pl_cortes_por_plancha||'[]');
+      const match=piezas.find(p=>p.nombre===nombreSubpieza);
+      return s+(match?match.qty:0);
+    }catch(e){ return s; }
+  },0);
 }
 
 function getCortadoKg(conjunto, parte) {
@@ -2423,10 +2454,10 @@ function supRmPieza(i){ supPiezas.splice(i,1); supRenderPiezas(); }
 let supSubPiezas = [];
 let _supDescompActivo = false;
 const PIEZAS_HI_SUP = {
-  'HI300-10-12*300': [{tipo:'Alma',esp:10,ancho:276,qty:1},{tipo:'Patín',esp:12,ancho:300,qty:2}],
-  'HI250-10-20*300': [{tipo:'Alma',esp:10,ancho:210,qty:1},{tipo:'Patín',esp:20,ancho:300,qty:2}],
-  'HI250-10-20*250': [{tipo:'Alma',esp:10,ancho:210,qty:1},{tipo:'Patín',esp:20,ancho:250,qty:2}],
-  'HI234-8-12*180':  [{tipo:'Alma',esp:8, ancho:210,qty:1},{tipo:'Patín',esp:12,ancho:180,qty:2}],
+  'HI300-10-12*300': [{tipo:'Alma',esp:12,ancho:300,qty:1},{tipo:'Patín',esp:10,ancho:276,qty:2}],
+  'HI250-10-20*300': [{tipo:'Alma',esp:20,ancho:300,qty:1},{tipo:'Patín',esp:10,ancho:210,qty:2}],
+  'HI250-10-20*250': [{tipo:'Alma',esp:20,ancho:250,qty:1},{tipo:'Patín',esp:10,ancho:210,qty:2}],
+  'HI234-8-12*180':  [{tipo:'Alma',esp:12,ancho:180,qty:1},{tipo:'Patín',esp:8, ancho:210,qty:2}],
 };
 
 function supToggleDescomp(){
@@ -2549,13 +2580,18 @@ function supRecalcDesp(){
   if(plan>0&&supSubPiezas.some(s=>s.qty>0)){
     const perfil=opt?.text?.match(/HI[\d\-\*]+/)?.[0]||'';
     const piezasHI=PIEZAS_HI_SUP[perfil]||[];
+    const cjVal=document.getElementById('c-cj')?.value||'';
+    const parteVal=opt?.value||'';
     let vigasMin=plan;
     const info=supSubPiezas.map((s,i)=>{
       const qpv=piezasHI[i]?.qty||1;
-      const vigas=Math.floor((s.qty||0)/qpv);
-      const faltanPzas=Math.max(0,plan*qpv-(s.qty||0));
+      // Sumar historial de todos los operarios para esta sub-pieza
+      const yaQty=getSubpiezaQty(cjVal, parteVal, s.nombre);
+      const totalQty=(s.qty||0)+yaQty;
+      const vigas=Math.floor(totalQty/qpv);
+      const faltanPzas=Math.max(0,plan*qpv-totalQty);
       vigasMin=Math.min(vigasMin,vigas);
-      return {nombre:s.nombre,qty:s.qty||0,planTotal:plan*qpv,faltanPzas,faltanVigas:Math.max(0,plan-vigas)};
+      return {nombre:s.nombre,qty:totalQty,planTotal:plan*qpv,faltanPzas,faltanVigas:Math.max(0,plan-vigas)};
     });
     const pct=plan>0?Math.min(100,vigasMin/plan*100):0;
     const prog=document.getElementById('sup-prog-vigas');
