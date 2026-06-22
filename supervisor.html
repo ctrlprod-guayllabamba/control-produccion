@@ -1739,13 +1739,29 @@ function getVigasCompletas(cj) {
   const PIEZAS_HI_KEYS = ['HI300','HI250','HI234'];
   const detalle = c.partes.map(p=>{
     const qtyPorViga = vigasPlan>0 ? p.cantidad/vigasPlan : 1;
-    const cortado = getCortadoQty(cj, p.parte);
     const esHI = PIEZAS_HI_KEYS.some(k=>p.perfil&&p.perfil.includes(k));
-    // Para HI descompuestos, qty ya representa vigas completas
-    const vigasEsta = esHI ? cortado : Math.floor(cortado/qtyPorViga);
+    // Para HI descompuestos, calcular por sub-pieza usando qty_subpiezas
+    let cortado, vigasEsta, subpiezasDetalle=[];
+    if(esHI && PIEZAS_HI_SUP[p.perfil]){
+      const piezasHI = PIEZAS_HI_SUP[p.perfil];
+      // Calcular vigas posibles por cada sub-pieza
+      const vigasPorSub = piezasHI.map(sp=>{
+        const qtyCorte = getSubpiezaQty(cj, p.parte, sp.tipo);
+        const vigasSub = Math.floor(qtyCorte / sp.qty);
+        const planSub = vigasPlan * sp.qty;
+        const faltanSub = Math.max(0, planSub - qtyCorte);
+        subpiezasDetalle.push({nombre:sp.tipo, cortado:qtyCorte, planTotal:planSub, faltanPzas:faltanSub, faltanVigas:Math.max(0,vigasPlan-vigasSub)});
+        return vigasSub;
+      });
+      vigasEsta = vigasPorSub.length>0 ? Math.min(...vigasPorSub) : 0;
+      cortado = vigasEsta; // vigas completas
+    } else {
+      cortado = getCortadoQty(cj, p.parte);
+      vigasEsta = Math.floor(cortado/qtyPorViga);
+    }
     const faltanPiezas = Math.max(0, p.cantidad - cortado);
     const faltanVigas = Math.max(0, vigasPlan - vigasEsta);
-    return {parte:p.parte, perfil:p.perfil, qtyPorViga, cortado, vigasEsta, faltanPiezas, faltanVigas, planTotal:p.cantidad, esHI};
+    return {parte:p.parte, perfil:p.perfil, qtyPorViga, cortado, vigasEsta, faltanPiezas, faltanVigas, planTotal:p.cantidad, esHI, subpiezasDetalle};
   });
   const vigasCompletas = Math.max(0, Math.min(...detalle.map(d=>d.vigasEsta)));
   return {vigasCompletas, vigasPlan, detalle};
@@ -2011,10 +2027,17 @@ function renderPendientes() {
         <div style="font-size:10px;font-weight:700;color:${r.kgPct>=100?'#166534':'#b45309'}">${r.kgPct.toFixed(1)}%</div>
       </td>
       <td style="font-size:10px;">
-        ${r.detalle.map(d=>`<div style="display:flex;justify-content:space-between;gap:8px;padding:1px 0;border-bottom:1px solid #f3f4f6">
-          <span style="font-weight:600">${d.parte}</span>
-          <span style="color:#6b7280">${d.cortado}/${d.planTotal} pzas</span>
-          <span style="color:${d.faltanVigas>0?'#b45309':'#166534'};font-weight:700">${d.faltanVigas>0?'−'+d.faltanVigas+' vigas':'✓'}</span>
+        ${r.detalle.map(d=>`<div style="padding:2px 0;border-bottom:1px solid #f3f4f6">
+          <div style="display:flex;justify-content:space-between;gap:8px;">
+            <span style="font-weight:600">${d.parte}</span>
+            <span style="color:#6b7280">${d.cortado}/${d.planTotal} ${d.esHI?'vigas':'pzas'}</span>
+            <span style="color:${d.faltanVigas>0?'#b45309':'#166534'};font-weight:700">${d.faltanVigas>0?'−'+d.faltanVigas+' vigas':'✓'}</span>
+          </div>
+          ${d.esHI && d.subpiezasDetalle?.length>0 ? d.subpiezasDetalle.map(sp=>`
+            <div style="display:flex;justify-content:space-between;gap:4px;padding:1px 0 1px 8px;font-size:10px;color:#6b7280;">
+              <span>↳ ${sp.nombre}</span>
+              <span style="color:${sp.faltanPzas>0?'#b45309':'#166534'};font-weight:600">${sp.cortado}/${sp.planTotal} pzas ${sp.faltanPzas>0?'(faltan '+sp.faltanPzas+')':'✓'}</span>
+            </div>`).join('') : ''}
         </div>`).join('')}
       </td>
       <td class="r" style="font-size:10px;white-space:nowrap;">
@@ -2100,6 +2123,11 @@ function renderTekla() {
         <td class="r" style="color:#166534;font-weight:700;">
           ${ejVigas} vigas
           <div style="font-size:10px;color:#6b7280">${piezasCortadas}/${p.cantidad} pzas · ${ejKg.toFixed(0)} kg</div>
+          ${parteDetalle?.esHI && parteDetalle?.subpiezasDetalle?.length>0 ? parteDetalle.subpiezasDetalle.map(sp=>`
+            <div style="font-size:10px;padding:1px 0;display:flex;justify-content:space-between;">
+              <span style="color:#6b7280">↳ ${sp.nombre}</span>
+              <span style="color:${sp.faltanPzas>0?'#b45309':'#166534'};font-weight:700">${sp.cortado}/${sp.planTotal} pzas</span>
+            </div>`).join('') : ''}
         </td>
         <td class="r">
           <span style="font-weight:800;color:${pend>0?'#b45309':'#166534'}">${pend} vigas</span>
