@@ -2260,16 +2260,24 @@ function wkRecalcDesp(){
       const qtyPorViga = piezasHI ? (piezasHI[i]?.qty||1) : 1;
       // Cantidad ya cortada en historial para este nombre de sub-pieza
       let yaQty = 0;
+      // Clasificar sub-pieza por espesor del perfil, independiente del nombre/orden
+      const ALMA_ESP_WK = {'HI300-10-12*300':12,'HI250-10-20*300':20,'HI250-10-20*250':20,'HI234-8-12*180':12};
+      const perfilActual = selParte?.perfil||'';
+      const almaEspWk = ALMA_ESP_WK[perfilActual];
+      function clasificarSpWk(sp){
+        if(!almaEspWk) return sp.nombre;
+        return (Number(sp.esp)===almaEspWk)?'Alma':'Patín';
+      }
       yaCorte.forEach(r=>{
         // Primero intentar qty_subpiezas (más preciso)
         const qtySubp=(()=>{try{return JSON.parse(r.qty_subpiezas||'[]');}catch(e){return[];}})();
         if(qtySubp.length>0){
-          const match=qtySubp.find(sp=>sp.nombre===s.nombre);
+          const match=qtySubp.find(sp=>clasificarSpWk(sp)===s.nombre);
           if(match){ yaQty+=match.qty||0; return; }
         }
-        // Fallback: leer pl_cortes_por_plancha filtrando por nombre
+        // Fallback: leer pl_cortes_por_plancha clasificando por espesor
         const piezas=(()=>{try{return JSON.parse(r.pl_cortes_por_plancha||'[]');}catch(e){return[];}})();
-        piezas.forEach(p=>{ if(p.nombre===s.nombre) yaQty+=p.qty||0; });
+        piezas.forEach(p=>{ if(clasificarSpWk(p)===s.nombre) yaQty+=p.qty||0; });
       });
       const esteRegistro = s.qty||0;
       const totalQty = yaQty + esteRegistro;

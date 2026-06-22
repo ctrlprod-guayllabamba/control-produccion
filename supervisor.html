@@ -1698,19 +1698,37 @@ function getCortadoQty(conjunto, parte) {
 }
 
 // Obtener qty real de una sub-pieza específica (para panel de progreso por sub-pieza)
+// Clasificar sub-pieza por espesor según perfil, independiente del orden o nombre ingresado
+function clasificarSubpieza(sp, perfil) {
+  // Definir qué espesor corresponde a Alma y Patín por perfil
+  const ALMA_ESP = {
+    'HI300-10-12*300': 12, 'HI250-10-20*300': 20, 'HI250-10-20*250': 20, 'HI234-8-12*180': 12
+  };
+  const almaEsp = ALMA_ESP[perfil];
+  if(!almaEsp) return sp.nombre; // si no conocemos el perfil, usar nombre original
+  return (sp.esp === almaEsp) ? 'Alma' : 'Patín';
+}
+
 function getSubpiezaQty(conjunto, parte, nombreSubpieza) {
+  // Buscar perfil de la parte
+  const cjData = TEKLA.conjuntos.find(x=>x.conjunto===conjunto);
+  const parteData = cjData?.partes.find(p=>p.parte===parte);
+  const perfil = parteData?.perfil || '';
+
   return ST.cortes.filter(c=>c.conjunto===conjunto&&c.parte===parte&&c.descompuesto).reduce((s,c)=>{
+    // Intentar qty_subpiezas primero
     if(c.qty_subpiezas){
       try{
         const subs=JSON.parse(c.qty_subpiezas||'[]');
-        const match=subs.find(sp=>sp.nombre===nombreSubpieza);
-        return s+(match?match.qty:0);
+        // Clasificar por espesor, no por nombre
+        const match=subs.find(sp=>clasificarSubpieza(sp, perfil)===nombreSubpieza);
+        if(match) return s+match.qty;
       }catch(e){}
     }
-    // Fallback: leer pl_cortes_por_plancha
+    // Fallback: leer pl_cortes_por_plancha y clasificar por espesor
     try{
       const piezas=JSON.parse(c.pl_cortes_por_plancha||'[]');
-      const match=piezas.find(p=>p.nombre===nombreSubpieza);
+      const match=piezas.find(p=>clasificarSubpieza(p, perfil)===nombreSubpieza);
       return s+(match?match.qty:0);
     }catch(e){ return s; }
   },0);
