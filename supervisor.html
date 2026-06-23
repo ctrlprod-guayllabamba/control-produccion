@@ -3799,7 +3799,7 @@ function pRenderVigas(){
           ${completa?'✅':'🔶'} Viga ${i+1} ${completa?'— COMPLETA':'— EN PROGRESO'}
         </span>
         <div style="display:flex;gap:6px;align-items:center">
-          ${pesoViga>0?`<span style="font-size:12px;font-weight:700;color:#065f46">⚖ ${pesoViga.toFixed(1)} kg</span>`:''}
+          ${pesoViga>0?`<span data-viga-peso="${i}" style="font-size:12px;font-weight:700;color:#065f46">⚖ ${pesoViga.toFixed(1)} kg</span>`:`<span data-viga-peso="${i}"></span>`}
           ${pVigasData.length>1?`<button onclick="pRemoveViga(${i})" style="background:#fee2e2;color:#991b1b;border:none;border-radius:6px;padding:2px 8px;font-size:12px;cursor:pointer">✕</button>`:''}
         </div>
       </div>
@@ -3877,21 +3877,40 @@ function pSetSubQty(vigaIdx, parte, subtipo, val){
   if(!pVigasData[vigaIdx].subQty) pVigasData[vigaIdx].subQty={};
   if(!pVigasData[vigaIdx].subQty[parte]) pVigasData[vigaIdx].subQty[parte]={};
   pVigasData[vigaIdx].subQty[parte][subtipo]=parseInt(val)||0;
+  // Solo recalcular peso sin re-render completo
+  _pUpdatePesoDisplay(vigaIdx);
   pCalcResumenDia();
-  // Actualizar solo el peso sin re-render completo
-  const cj=document.getElementById('p-cj')?.value;
-  const c=TEKLA.conjuntos.find(x=>x.conjunto===cj);
-  if(!c) return;
-  // Re-render para actualizar colores
-  pRenderVigas();
 }
 
 function pSetQty(vigaIdx, parte, val){
   if(!pVigasData[vigaIdx]) return;
   if(!pVigasData[vigaIdx].qty) pVigasData[vigaIdx].qty={};
   pVigasData[vigaIdx].qty[parte]=parseInt(val)||0;
+  _pUpdatePesoDisplay(vigaIdx);
   pCalcResumenDia();
-  pRenderVigas();
+}
+
+function _pUpdatePesoDisplay(vigaIdx){
+  const cj=document.getElementById('p-cj')?.value;
+  const c=TEKLA.conjuntos.find(x=>x.conjunto===cj);
+  if(!c) return;
+  const v=pVigasData[vigaIdx];
+  let pesoViga=0;
+  c.partes.forEach(p=>{
+    const piezasHI=PIEZAS_HI_SUP[p.perfil];
+    if(piezasHI){
+      piezasHI.forEach(sp=>{
+        const qty=Number(v.subQty?.[p.parte]?.[sp.tipo]||0);
+        if(qty>0) pesoViga+=sp.esp*sp.ancho*(p.longitud||3000)*7.85e-6*qty;
+      });
+    } else {
+      const qty=Number(v.qty?.[p.parte]||0);
+      if(qty>0) pesoViga+=(p.peso_unit||0)*qty;
+    }
+  });
+  // Actualizar badge de peso en la viga
+  const badges=document.querySelectorAll(`[data-viga-peso="${vigaIdx}"]`);
+  badges.forEach(b=>b.textContent=pesoViga>0?`⚖ ${pesoViga.toFixed(1)} kg`:'');
 }
 
 function pCalcResumenDia(){
