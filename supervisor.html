@@ -1702,7 +1702,7 @@ function getCortadoQty(conjunto, parte) {
 function clasificarSubpieza(sp, perfil) {
   // Definir qué espesor corresponde a Alma y Patín por perfil
   const ALMA_ESP = {
-    'HI300-10-12*300': 12, 'HI250-10-20*300': 20, 'HI250-10-20*250': 20, 'HI234-8-12*180': 12
+    'HI300-10-12*300': 10, 'HI250-10-20*300': 10, 'HI250-10-20*250': 10, 'HI234-8-12*180': 8
   };
   const almaEsp = ALMA_ESP[perfil];
   if(!almaEsp) return sp.nombre; // si no conocemos el perfil, usar nombre original
@@ -2500,10 +2500,14 @@ function supRmPieza(i){ supPiezas.splice(i,1); supRenderPiezas(); }
 let supSubPiezas = [];
 let _supDescompActivo = false;
 const PIEZAS_HI_SUP = {
-  'HI300-10-12*300': [{tipo:'Alma',esp:12,ancho:300,qty:1},{tipo:'Patín',esp:10,ancho:276,qty:2}],
-  'HI250-10-20*300': [{tipo:'Alma',esp:20,ancho:300,qty:1},{tipo:'Patín',esp:10,ancho:210,qty:2}],
-  'HI250-10-20*250': [{tipo:'Alma',esp:20,ancho:250,qty:1},{tipo:'Patín',esp:10,ancho:210,qty:2}],
-  'HI234-8-12*180':  [{tipo:'Alma',esp:12,ancho:180,qty:1},{tipo:'Patín',esp:8, ancho:210,qty:2}],
+  // HI300-10-12*300: Alma=PL10×276 (1ud), Patín=PL12×300 (2uds)
+  'HI300-10-12*300': [{tipo:'Alma',esp:10,ancho:276,qty:1},{tipo:'Patín',esp:12,ancho:300,qty:2}],
+  // HI250-10-20*300: Alma=PL10×210 (1ud), Patín=PL20×300 (2uds)
+  'HI250-10-20*300': [{tipo:'Alma',esp:10,ancho:210,qty:1},{tipo:'Patín',esp:20,ancho:300,qty:2}],
+  // HI250-10-20*250: Alma=PL10×210 (1ud), Patín=PL20×250 (2uds)
+  'HI250-10-20*250': [{tipo:'Alma',esp:10,ancho:210,qty:1},{tipo:'Patín',esp:20,ancho:250,qty:2}],
+  // HI234-8-12*180: Alma=PL8×210 (1ud), Patín=PL12×180 (2uds)
+  'HI234-8-12*180':  [{tipo:'Alma',esp:8, ancho:210,qty:1},{tipo:'Patín',esp:12,ancho:180,qty:2}],
 };
 
 function supToggleDescomp(){
