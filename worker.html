@@ -931,19 +931,18 @@ function selectWorker(w){
 }
 
 async function loadMyRecs(){
-  // Always show local first
-  _cache = LS.g(WORKER_RECS_LS, []).filter(r => r.opId == W?.id);
-  // Then try GAS
+  // Cargar registros locales primero
+  _cache = LS.g(WORKER_RECS_LS, []);
+  // Cargar TODOS los registros del GAS (todos los operarios) para progreso global
   if (GAS.configured()) {
     try {
-      const recs = await GAS.get('getRegistros', {opId: W.id});
-      if (recs && recs.length) {
-        // Merge: server recs + any local not yet synced
-        const serverIds = new Set(recs.map(r => String(r.id)));
-        const localOnly = LS.g(WORKER_RECS_LS, []).filter(r => r.opId == W.id && !serverIds.has(String(r.id)));
-        _cache = [...recs, ...localOnly];
+      const allRecs = await GAS.get('getRegistros');
+      if (allRecs && allRecs.length) {
+        const serverIds = new Set(allRecs.map(r => String(r.id)));
+        const localOnly = LS.g(WORKER_RECS_LS, []).filter(r => !serverIds.has(String(r.id)));
+        _cache = [...allRecs, ...localOnly];
       }
-    } catch(e) { /* offline, use local */ }
+    } catch(e) { /* offline */ }
   }
   return _cache;
 }
@@ -975,9 +974,10 @@ function saveRec(rec) {
 }
 
 function myExec(cj,pr,fase){return _cache.filter(r=>r.cj===cj&&r.pr===pr&&r.fase===fase).reduce((s,r)=>s+r.qty,0);}
-function totalExec(cj,pr,fase){   const all = _cache.length > 0 ? _cache : LS.g(WORKER_RECS_LS, []);   return all.filter(r=>(r.cj||r.conjunto)===cj&&(r.pr||r.parte)===pr&&r.fase===fase).reduce((s,r)=>s+(Number(r.qty)||0),0); }cj,pr,fase){
-  const all = LS.g(WORKER_RECS_LS, []);
-  return all.filter(r=>r.cj===cj&&r.pr===pr&&r.fase===fase).reduce((s,r)=>s+r.qty,0);
+function totalExec(cj,pr,fase){
+  // Usar _cache (que incluye datos del GAS) si está disponible
+  const all = _cache.length > 0 ? _cache : LS.g(WORKER_RECS_LS, []);
+  return all.filter(r=>(r.cj||r.conjunto)===cj&&(r.pr||r.parte)===pr&&r.fase===fase).reduce((s,r)=>s+(Number(r.qty)||0),0);
 }
 
 // ======= FASE GRID =======
@@ -1114,37 +1114,42 @@ function selectParte(prId){
     wkMateriales=[{tipo:'plancha',qty:1,grado:'A588-50'}];
     wkPiezas=[{forma:'rectangular',qty:0,largo:selParte.long||0}];
     wkSobrantes=[{tipo:'plancha',qty:1,dest:'stock'}];
-    // Reset descomposición
     _descompActivo=false; wkSubPiezas=[];
     const chkDesp=document.getElementById('wk-chk-desp');
     if(chkDesp) chkDesp.checked=false;
     document.getElementById('wk-pzas-normal').style.display='';
     document.getElementById('wk-pzas-desp').style.display='none';
-    // Mostrar toggle solo para perfiles HI
     const toggleDesp=document.getElementById('wk-toggle-desp');
     if(toggleDesp) toggleDesp.style.display=PIEZAS_HI[selParte.perfil]?'':'none';
-    const yaHecho=totalExec(selCj.cj,selParte.pr,'Corte');
-    const plan=selParte.plan; const pu=selParte.pu;
-    const pend=Math.max(0,plan-yaHecho);
-    document.getElementById('wk-parte-info').style.display='';
-    document.getElementById('wk-info-plan').textContent=plan+' uds';
-    document.getElementById('wk-info-plan-kg').textContent=(plan*pu).toFixed(1)+' kg';
-    document.getElementById('wk-info-ej').textContent=yaHecho+' uds';
-    document.getElementById('wk-info-ej-kg').textContent=(yaHecho*pu).toFixed(1)+' kg';
-    document.getElementById('wk-info-pend').textContent=pend+' uds';
-    document.getElementById('wk-info-pend-kg').textContent=(pend*pu).toFixed(1)+' kg';
-    const pct=plan>0?(yaHecho/plan*100):0;
-    const bar=document.getElementById('wk-info-bar');
-    if(bar){bar.style.width=pct+'%';bar.style.background=pct>=100?'#22c55e':pct>=80?'#f59e0b':'#3b82f6';}
-    const msg=document.getElementById('wk-info-msg');
-    if(msg&&pend===0){msg.style.display='';msg.style.background='#f0fdf4';msg.style.color='#065f46';msg.innerHTML='✅ Esta parte ya está completamente cortada.';}
-    else if(msg) msg.style.display='none';
-    document.getElementById('wk-info-txt').textContent='Long: '+selParte.long+' mm · '+pu+' kg/ud';
     wkRenderMateriales(); wkRenderPiezas(); wkRenderSobrantes();
     go('sc-plancha');
+    // Cargar registros del GAS para mostrar progreso correcto
+    loadMyRecs().then(()=>{ _actualizarPanelParte(); });
+    _actualizarPanelParte(); // mostrar con lo que hay en caché mientras carga
   } else {
     buildForm();go('sc-form');
   }
+}
+
+function _actualizarPanelParte(){
+  if(!selParte||!selCj) return;
+  const yaHecho=totalExec(selCj.cj,selParte.pr,'Corte');
+  const plan=selParte.plan; const pu=selParte.pu;
+  const pend=Math.max(0,plan-yaHecho);
+  document.getElementById('wk-parte-info').style.display='';
+  document.getElementById('wk-info-plan').textContent=plan+' uds';
+  document.getElementById('wk-info-plan-kg').textContent=(plan*pu).toFixed(1)+' kg';
+  document.getElementById('wk-info-ej').textContent=yaHecho+' uds';
+  document.getElementById('wk-info-ej-kg').textContent=(yaHecho*pu).toFixed(1)+' kg';
+  document.getElementById('wk-info-pend').textContent=pend+' uds';
+  document.getElementById('wk-info-pend-kg').textContent=(pend*pu).toFixed(1)+' kg';
+  const pct=plan>0?(yaHecho/plan*100):0;
+  const bar=document.getElementById('wk-info-bar');
+  if(bar){bar.style.width=pct+'%';bar.style.background=pct>=100?'#22c55e':pct>=80?'#f59e0b':'#3b82f6';}
+  const msg=document.getElementById('wk-info-msg');
+  if(msg&&pend===0){msg.style.display='';msg.style.background='#f0fdf4';msg.style.color='#065f46';msg.innerHTML='✅ Esta parte ya está completamente cortada.';}
+  else if(msg) msg.style.display='none';
+  document.getElementById('wk-info-txt').textContent='Long: '+selParte.long+' mm · '+pu+' kg/ud';
 }
 
 function addPlanchaRowHI(idx, pz){
@@ -2248,9 +2253,20 @@ function wkRecalcDesp(){
       const qtyPorViga = piezasHI ? (piezasHI[i]?.qty||1) : 1;
       // Cantidad ya cortada en historial para este nombre de sub-pieza
       let yaQty = 0;
+      const espEsperado = piezasHI?.[i]?.esp; // espesor esperado para esta sub-pieza
       yaCorte.forEach(r=>{
         const piezas=(()=>{try{return JSON.parse(r.pl_cortes_por_plancha||'[]');}catch(e){return[];}})();
-        piezas.forEach(p=>{ if(p.nombre===s.nombre||p.descompuesto) yaQty+=p.qty||0; });
+        piezas.forEach(p=>{
+          // Clasificar por espesor si es HI y el registro tiene esp definido
+          // Si no tiene esp (formato viejo), usar nombre
+          let coincide = false;
+          if(espEsperado && p.esp && p.esp > 0){
+            coincide = (Number(p.esp) === Number(espEsperado));
+          } else if(p.nombre && s.nombre){
+            coincide = (p.nombre === s.nombre);
+          }
+          if(coincide) yaQty += p.qty||0;
+        });
       });
       const esteRegistro = s.qty||0;
       const totalQty = yaQty + esteRegistro;
