@@ -2038,11 +2038,11 @@ function renderPendientes() {
       <td class="r" style="color:#166534;font-weight:700;">${r.vigasCompletas}</td>
       <td class="r"><span style="font-size:13px;font-weight:800;color:#b45309;background:#fff3cd;padding:2px 8px;border-radius:5px;">${r.pendVigas}</span></td>
       <td class="r">
-        <div style="font-size:10px;color:#6b7280;">${r.kgEjec.toFixed(0)}/${r.kgPlan.toFixed(0)} kg</div>
+        <div style="font-size:10px;color:#6b7280;">${(r.kgEjec||0).toFixed(0)}/${(r.kgPlan||0).toFixed(0)} kg</div>
         <div style="background:#e5e7eb;border-radius:3px;height:4px;overflow:hidden;margin:2px 0">
-          <div style="background:${r.kgPct>=100?'#166534':'#e8631a'};height:100%;width:${Math.min(100,r.kgPct).toFixed(0)}%"></div>
+          <div style="background:${(r.kgPct||0)>=100?'#166534':'#e8631a'};height:100%;width:${Math.min(100,(r.kgPct||0)).toFixed(0)}%"></div>
         </div>
-        <div style="font-size:10px;font-weight:700;color:${r.kgPct>=100?'#166534':'#b45309'}">${r.kgPct.toFixed(1)}%</div>
+        <div style="font-size:10px;font-weight:700;color:${(r.kgPct||0)>=100?'#166534':'#b45309'}">${(r.kgPct||0).toFixed(1)}%</div>
       </td>
       <td style="font-size:10px;">
         ${r.detalle.map(d=>`<div style="padding:2px 0;border-bottom:1px solid #f3f4f6">
@@ -2335,6 +2335,7 @@ function supStockDisponible(){
 }
 
 function _calcStockSaldos(){
+  try {
   // 1. Recopilar todos los sobrantes generados
   const sobs = {};
   ST.cortes.forEach(c=>{
@@ -2389,6 +2390,7 @@ function _calcStockSaldos(){
   });
 
   return Object.values(sobs).sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha)));
+  } catch(e){ console.error('_calcStockSaldos error:',e); return []; }
 }
 
 function supSelStock(i){
@@ -2404,7 +2406,7 @@ function supSelStock(i){
     colada:s.colada, grado:s.grado,
     esp:s.esp, ancho:s.ancho, largo:s.largo,
     ancho_corte:s.ancho_corte, largo_corte:s.largo_corte,
-    qty:1, peso:s.peso, tipoOrig:s.tipo,
+    qty:1, peso:s.saldo||s.pesoOriginal||0, tipoOrig:s.tipo,
   };
   supRenderMateriales();
 }
