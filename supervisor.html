@@ -861,36 +861,66 @@ global.Chart = class {
 
 <div class="g2">
   <div class="card">
-    <div class="card-hdr">Registrar Ejecución de Fase</div>
+    <div class="card-hdr">🔧 Registro de Armado / Producción</div>
     <div class="frow">
       <div class="fg"><label>Fecha</label><input type="date" id="p-fecha"></div>
       <div class="fg"><label>Turno</label><select id="p-turno"><option>Diurno</option><option>Nocturno</option></select></div>
+      <div class="fg"><label>Operario</label><select id="p-op"><option value="">Seleccionar...</option></select></div>
     </div>
     <div class="frow">
       <div class="fg wide"><label>Conjunto</label>
         <select id="p-cj" onchange="pUpdatePartes();pRenderRef()"><option value="">Seleccionar...</option></select>
       </div>
-    </div>
-    <div class="frow">
-      <div class="fg wide"><label>Parte</label>
-        <select id="p-parte" onchange="pCalcPeso()"><option value="">Seleccionar...</option></select>
-      </div>
-      <div class="fg fix" style="min-width:90px;"><label>Cantidad</label>
-        <input type="number" id="p-qty" min="1" placeholder="0" oninput="pCalcPeso()">
-      </div>
-    </div>
-    <div id="p-parte-info" style="display:none;background:var(--su);border-radius:7px;padding:8px 12px;margin-bottom:.5rem;font-size:11px;">
-      <span id="p-info-txt"></span>
-    </div>
-    <div class="frow">
       <div class="fg"><label>Fase</label>
-        <select id="p-fase" onchange="toggleSoldExtra()">
+        <select id="p-fase" onchange="toggleSoldExtra();pUpdateInfo();pBuildVigas()">
           <option>Armado</option><option>Soldadura</option>
           <option>Perforaciones</option><option>Limpieza Mecánica</option><option>Pintura</option>
         </select>
       </div>
-      <div class="fg"><label>Operario</label><select id="p-op"><option value="">Seleccionar...</option></select></div>
     </div>
+
+    <!-- Panel progreso -->
+    <div id="p-cj-info" style="display:none;background:#fffbeb;border:1.5px solid #fcd34d;border-radius:10px;padding:.75rem;margin-bottom:.625rem">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:.5rem">
+        <div style="background:#fff;border-radius:8px;padding:6px;text-align:center;border:1px solid #e5e7eb">
+          <div style="font-size:9px;font-weight:800;color:#6b7280">📐 PLAN</div>
+          <div id="p-info-plan" style="font-size:16px;font-weight:800;color:#1a2b4a">—</div>
+          <div id="p-info-plan-kg" style="font-size:10px;color:#6b7280">— kg</div>
+        </div>
+        <div style="background:#f0fdf4;border-radius:8px;padding:6px;text-align:center;border:1px solid #86efac">
+          <div style="font-size:9px;font-weight:800;color:#065f46">✅ EJECUTADO</div>
+          <div id="p-info-ej" style="font-size:16px;font-weight:800;color:#065f46">—</div>
+          <div id="p-info-ej-kg" style="font-size:10px;color:#065f46">— kg</div>
+        </div>
+        <div style="background:#fef3c7;border-radius:8px;padding:6px;text-align:center;border:1px solid #fcd34d">
+          <div style="font-size:9px;font-weight:800;color:#92400e">⏳ PENDIENTE</div>
+          <div id="p-info-pend" style="font-size:16px;font-weight:800;color:#92400e">—</div>
+          <div id="p-info-pend-kg" style="font-size:10px;color:#92400e">— kg</div>
+        </div>
+      </div>
+      <div style="background:#e5e7eb;border-radius:999px;height:8px;overflow:hidden">
+        <div id="p-info-bar" style="height:100%;border-radius:999px;background:#3b82f6;transition:width .4s;width:0%"></div>
+      </div>
+    </div>
+
+    <!-- REGISTRO DE VIGAS DEL DÍA -->
+    <div id="p-vigas-section" style="display:none">
+      <div style="font-size:10px;font-weight:800;color:#1e40af;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.5rem">
+        📋 Vigas trabajadas hoy
+        <span style="font-size:9px;font-weight:400;color:#6b7280;text-transform:none"> — marca las partes completadas en cada viga</span>
+      </div>
+      <div id="p-vigas-list"></div>
+      <button onclick="pAddViga()" style="width:100%;padding:.5rem;background:#eef4ff;color:#1e40af;border:1.5px dashed #93c5fd;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:.75rem">
+        + Agregar viga
+      </button>
+
+      <!-- Resumen del día -->
+      <div id="p-resumen-dia" style="display:none;background:#1a2b4a;color:#fff;border-radius:10px;padding:.875rem;margin-bottom:.75rem">
+        <div style="font-size:10px;font-weight:700;opacity:.7;margin-bottom:.5rem;text-transform:uppercase">Resumen del día</div>
+        <div id="p-resumen-grid" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px"></div>
+      </div>
+    </div>
+
     <!-- SOLDADURA EXTRA -->
     <div id="sold-extra-sup" style="display:none;background:#eef4ff;border:1.5px solid #bfdbfe;border-radius:10px;padding:.875rem;margin-bottom:.625rem;">
       <div style="font-size:10px;font-weight:800;color:#1e40af;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.625rem;">🔥 Metrado de Soldadura</div>
@@ -918,14 +948,17 @@ global.Chart = class {
         </div>
       </div>
     </div>
+
     <div class="frow">
-      <div class="fg"><label>Peso ejecutado (kg)</label><input type="number" id="p-peso" readonly placeholder="auto"></div>
       <div class="fg"><label>Calidad</label>
         <select id="p-cal">
           <option value="ok">✓ Aprobado</option>
           <option value="rep">⚠ Reproceso</option>
           <option value="rec">✗ Rechazo</option>
         </select>
+      </div>
+      <div class="fg"><label>Peso ejecutado (kg) AUTO</label>
+        <input type="number" id="p-peso" readonly placeholder="auto" style="background:var(--su);font-weight:700">
       </div>
     </div>
     <div class="frow">
@@ -3705,22 +3738,160 @@ function initProdSelects(){
   selOp.innerHTML='<option value="">Seleccionar...</option>'+ST.ops.map(o=>`<option value="${o.id}">${o.nom} ${o.ape} (${o.rol})</option>`).join('');
   const f=document.getElementById('p-fecha');if(f&&!f.value)f.value=today();
 }
+// ══════════════════════════════════════════════════
+// PRODUCCIÓN — SISTEMA GRANULAR POR VIGA
+// ══════════════════════════════════════════════════
+let pVigasData = []; // array de vigas del día con sus partes
+
+function pBuildVigas(){
+  const cj = document.getElementById('p-cj')?.value;
+  const fase = document.getElementById('p-fase')?.value||'Armado';
+  const sec = document.getElementById('p-vigas-section');
+  if(!cj||!sec){ if(sec) sec.style.display='none'; return; }
+  sec.style.display = '';
+  pVigasData = [{partes:{}}]; // empezar con una viga
+  pRenderVigas();
+  pUpdateInfo();
+}
+
+function pAddViga(){
+  pVigasData.push({partes:{}});
+  pRenderVigas();
+}
+
+function pRemoveViga(i){
+  if(pVigasData.length<=1) return;
+  pVigasData.splice(i,1);
+  pRenderVigas();
+}
+
+function pRenderVigas(){
+  const cj = document.getElementById('p-cj')?.value;
+  const c = TEKLA.conjuntos.find(x=>x.conjunto===cj);
+  const cont = document.getElementById('p-vigas-list');
+  if(!cont||!c) return;
+
+  cont.innerHTML = pVigasData.map((v,i)=>{
+    // Calcular peso de esta viga según partes marcadas
+    let pesoViga = 0;
+    c.partes.forEach(p=>{
+      if(v.partes[p.parte]) pesoViga += p.peso_unit||0;
+    });
+    const completa = c.partes.every(p=>v.partes[p.parte]);
+
+    return `<div style="border:2px solid ${completa?'#86efac':'#bfdbfe'};border-radius:12px;padding:.875rem;margin-bottom:.625rem;background:${completa?'#f0fdf4':'#f8faff'}">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.625rem">
+        <span style="font-size:13px;font-weight:700;color:${completa?'#065f46':'#1e40af'}">
+          ${completa?'✅':'🔶'} Viga ${i+1} ${completa?'— COMPLETA':'— EN PROGRESO'}
+        </span>
+        <div style="display:flex;gap:6px;align-items:center">
+          ${pesoViga>0?`<span style="font-size:11px;font-weight:700;color:#065f46">⚖ ${pesoViga.toFixed(1)} kg</span>`:''}
+          ${pVigasData.length>1?`<button onclick="pRemoveViga(${i})" style="background:#fee2e2;color:#991b1b;border:none;border-radius:6px;padding:2px 8px;font-size:12px;cursor:pointer">✕</button>`:''}
+        </div>
+      </div>
+      <!-- Checkboxes por parte -->
+      <div style="display:flex;flex-wrap:wrap;gap:6px">
+        ${c.partes.map(p=>{
+          const checked = v.partes[p.parte]||false;
+          const pesoP = p.peso_unit||0;
+          return `<label style="display:flex;align-items:center;gap:4px;background:${checked?'#dcfce7':'#f1f5f9'};border:1.5px solid ${checked?'#86efac':'#cbd5e1'};border-radius:8px;padding:6px 10px;cursor:pointer;font-size:12px;font-weight:${checked?'700':'400'};color:${checked?'#065f46':'#374151'}">
+            <input type="checkbox" ${checked?'checked':''} onchange="pToggleParte(${i},'${p.parte}',this.checked)" style="width:14px;height:14px;cursor:pointer">
+            ${p.parte}
+            <span style="font-size:10px;color:#6b7280;font-family:monospace">${p.perfil}</span>
+            <span style="font-size:10px;color:#065f46;font-weight:700">${pesoP.toFixed(1)}kg</span>
+          </label>`;
+        }).join('')}
+      </div>
+    </div>`;
+  }).join('');
+
+  pCalcResumenDia();
+}
+
+function pToggleParte(vigaIdx, parte, checked){
+  if(!pVigasData[vigaIdx]) return;
+  pVigasData[vigaIdx].partes[parte] = checked;
+  pRenderVigas();
+}
+
+function pCalcResumenDia(){
+  const cj = document.getElementById('p-cj')?.value;
+  const c = TEKLA.conjuntos.find(x=>x.conjunto===cj);
+  const resumen = document.getElementById('p-resumen-dia');
+  const grid = document.getElementById('p-resumen-grid');
+  if(!c||!resumen||!grid) return;
+
+  const vigasCompletas = pVigasData.filter(v=>c.partes.every(p=>v.partes[p.parte])).length;
+  const vigasIncompletas = pVigasData.filter(v=>!c.partes.every(p=>v.partes[p.parte])&&Object.values(v.partes).some(x=>x)).length;
+
+  let pesoTotal = 0;
+  pVigasData.forEach(v=>{
+    c.partes.forEach(p=>{ if(v.partes[p.parte]) pesoTotal += p.peso_unit||0; });
+  });
+
+  // Qty para el campo oculto
+  const qtyTotal = pVigasData.length;
+  document.getElementById('p-qty').value = qtyTotal;
+  document.getElementById('p-peso').value = pesoTotal.toFixed(2);
+
+  resumen.style.display = pVigasData.length>0 ? '' : 'none';
+  grid.innerHTML = `
+    <div style="text-align:center">
+      <div style="font-size:9px;opacity:.7;font-weight:700">✅ COMPLETAS</div>
+      <div style="font-size:20px;font-weight:800;color:#86efac">${vigasCompletas}</div>
+      <div style="font-size:9px;opacity:.6">vigas</div>
+    </div>
+    <div style="text-align:center">
+      <div style="font-size:9px;opacity:.7;font-weight:700">🔶 INCOMPLETAS</div>
+      <div style="font-size:20px;font-weight:800;color:#fde68a">${vigasIncompletas}</div>
+      <div style="font-size:9px;opacity:.6">vigas</div>
+    </div>
+    <div style="text-align:center">
+      <div style="font-size:9px;opacity:.7;font-weight:700">⚖ PESO REAL</div>
+      <div style="font-size:18px;font-weight:800;color:#93c5fd">${pesoTotal.toFixed(1)}</div>
+      <div style="font-size:9px;opacity:.6">kg del día</div>
+    </div>`;
+}
+
 function pUpdatePartes(){
   const cj=document.getElementById('p-cj').value;
-  const sel=document.getElementById('p-parte');
-  sel.innerHTML='<option value="">Seleccionar parte...</option>';
-  document.getElementById('p-parte-info').style.display='none';
-  if(!cj)return;
+  if(!cj){ document.getElementById('p-cj-info').style.display='none'; document.getElementById('p-vigas-section').style.display='none'; return; }
+  pBuildVigas();
+  pRenderRef();
+}
+
+function pUpdateInfo(){
+  const cj=document.getElementById('p-cj')?.value;
+  const fase=document.getElementById('p-fase')?.value||'Armado';
+  const qty=parseFloat(document.getElementById('p-qty')?.value)||0;
+  if(!cj){ document.getElementById('p-cj-info').style.display='none'; return; }
   const c=TEKLA.conjuntos.find(x=>x.conjunto===cj);
-  if(!c)return;
-  c.partes.forEach(p=>{
-    const cortado=getCortadoQty(cj,p.parte);
-    const sinCorte=cortado<=0;
-    const label=sinCorte
-      ? `⚠ ${p.parte} — ${p.perfil} [SIN CORTE]`
-      : `✓ ${p.parte} — ${p.perfil} (${cortado}/${p.cantidad} cortados)`;
-    sel.innerHTML+=`<option value="${p.parte}" data-pu="${p.peso_unit}" data-plan="${p.cantidad}" data-cortado="${cortado}" data-sin-corte="${sinCorte}">${label}</option>`;
-  });
+  if(!c) return;
+
+  const plan=c.cantidad;
+  const pu=c.peso_unit||0;
+  // Ejecutado en esta fase = vigas registradas
+  const ej=ST.prods.filter(r=>(r.conjunto||r.cj)===cj&&r.fase===fase).reduce((s,r)=>s+(Number(r.qty)||0),0);
+  const pend=Math.max(0,plan-ej);
+  const pct=plan>0?Math.min(100,(ej/plan*100)):0;
+
+  document.getElementById('p-cj-info').style.display='';
+  document.getElementById('p-info-plan').textContent=plan+' vigas';
+  document.getElementById('p-info-plan-kg').textContent=(plan*pu).toFixed(1)+' kg';
+  document.getElementById('p-info-ej').textContent=ej+' vigas';
+  document.getElementById('p-info-ej-kg').textContent=(ej*pu).toFixed(1)+' kg';
+  document.getElementById('p-info-pend').textContent=pend+' vigas';
+  document.getElementById('p-info-pend-kg').textContent=(pend*pu).toFixed(1)+' kg';
+  const bar=document.getElementById('p-info-bar');
+  if(bar){bar.style.width=pct+'%';bar.style.background=pct>=100?'#22c55e':pct>=80?'#f59e0b':'#3b82f6';}
+  const msg=document.getElementById('p-info-msg');
+  if(msg){
+    const ejConEsta=ej+qty;
+    if(qty>0&&ejConEsta>=plan){
+      msg.style.display='';msg.style.background='#f0fdf4';msg.style.color='#065f46';msg.style.border='1.5px solid #86efac';
+      msg.textContent=ejConEsta===plan?`✅ ¡COMPLETO! Con este registro se termina el ${fase} de E-T-1`:`⚠ Supera el plan en ${ejConEsta-plan} vigas`;
+    } else msg.style.display='none';
+  }
 }
 function toggleSoldExtra(){
   const fase = document.getElementById('p-fase')?.value;
@@ -3835,11 +4006,43 @@ function pCalcPeso(){
 function addProd(){
   const fecha=document.getElementById('p-fecha').value;
   const cj=document.getElementById('p-cj').value;
-  const parte=document.getElementById('p-parte').value;
-  const qty=parseFloat(document.getElementById('p-qty').value)||0;
   const fase=document.getElementById('p-fase').value;
   const opId=document.getElementById('p-op').value;
-  if(!fecha||!cj||!parte||qty<=0){toast('⚠ Completa todos los campos');return;}
+  const pesoTotal=parseFloat(document.getElementById('p-peso').value)||0;
+  if(!fecha||!cj){toast('⚠ Completa: fecha y conjunto');return;}
+  if(pVigasData.length===0||!pVigasData.some(v=>Object.values(v.partes).some(x=>x))){
+    toast('⚠ Marca al menos una parte en al menos una viga');return;
+  }
+
+  const c=TEKLA.conjuntos.find(x=>x.conjunto===cj);
+  const vigasCompletas=pVigasData.filter(v=>c?.partes.every(p=>v.partes[p.parte])).length;
+  const qty=pVigasData.length;
+  const op=ST.ops.find(o=>o.id==opId);
+
+  const rec={
+    id:Date.now(), fecha, turno:document.getElementById('p-turno').value,
+    tipo:'produccion', fase, conjunto:cj, cj,
+    parte:c?.partes.map(p=>p.parte).join('+'), pr:'—',
+    perfil:c?.perfil||'',
+    qty, vigasCompletas, pesoReal:pesoTotal,
+    peso:pesoTotal,
+    detalle_vigas:JSON.stringify(pVigasData),
+    calidad:document.getElementById('p-cal').value,
+    obs:document.getElementById('p-obs')?.value.trim()||'',
+    opId, opNom:op?`${op.nom} ${op.ape}`:'—', opRol:op?.rol||'—',
+    sold_tipo:document.getElementById('p-sold-tipo')?.value||'',
+    sold_ml:parseFloat(document.getElementById('p-sold-ml')?.value)||0,
+    sold_elec:parseFloat(document.getElementById('p-sold-elec')?.value)||0,
+    sold_pos:document.getElementById('p-sold-pos')?.value||'',
+  };
+
+  ST.prods.push(rec);
+  addExec(cj, rec.parte, fase, vigasCompletas);
+  saveAll();
+  if(GAS.configured()) GAS.post('addRegistro',rec).catch(()=>{});
+  clearProd(); renderProd(); renderDashboard(); pRenderRef();
+  toast(`✓ ${fase}: ${cj} — ${vigasCompletas} vigas completas + ${qty-vigasCompletas} incompletas · ${pesoTotal.toFixed(1)} kg`);
+}
   // ── Validación de secuencia de fabricación ──────────────
   const esPL = (parte||'').toUpperCase().startsWith('PR') && 
                TEKLA.conjuntos.find(x=>x.conjunto===cj)?.partes
@@ -3919,15 +4122,18 @@ function addProd(){
   renderProd(); renderDashboard();
   // Mantener conjunto seleccionado y actualizar tabla referencia
   const cjSel=document.getElementById('p-cj'); if(cjSel) cjSel.value=cj;
-  pUpdatePartes(); pRenderRef();
-  document.getElementById('p-parte').value='';
-  document.getElementById('p-qty').value='';
-  document.getElementById('p-peso').value='';
-  document.getElementById('p-obs').value='';
-  document.getElementById('p-parte-info').style.display='none';
-  toast(`✓ ${fase}: ${cj}/${parte} — ${qty} uds`);
+function clearProd(){
+  ['p-cj','p-fase','p-op','p-qty','p-peso','p-cal','p-obs'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el)el.value=el.tagName==='SELECT'?el.options[0]?.value||'':'';
+  });
+  document.getElementById('p-cj-info').style.display='none';
+  document.getElementById('p-vigas-section').style.display='none';
+  document.getElementById('p-resumen-dia').style.display='none';
+  pVigasData=[];
+  const list=document.getElementById('p-vigas-list');
+  if(list) list.innerHTML='';
 }
-function clearProd(){['p-cj','p-parte','p-fase','p-op','p-qty','p-peso','p-cal','p-obs'].forEach(id=>{const el=document.getElementById(id);if(el)el.value=el.tagName==='SELECT'?el.options[0]?.value||'':'';}); document.getElementById('p-parte-info').style.display='none';}
 function renderProd(){
   const q=(document.getElementById('pr-q')?.value||'').toLowerCase();
   const ff=document.getElementById('pr-fase')?.value||'';
