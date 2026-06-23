@@ -2383,10 +2383,12 @@ function _calcStockSaldos(){
     });
   });
 
-  // 3. Aplicar agotados manuales
+  // 3. Aplicar agotados manuales y restaurados forzados
   const agotadosManuales = new Set(_getAgotados());
+  const restauradosForzados = new Set(_getRestaurados());
   Object.values(sobs).forEach(s=>{
     if(agotadosManuales.has(s._key)) s.saldo=0;
+    if(restauradosForzados.has(s._key)) s.saldo=s.pesoOriginal; // forzar restaurar
   });
 
   return Object.values(sobs).sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha)));
@@ -4218,16 +4220,27 @@ function marcarAgotado(key){
   const arr=_getAgotados();
   if(!arr.includes(key)) arr.push(key);
   _saveAgotados(arr);
+  // Quitar de restaurados si estaba
+  const rest=_getRestaurados().filter(k=>k!==key);
+  _saveRestaurados(rest);
   renderStock();
   toast('✓ Sobrante marcado como agotado');
 }
 
 function restaurarSobrante(key){
+  // Quitar de agotados manuales
   const arr=_getAgotados().filter(k=>k!==key);
   _saveAgotados(arr);
+  // Agregar a restaurados forzados
+  const rest=_getRestaurados();
+  if(!rest.includes(key)) rest.push(key);
+  _saveRestaurados(rest);
   renderStock();
   toast('✓ Sobrante restaurado al stock');
 }
+
+function _getRestaurados(){ return JSON.parse(localStorage.getItem('_stockRestaurados')||'[]'); }
+function _saveRestaurados(arr){ localStorage.setItem('_stockRestaurados',JSON.stringify(arr)); }
 
 function delStock(id){ST.cortes=ST.cortes.filter(c=>c.id!==id);renderStock();}
 
