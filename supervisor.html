@@ -2331,28 +2331,64 @@ function supMatHTML(m,i){
 }
 
 function supStockDisponible(){
-  const items=[];
-  const seen=new Set();
+  return _calcStockSaldos().filter(s=>s.saldo>0.01);
+}
+
+function _calcStockSaldos(){
+  // 1. Recopilar todos los sobrantes generados
+  const sobs = {};
   ST.cortes.forEach(c=>{
-    const sobs=(()=>{try{return JSON.parse(c.sob_por_plancha||'[]');}catch(e){return[];}})();
-    sobs.forEach((s,si)=>{
+    const arr=(()=>{try{return JSON.parse(c.sob_por_plancha||'[]');}catch(e){return[];}})();
+    arr.forEach((s,si)=>{
       const peso=Number(s.sobPeso||s.peso||0);
       if(peso<=0||s.dest==='waste') return;
       const key=c.id+'_'+si;
-      if(seen.has(key)) return;
-      seen.add(key);
-      items.push({
+      sobs[key]={
         _key:key, _recId:c.id, _sobIdx:si,
         colada:s.colada||c.pl_num||'—',
         grado:s.grado||s.mat||c.pl_mat||'A588-50',
         tipo:s.tipo||'plancha',
         esp:s.esp||0, ancho:s.ancho||0, largo:s.largo||0,
-        ancho_corte:s.ancho_corte||0, largo_corte:s.largo_corte||0,
-        qty:s.qty||1, peso,
-      });
+        qty:s.qty||1, pesoOriginal:peso, saldo:peso,
+        fecha:c.fecha, parte:c.parte||c.pr,
+      };
+    });
+    // Formato viejo
+    if(Number(c.sob_peso||0)>0&&(c.sob_dest||'stock')==='stock'&&!arr.length){
+      const key=c.id+'_0';
+      const peso=Number(c.sob_peso||0);
+      sobs[key]={
+        _key:key,_recId:c.id,_sobIdx:0,
+        colada:c.sob_colada||c.pl_num||'—',
+        grado:c.sob_mat||c.pl_mat||'A588-50',
+        tipo:'plancha',
+        esp:c.sob_esp||0,ancho:c.sob_ancho||0,largo:c.sob_largo||0,
+        qty:c.sob_qty||1,pesoOriginal:peso,saldo:peso,
+        fecha:c.fecha,parte:c.parte||c.pr,
+      };
+    }
+  });
+
+  // 2. Descontar lo que se usó en cortes posteriores
+  ST.cortes.forEach(c=>{
+    const planchas=(()=>{try{return JSON.parse(c.pl_planchas||'[]');}catch(e){return[];}})();
+    planchas.forEach(m=>{
+      if(m.tipo==='desde_stock'&&m.stockRef&&sobs[m.stockRef]){
+        // Descontar el peso usado
+        const pesoUsado=m.peso||sobs[m.stockRef].pesoOriginal;
+        sobs[m.stockRef].saldo=Math.max(0,sobs[m.stockRef].saldo-pesoUsado);
+        // Si generó nuevo sobrante en ese corte, ese sobrante ya está como nuevo registro
+      }
     });
   });
-  return items;
+
+  // 3. Aplicar agotados manuales
+  const agotadosManuales = new Set(_getAgotados());
+  Object.values(sobs).forEach(s=>{
+    if(agotadosManuales.has(s._key)) s.saldo=0;
+  });
+
+  return Object.values(sobs).sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha)));
 }
 
 function supSelStock(i){
@@ -4096,53 +4132,15 @@ function renderStock(){
   const q=(document.getElementById('st-q')?.value||'').toLowerCase();
   const destFilt=document.getElementById('st-dest')?.value||'';
 
-  const items=[];
-  ST.cortes.forEach(c=>{
-    const sobArr=(()=>{ try{ const v=c.sob_por_plancha; if(typeof v==='string'&&v.startsWith('[')) return JSON.parse(v); return []; }catch(e){return [];} })();
-
-    if(sobArr.length>0){
-      sobArr.forEach((s,i)=>{
-        const hay=s.hay||'si';
-        if(hay==='no') return;
-        const peso=Number(s.sobPeso||s.peso||0);
-        if(peso<=0) return;
-        const dest=s.dest||'stock';
-        const colada=s.colada||s.num||c.pl_num||'—';
-        const grado=s.mat||s.grado||c.pl_mat||'—';
-        items.push({
-          id:c.id+'_'+i, fecha:c.fecha, cj:c.conjunto||c.cj, parte:c.parte||c.pr,
-          colada, grado,
-          esp:s.esp||0, ancho:s.ancho||0, largo:s.largo||0,
-          ancho_corte:s.ancho_corte||0, largo_corte:s.largo_corte||0,
-          qty:s.qty||1, peso, dest, ref:s.ref||c.sob_ref||'',
-          tipo:s.tipo||'plancha',
-        });
-      });
-    } else {
-      const peso=Number(c.sob_peso||c.sobPeso||0);
-      const hay=c.sob_hay||'no';
-      if(peso>0&&hay==='si'){
-        items.push({
-          id:c.id+'_0', fecha:c.fecha, cj:c.conjunto||c.cj, parte:c.parte||c.pr,
-          colada:c.sob_colada||c.pl_num||'—',
-          grado:c.sob_mat||c.pl_mat||'—',
-          esp:c.sob_esp||0, ancho:c.sob_ancho||0, largo:c.sob_largo||0,
-          ancho_corte:0, largo_corte:0,
-          qty:c.sob_qty||1, peso, dest:c.sob_dest||'stock',
-          ref:c.sob_ref||'', tipo:'plancha',
-        });
-      }
-    }
-  });
-
-  const filtered=items.filter(s=>
-    (!q||(s.colada+s.grado+s.parte+s.cj).toLowerCase().includes(q))&&
-    (!destFilt||s.dest===destFilt)
+  const todosItems=_calcStockSaldos();
+  const filtered=todosItems.filter(s=>
+    (!q||(s.colada+s.grado+s.parte).toLowerCase().includes(q))&&
+    (!destFilt||(destFilt==='stock'?s.saldo>0.01:s.saldo<=0.01))
   );
 
-  const totStock=items.filter(s=>s.dest==='stock').reduce((a,s)=>a+s.peso,0);
+  const totStock=todosItems.reduce((a,s)=>a+s.saldo,0);
   const totWaste=ST.cortes.reduce((a,c)=>a+Number(c.desperdicio||0),0);
-  const nStock=items.filter(s=>s.dest==='stock').length;
+  const nStock=todosItems.filter(s=>s.saldo>0.01).length;
 
   document.getElementById('kpi-stock').innerHTML=`
     <div class="kpi k-green"><div class="kpi-lbl">Stock reutilizable</div><div class="kpi-val">${totStock.toFixed(1)}</div><div class="kpi-sub">kg disponibles</div></div>
@@ -4152,7 +4150,13 @@ function renderStock(){
   document.getElementById('st-tbody').innerHTML=filtered.length?filtered.map(s=>{
     const esL=s.tipo==='forma_l'&&s.ancho_corte>0&&s.largo_corte>0;
     const svgDibujo=esL?formaLSVG(s.esp,s.ancho,s.largo,s.ancho_corte,s.largo_corte):'';
-    return `<tr style="cursor:${esL?'pointer':'default'}" onclick="${esL?`toggleFormaL('fl_${s.id}')`:''}" title="${esL?'Clic para ver dibujo':''}">
+    const saldoColor=s.saldo<=0?'#991b1b':s.saldo<s.pesoOriginal?'#b45309':'#166534';
+    const saldoLabel=s.saldo<=0
+      ?'<span style="color:#991b1b;font-weight:800">AGOTADO</span>'
+      :s.saldo<s.pesoOriginal
+        ?`<span style="color:#b45309;font-weight:700">${s.saldo.toFixed(1)} kg<br><span style="font-size:9px">de ${s.pesoOriginal.toFixed(1)} kg</span></span>`
+        :`<strong style="color:#166534">${s.saldo.toFixed(1)} kg</strong>`;
+    return `<tr style="cursor:${esL?'pointer':'default'};opacity:${s.saldo<=0?'0.5':'1'}" onclick="${esL?`toggleFormaL('fl_${s._key||s.id}')`:''}" title="${esL?'Clic para ver dibujo':''}">
     <td>${s.fecha||'—'}</td>
     <td><span style="font-weight:700;color:#3730a3;">📋 ${s.colada}</span><br>
       <span style="font-size:9px;color:var(--gm);">${s.tipo==='forma_l'?'⌐ Forma en L':s.tipo}</span>
@@ -4162,21 +4166,23 @@ function renderStock(){
     <td class="r">${s.ancho||'—'}</td>
     <td class="r">${s.largo||'—'}</td>
     <td class="r">${s.qty}</td>
-    <td class="r"><strong>${s.peso.toFixed(1)}</strong></td>
-    <td>${s.dest==='stock'?'<span class="badge b-stock">📦 STOCK</span>':'<span class="badge b-waste">🗑 DESP.</span>'}</td>
+    <td class="r">${saldoLabel}</td>
+    <td>${s.saldo>0?'<span class="badge b-stock">📦 STOCK</span>':'<span class="badge b-waste">⛔ AGOTADO</span>'}</td>
     <td style="font-size:11px;">${s.ref||'—'}</td>
-    <td style="font-size:10px;">${s.cj}/${s.parte}</td>
-    <td class="c no-print"><button class="btn btn-d btn-sm" onclick="event.stopPropagation();delStock('${s.id}')">✕</button></td>
-  </tr>${esL?`<tr id="fl_${s.id}" style="display:none"><td colspan="12" style="padding:.75rem 1rem;background:var(--color-background-secondary)">${svgDibujo}</td></tr>`:''}`;
+    <td style="font-size:10px;">${s.parte||'—'}</td>
+    <td class="c no-print" style="white-space:nowrap">
+      ${s.saldo>0?`<button class="btn btn-s btn-sm" onclick="event.stopPropagation();marcarAgotado('${s._key}')" title="Marcar como agotado" style="background:#dc2626;color:#fff;border-color:#dc2626;margin-right:2px">⛔</button>`:''}
+      ${s.saldo<=0?`<button class="btn btn-s btn-sm" onclick="event.stopPropagation();restaurarSobrante('${s._key}')" title="Restaurar" style="margin-right:2px">↩</button>`:''}
+    </td>
+  </tr>${esL?`<tr id="fl_${s._key||s.id}" style="display:none"><td colspan="12" style="padding:.75rem 1rem;background:var(--color-background-secondary)">${svgDibujo}</td></tr>`:''}`;
   }).join('')
   :'<tr><td colspan="12" style="text-align:center;padding:1.5rem;color:var(--gm);">Sin sobrantes registrados</td></tr>';
 
   const byMat={};
-  items.forEach(s=>{
+  todosItems.forEach(s=>{
     const k=s.grado||'—';
     if(!byMat[k]) byMat[k]={stock:0,waste:0,totalPlancha:0};
-    if(s.dest==='stock') byMat[k].stock+=s.peso;
-    else byMat[k].waste+=s.peso;
+    byMat[k].stock+=s.saldo;
   });
   ST.cortes.forEach(c=>{
     const desp=Number(c.desperdicio||0);
@@ -4199,6 +4205,26 @@ function renderStock(){
 function toggleFormaL(id){
   const el=document.getElementById(id);
   if(el) el.style.display=el.style.display==='none'?'':'none';
+}
+
+// Stock agotados manuales — guardado en localStorage
+function _getAgotados(){ return JSON.parse(localStorage.getItem('_stockAgotados')||'[]'); }
+function _saveAgotados(arr){ localStorage.setItem('_stockAgotados',JSON.stringify(arr)); }
+
+function marcarAgotado(key){
+  if(!confirm('¿Marcar este sobrante como AGOTADO?\nYa no aparecerá disponible en el stock.')) return;
+  const arr=_getAgotados();
+  if(!arr.includes(key)) arr.push(key);
+  _saveAgotados(arr);
+  renderStock();
+  toast('✓ Sobrante marcado como agotado');
+}
+
+function restaurarSobrante(key){
+  const arr=_getAgotados().filter(k=>k!==key);
+  _saveAgotados(arr);
+  renderStock();
+  toast('✓ Sobrante restaurado al stock');
 }
 
 function delStock(id){ST.cortes=ST.cortes.filter(c=>c.id!==id);renderStock();}
@@ -4548,7 +4574,8 @@ function renderInformeCharts(cortes, prods, byFase) {
 
 function openModal(cj){
   const c=TEKLA.conjuntos.find(x=>x.conjunto===cj);if(!c)return;
-  const totEj=getVigasCompletas(cj);
+  const av=getVigasCompletas(cj);
+  const totEj=av.vigasCompletas;
   document.getElementById('modal-ttl').textContent=`${c.conjunto} — ${c.perfil} (${c.cantidad} plan)`;
   let html=`<div class="kpi-row" style="grid-template-columns:repeat(3,1fr);">
     <div class="kpi"><div class="kpi-lbl">Plan</div><div class="kpi-val">${c.cantidad}</div></div>
@@ -4557,35 +4584,30 @@ function openModal(cj){
   </div>
   <div style="font-size:11px;font-weight:800;color:var(--sd);margin:.75rem 0 .5rem;">Partes del conjunto</div>
   <div class="tw"><table><thead><tr><th>Parte</th><th>Perfil</th><th class="r">Plan</th><th class="r">Long (mm)</th><th class="r">Pu (kg)</th><th class="r">Ejec. (vigas)</th><th class="r">Pend.</th></tr></thead>
-  <tbody>${c.partes.map(p=>{
-    const vigasPosibles=getVigasPorParte(cj,p.parte,p.perfil,p.cantidad);
-    const pend=Math.max(0,c.cantidad-vigasPosibles);
+  <tbody>${av.detalle.map(d=>{
+    const pend=Math.max(0,c.cantidad-d.vigasEsta);
     return`<tr class="${pend>0?'pend-row':'done-row'}">
-      <td>${p.parte}</td><td class="mono">${p.perfil}</td>
-      <td class="r">${p.cantidad}</td>
-      <td class="r">${p.longitud||'—'}</td>
-      <td class="r">${p.peso_unit.toFixed(2)}</td>
-      <td class="r" style="color:#166534;font-weight:700;">${vigasPosibles}</td>
+      <td>${d.parte}</td><td class="mono">${d.perfil}</td>
+      <td class="r">${d.planTotal}</td>
+      <td class="r">${c.partes.find(p=>p.parte===d.parte)?.longitud||'—'}</td>
+      <td class="r">${c.partes.find(p=>p.parte===d.parte)?.peso_unit?.toFixed(2)||'—'}</td>
+      <td class="r" style="color:#166534;font-weight:700;">${d.vigasEsta}</td>
       <td class="r"><strong style="color:${pend>0?'#b45309':'#166534'}">${pend}</strong></td>
-    </tr>`;
+    </tr>
+    ${d.subpiezasDetalle?.length>0?d.subpiezasDetalle.map(s=>`
+    <tr style="background:#f0fdf4">
+      <td style="padding:3px 8px 3px 24px;font-size:11px;color:#065f46">
+        └ ${s.nombre==='Alma'?'🔷':'🔶'} ${s.nombre}
+      </td>
+      <td colspan="3" style="font-size:10px;color:#6b7280;padding:3px 8px"></td>
+      <td class="r" style="font-size:11px;color:#065f46;font-weight:700;">${s.cortado} pzas</td>
+      <td class="r" style="font-size:11px;color:#065f46;font-weight:700;">${s.cortado}/${s.planTotal}</td>
+      <td class="r" style="font-size:11px;color:${s.faltanPzas>0?'#b45309':'#166534'};font-weight:700;">${s.faltanPzas>0?s.faltanPzas+' pzas':'✅'}</td>
+    </tr>`).join(''):''}`; 
   }).join('')}
   </tbody></table></div>`;
   document.getElementById('modal-body').innerHTML=html;
   document.getElementById('modal-bg').classList.add('open');
-}
-
-function getVigasPorParte(cj, parte, perfil, planQty){
-  // Para vigas HI descompuestas, calcular por sub-piezas
-  const piezasHI = PIEZAS_HI_SUP[perfil];
-  if(piezasHI){
-    return getVigasCompletas(cj);
-  }
-  // Para piezas normales: qty cortada ÷ (planQty / c.cantidad)
-  const c = TEKLA.conjuntos.find(x=>x.conjunto===cj);
-  const planVigas = c?.cantidad||1;
-  const pzPorViga = Math.round(planQty/planVigas); // piezas por viga
-  const qtyCortada = getCortadoQty(cj, parte);
-  return pzPorViga>0 ? Math.floor(qtyCortada/pzPorViga) : qtyCortada;
 }
 function closeModal(){document.getElementById('modal-bg').classList.remove('open');}
 
