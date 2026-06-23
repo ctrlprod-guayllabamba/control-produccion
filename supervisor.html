@@ -949,7 +949,6 @@ global.Chart = class {
       </div>
     </div>
 
-    <div class="frow">
       <div class="fg"><label>Calidad</label>
         <select id="p-cal">
           <option value="ok">✓ Aprobado</option>
@@ -957,10 +956,9 @@ global.Chart = class {
           <option value="rec">✗ Rechazo</option>
         </select>
       </div>
-      <div class="fg"><label>Peso ejecutado (kg) AUTO</label>
-        <input type="number" id="p-peso" readonly placeholder="auto" style="background:var(--su);font-weight:700">
+      <div class="fg"><label>Peso ejecutado (kg) <span style="color:var(--oa);font-size:9px">AUTO</span></label>
+        <input type="number" id="p-peso" readonly placeholder="0.00" style="background:var(--su);font-weight:700;color:var(--sd);">
       </div>
-    </div>
     <div class="frow">
       <div class="fg wide"><label>Observaciones</label><textarea id="p-obs" rows="2"></textarea></div>
     </div>
@@ -3840,20 +3838,31 @@ function pRenderVigas(){
           // Parte simple (pr65, pr98)
           const qty = v.qty?.[p.parte]||0;
           const tieneAlgo = qty>0;
-          return `<div style="border:1.5px solid ${tieneAlgo?'#86efac':'#e2e8f0'};border-radius:10px;padding:.625rem .75rem;margin-bottom:.5rem;background:${tieneAlgo?'#f0fdf4':'#fff'};display:flex;align-items:center;gap:12px">
-            <div style="flex:1">
-              <div style="font-size:12px;font-weight:700;color:#374151">
-                📋 ${p.parte} <span style="font-family:monospace;font-size:10px;font-weight:400;color:#6b7280">${p.perfil}</span>
+          const planVigas = c.cantidad||1;
+          const qtyPorViga = Math.round((p.cantidad||0)/planVigas); // piezas por viga
+          const pesoP = (p.peso_unit||0)*qty;
+          return `<div style="border:1.5px solid ${tieneAlgo?'#86efac':'#e2e8f0'};border-radius:10px;padding:.625rem .75rem;margin-bottom:.5rem;background:${tieneAlgo?'#f0fdf4':'#fff'}">
+            <div style="display:flex;align-items:center;gap:12px">
+              <div style="flex:1">
+                <div style="font-size:12px;font-weight:700;color:#374151">
+                  📋 ${p.parte}
+                  <span style="font-family:monospace;font-size:10px;font-weight:400;color:#6b7280"> ${p.perfil}</span>
+                </div>
+                <div style="font-size:10px;color:#6b7280">
+                  ${(p.peso_unit||0).toFixed(3)} kg/ud
+                  ${qtyPorViga>0?`<span style="color:#1e40af;font-weight:700;margin-left:4px">· ${qtyPorViga} pzas/viga</span>`:''}
+                </div>
               </div>
-              <div style="font-size:10px;color:#6b7280">${(p.peso_unit||0).toFixed(2)} kg/ud</div>
+              <div style="text-align:center">
+                <div style="font-size:10px;color:#6b7280;margin-bottom:2px">CANT. COLOCADAS</div>
+                <input type="number" value="${qty||''}" min="0" inputmode="numeric" placeholder="0"
+                  style="width:80px;text-align:center;font-size:22px;font-weight:800;border:2px solid ${tieneAlgo?'#86efac':'#cbd5e1'};border-radius:8px;padding:4px;color:#065f46"
+                  oninput="pSetQty(${i},'${p.parte}',this.value)">
+              </div>
+              <div style="font-size:13px;font-weight:700;color:${tieneAlgo?'#065f46':'#9ca3af'};min-width:60px;text-align:right">
+                ${tieneAlgo?`⚖ ${pesoP.toFixed(2)} kg`:'—'}
+              </div>
             </div>
-            <div style="text-align:center">
-              <div style="font-size:10px;color:#6b7280;margin-bottom:2px">CANT.</div>
-              <input type="number" value="${qty}" min="0" inputmode="numeric" placeholder="0"
-                style="width:70px;text-align:center;font-size:20px;font-weight:800;border:2px solid ${tieneAlgo?'#86efac':'#cbd5e1'};border-radius:8px;padding:4px;color:#065f46"
-                oninput="pSetQty(${i},'${p.parte}',this.value)">
-            </div>
-            ${qty>0?`<div style="font-size:12px;font-weight:700;color:#065f46">⚖ ${((p.peso_unit||0)*qty).toFixed(1)} kg</div>`:''}
           </div>`;
         }
       }).join('')}
@@ -4074,12 +4083,24 @@ function addProd(){
   const opId=document.getElementById('p-op').value;
   const pesoTotal=parseFloat(document.getElementById('p-peso').value)||0;
   if(!fecha||!cj){toast('⚠ Completa: fecha y conjunto');return;}
-  if(pVigasData.length===0||!pVigasData.some(v=>Object.values(v.partes).some(x=>x))){
-    toast('⚠ Marca al menos una parte en al menos una viga');return;
+  if(pVigasData.length===0||!pVigasData.some(v=>{
+    const cj2=document.getElementById('p-cj').value;
+    const c2=TEKLA.conjuntos.find(x=>x.conjunto===cj2);
+    return c2?.partes.some(p=>{
+      const piezasHI=PIEZAS_HI_SUP[p.perfil];
+      if(piezasHI) return piezasHI.some(sp=>Number(v.subQty?.[p.parte]?.[sp.tipo]||0)>0);
+      return Number(v.qty?.[p.parte]||0)>0;
+    });
+  })){
+    toast('⚠ Ingresa al menos una cantidad en al menos una viga');return;
   }
 
   const c=TEKLA.conjuntos.find(x=>x.conjunto===cj);
-  const vigasCompletas=pVigasData.filter(v=>c?.partes.every(p=>v.partes[p.parte])).length;
+  const vigasCompletas=pVigasData.filter(v=>c?.partes.every(p=>{
+    const piezasHI=PIEZAS_HI_SUP[p.perfil];
+    if(piezasHI) return piezasHI.every(sp=>Number(v.subQty?.[p.parte]?.[sp.tipo]||0)>0);
+    return Number(v.qty?.[p.parte]||0)>0;
+  })).length;
   const qty=pVigasData.length;
   const op=ST.ops.find(o=>o.id==opId);
 
