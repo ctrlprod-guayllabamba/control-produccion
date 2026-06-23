@@ -592,8 +592,8 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);min-height
 const PIEZAS_HI = {
   // perfil → sub-piezas que forman 1 unidad de viga
   'HI300-10-12*300': [
-    {tipo:'Alma',  esp:12, ancho:300, desc:'Alma PL12×300',  qty:1},
-    {tipo:'Patín', esp:10, ancho:276, desc:'Patín PL10×276', qty:2},
+    {tipo:'Alma',  esp:10, ancho:276, desc:'Alma PL10×276',  qty:1},
+    {tipo:'Patín', esp:12, ancho:300, desc:'Patín PL12×300', qty:2},
   ],
   'HI250-10-20*300': [
     {tipo:'Alma',  esp:10, ancho:210, desc:'Alma PL10×210',  qty:1},
@@ -617,8 +617,7 @@ const D=7.85e-6;
 // ======= STATE =======
 let W=null,selFase=null,selCj=null,selParte=null,calidad='ok';
 let draft={pl:{},ct:{}};
-let _cache=[]; // registros locales (solo este operario)
-let _cacheAll=[]; // registros de TODOS los operarios (para panel de progreso)
+let _cache=[]; // registros locales
 
 // ======= UTILS =======
 const todayISO=()=>new Date().toISOString().split('T')[0];
@@ -934,27 +933,16 @@ function selectWorker(w){
 async function loadMyRecs(){
   // Always show local first
   _cache = LS.g(WORKER_RECS_LS, []).filter(r => r.opId == W?.id);
-  _cacheAll = LS.g(WORKER_RECS_LS, []); // todos locales como fallback
   // Then try GAS
   if (GAS.configured()) {
     try {
-      // Cargar registros de este operario
       const recs = await GAS.get('getRegistros', {opId: W.id});
       if (recs && recs.length) {
+        // Merge: server recs + any local not yet synced
         const serverIds = new Set(recs.map(r => String(r.id)));
         const localOnly = LS.g(WORKER_RECS_LS, []).filter(r => r.opId == W.id && !serverIds.has(String(r.id)));
         _cache = [...recs, ...localOnly];
       }
-      // Cargar registros de TODOS los operarios para panel de progreso
-      try {
-        const allRecs = await GAS.get('getRegistros', {});
-        if (allRecs && allRecs.length) {
-          const localAll = LS.g(WORKER_RECS_LS, []);
-          const serverAllIds = new Set(allRecs.map(r => String(r.id)));
-          const localAllOnly = localAll.filter(r => !serverAllIds.has(String(r.id)));
-          _cacheAll = [...allRecs, ...localAllOnly];
-        }
-      } catch(e) { _cacheAll = _cache; }
     } catch(e) { /* offline, use local */ }
   }
   return _cache;
@@ -2249,7 +2237,7 @@ function wkRecalcDesp(){
     const piezasHI = PIEZAS_HI[selParte.perfil];
 
     // Vigas ya cortadas en registros anteriores (acumulado histórico)
-    const yaCorte = _cacheAll.filter(r=>r.cj===selCj.cj&&r.pr===selParte.pr&&r.fase==='Corte'); // todos los operarios
+    const yaCorte = _cache.filter(r=>r.cj===selCj.cj&&r.pr===selParte.pr&&r.fase==='Corte');
 
     // Calcular vigas completadas por sub-pieza considerando historial + este registro
     let vigasCompletas = planVigas; // empezar con el plan, reducir
@@ -2260,24 +2248,16 @@ function wkRecalcDesp(){
       const qtyPorViga = piezasHI ? (piezasHI[i]?.qty||1) : 1;
       // Cantidad ya cortada en historial para este nombre de sub-pieza
       let yaQty = 0;
-      // Clasificar sub-pieza por espesor del perfil, independiente del nombre/orden
-      const ALMA_ESP_WK = {'HI300-10-12*300':12,'HI250-10-20*300':20,'HI250-10-20*250':20,'HI234-8-12*180':12};
-      const perfilActual = selParte?.perfil||'';
-      const almaEspWk = ALMA_ESP_WK[perfilActual];
-      function clasificarSpWk(sp){
-        if(!almaEspWk) return sp.nombre;
-        return (Number(sp.esp)===almaEspWk)?'Alma':'Patín';
-      }
+      const espEsperado = piezasHI?.[i]?.esp; // espesor esperado para esta sub-pieza
       yaCorte.forEach(r=>{
-        // Primero intentar qty_subpiezas (más preciso)
-        const qtySubp=(()=>{try{return JSON.parse(r.qty_subpiezas||'[]');}catch(e){return[];}})();
-        if(qtySubp.length>0){
-          const match=qtySubp.find(sp=>clasificarSpWk(sp)===s.nombre);
-          if(match){ yaQty+=match.qty||0; return; }
-        }
-        // Fallback: leer pl_cortes_por_plancha clasificando por espesor
         const piezas=(()=>{try{return JSON.parse(r.pl_cortes_por_plancha||'[]');}catch(e){return[];}})();
-        piezas.forEach(p=>{ if(clasificarSpWk(p)===s.nombre) yaQty+=p.qty||0; });
+        piezas.forEach(p=>{
+          // Clasificar por espesor si es HI, sino por nombre
+          const coincide = espEsperado
+            ? (p.esp === espEsperado)
+            : (p.nombre === s.nombre);
+          if(coincide) yaQty += p.qty||0;
+        });
       });
       const esteRegistro = s.qty||0;
       const totalQty = yaQty + esteRegistro;
@@ -2485,13 +2465,11 @@ function wkGuardarCorte(){
       forma:'rectangular', nombre:s.nombre, esp:s.esp, ancho:s.ancho, largo:s.largo,
       qty:s.qty, colada:s.colada||'', peso:s.peso, descompuesto:true
     }));
-    // qty_subpiezas: cantidades reales por sub-pieza [{nombre, qty}]
-    const qtySubpiezas = wkSubPiezas.filter(s=>s.qty>0).map(s=>({nombre:s.nombre, qty:s.qty}));
     const rec={
       id:Date.now(), tipo:'corte', fecha:todayISO(), hora:timeNow(),
       opId:W.id, opNom:`${W.nom} ${W.ape}`, opRol:W.rol,
       fase:'Corte', cj:selCj.cj, pr:selParte.pr, perfil:selParte.perfil,
-      qty:qtyVigas, qty_subpiezas:JSON.stringify(qtySubpiezas), pesoPzas:totalPesoDesp, calidad, obs:document.getElementById('ct-obs')?.value.trim()||'',
+      qty:qtyVigas, pesoPzas:totalPesoDesp, calidad, obs:document.getElementById('ct-obs')?.value.trim()||'',
       pl_planchas:JSON.stringify(wkMateriales),
       pl_tipo:m0.tipo||'plancha', pl_num:m0.colada||'—', pl_mat:m0.grado||'—',
       pl_esp:m0.esp||0, pl_ancho:m0.ancho||0, pl_largo:m0.largo||0,
