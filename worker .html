@@ -2252,10 +2252,14 @@ function wkRecalcDesp(){
       yaCorte.forEach(r=>{
         const piezas=(()=>{try{return JSON.parse(r.pl_cortes_por_plancha||'[]');}catch(e){return[];}})();
         piezas.forEach(p=>{
-          // Clasificar por espesor si es HI, sino por nombre
-          const coincide = espEsperado
-            ? (p.esp === espEsperado)
-            : (p.nombre === s.nombre);
+          // Clasificar por espesor si es HI y el registro tiene esp definido
+          // Si no tiene esp (formato viejo), usar nombre
+          let coincide = false;
+          if(espEsperado && p.esp && p.esp > 0){
+            coincide = (Number(p.esp) === Number(espEsperado));
+          } else if(p.nombre && s.nombre){
+            coincide = (p.nombre === s.nombre);
+          }
           if(coincide) yaQty += p.qty||0;
         });
       });
