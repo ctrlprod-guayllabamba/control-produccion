@@ -2105,7 +2105,7 @@ function renderTekla() {
       <td class="r"><strong>${c.cantidad}</strong></td>
       <td class="r">${c.area.toFixed(2)}</td>
       <td>${c.material}</td>
-      <td class="r">${c.peso_unit.toFixed(2)}</td>
+      <td class="r">${(c.peso_unit||0).toFixed(2)}</td>
       <td class="r"><strong>${c.peso_total.toFixed(0)}</strong></td>
       <td class="r" style="color:#166534;font-weight:700">${cjAv.kgEjec.toFixed(0)} kg</td>
       <td class="r">
@@ -2136,7 +2136,7 @@ function renderTekla() {
         <td class="r">${p.cantidad}</td>
         <td class="r">${p.area?p.area.toFixed(2):'—'}</td>
         <td>${p.material}</td>
-        <td class="r">${p.peso_unit.toFixed(2)}</td>
+        <td class="r">${(p.peso_unit||0).toFixed(2)}</td>
         <td class="r">${p.peso_total.toFixed(0)}</td>
         <td class="r" style="color:#166534;font-weight:700;">
           ${ejVigas} vigas
