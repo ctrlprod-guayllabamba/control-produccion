@@ -931,23 +931,18 @@ function selectWorker(w){
 }
 
 async function loadMyRecs(){
-  // Cargar registros locales del operario actual
-  _cache = LS.g(WORKER_RECS_LS, []).filter(r => r.opId == W?.id);
-  // Cargar TODOS los registros del GAS para calcular progreso correcto
+  // Cargar registros locales primero
+  _cache = LS.g(WORKER_RECS_LS, []);
+  // Cargar TODOS los registros del GAS (todos los operarios) para progreso global
   if (GAS.configured()) {
     try {
-      // Todos los registros (sin filtro de opId) para progreso global
       const allRecs = await GAS.get('getRegistros');
       if (allRecs && allRecs.length) {
-        // _cache = registros de todos para calcular progreso
         const serverIds = new Set(allRecs.map(r => String(r.id)));
         const localOnly = LS.g(WORKER_RECS_LS, []).filter(r => !serverIds.has(String(r.id)));
         _cache = [...allRecs, ...localOnly];
-        // Guardar solo los míos en localStorage
-        const miosLocal = allRecs.filter(r => r.opId == W?.id);
-        LS.s(WORKER_RECS_LS, [...miosLocal, ...localOnly]);
       }
-    } catch(e) { /* offline, use local */ }
+    } catch(e) { /* offline */ }
   }
   return _cache;
 }
