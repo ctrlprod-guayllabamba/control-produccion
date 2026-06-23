@@ -3965,24 +3965,14 @@ function pRenderRef(){
 }
 
 function pSeleccionarParte(parte){
-  const sel = document.getElementById('p-parte');
-  if(sel){ sel.value=parte; pCalcPeso(); }
-  // Scroll al formulario
+  // Con el nuevo sistema, seleccionar una parte activa la viga correspondiente
   document.getElementById('p-fecha')?.scrollIntoView({behavior:'smooth',block:'center'});
 }
+
 function pCalcPeso(){
-  const sel=document.getElementById('p-parte');
-  const opt=sel.options[sel.selectedIndex];
-  const pu=parseFloat(opt?.dataset?.pu||0);
-  const qty=parseFloat(document.getElementById('p-qty').value)||0;
-  document.getElementById('p-peso').value=qty&&pu?(qty*pu).toFixed(2):'';
-  if(opt&&opt.value){
-    const plan=parseInt(opt.dataset.plan||0);
-    const cortado=parseInt(opt.dataset.cortado||0);
-    const sinCorte=opt.dataset.sinCorte==='true';
-    const fase=document.getElementById('p-fase')?.value||'';
-    const infoEl=document.getElementById('p-parte-info');
-    const txtEl=document.getElementById('p-info-txt');
+  // El peso ahora se calcula en pCalcResumenDia() basado en las vigas
+  pCalcResumenDia?.();
+}
     infoEl.style.display='block';
     if(sinCorte && fase!=='Corte'){
       infoEl.style.background='#fee2e2';
@@ -3992,16 +3982,6 @@ function pCalcPeso(){
         <span style="color:#991b1b;font-size:11px;">Debes registrar el corte antes de avanzar a ${fase}.</span>`;
     } else if(cortado>0 && qty>cortado){
       infoEl.style.background='#fff3cd';
-      infoEl.style.border='1.5px solid #fbbf24';
-      infoEl.style.borderRadius='8px';
-      txtEl.innerHTML=`<span style="color:#92400e;font-weight:800;">⚠ Cantidad supera lo cortado.</span> Cortado: <strong>${cortado}</strong> uds · Plan: <strong>${plan}</strong> uds`;
-    } else {
-      infoEl.style.background='var(--su)';
-      infoEl.style.border='none';
-      infoEl.style.borderRadius='7px';
-      txtEl.innerHTML=`Plan total: <strong>${plan}</strong> uds · Cortado: <strong style="color:#166534">${cortado}</strong> uds`;
-    }
-  }
 }
 function addProd(){
   const fecha=document.getElementById('p-fecha').value;
@@ -4043,85 +4023,6 @@ function addProd(){
   clearProd(); renderProd(); renderDashboard(); pRenderRef();
   toast(`✓ ${fase}: ${cj} — ${vigasCompletas} vigas completas + ${qty-vigasCompletas} incompletas · ${pesoTotal.toFixed(1)} kg`);
 }
-  // ── Validación de secuencia de fabricación ──────────────
-  const esPL = (parte||'').toUpperCase().startsWith('PR') && 
-               TEKLA.conjuntos.find(x=>x.conjunto===cj)?.partes
-               .find(x=>x.parte===parte)?.perfil?.toUpperCase().startsWith('PL');
-
-  if(fase==='Armado'){
-    const cortado=getCortadoQty(cj,parte);
-    if(cortado<=0){
-      toast(`⛔ ${parte} no tiene cortes — registra el corte primero`);
-      pRenderRef(); return;
-    }
-  } else if(fase==='Soldadura'){
-    // Verificar que TODO el conjunto esté armado
-    const c=TEKLA.conjuntos.find(x=>x.conjunto===cj);
-    if(c){
-      const sinArmar=c.partes.filter(p=>{
-        const armado=ST.prods.filter(r=>r.conjunto===cj&&r.parte===p.parte&&r.fase==='Armado').reduce((s,r)=>s+r.qty,0);
-        return armado<p.cantidad;
-      });
-      if(sinArmar.length>0){
-        const lista=sinArmar.map(p=>`${p.parte} (${ST.prods.filter(r=>r.conjunto===cj&&r.parte===p.parte&&r.fase==='Armado').reduce((s,r)=>s+r.qty,0)}/${p.cantidad})`).join(', ');
-        toast(`⛔ Conjunto incompleto — partes sin armar: ${sinArmar.length}`);
-        const infoEl=document.getElementById('p-parte-info');
-        if(infoEl){
-          infoEl.style.display='block'; infoEl.style.background='#fee2e2';
-          infoEl.style.border='1.5px solid #fca5a5'; infoEl.style.borderRadius='8px';
-          document.getElementById('p-info-txt').innerHTML=`<span style="color:#991b1b;font-weight:800;">⛔ No puedes soldar — el conjunto no está completamente armado.</span><br>
-            <span style="color:#991b1b;font-size:11px;">Partes pendientes de armar: <strong>${lista}</strong></span>`;
-        }
-        pRenderRef(); return;
-      }
-    }
-  } else if(fase==='Perforaciones'){
-    // Placas PL pueden perforarse libremente (laser/pantógrafo)
-    // Para el resto, verificar soldadura completa del conjunto
-    if(!esPL){
-      const c=TEKLA.conjuntos.find(x=>x.conjunto===cj);
-      if(c){
-        const sinSoldar=c.partes.filter(p=>{
-          const perfPL=p.perfil?.toUpperCase().startsWith('PL');
-          if(perfPL) return false; // excluir placas
-          const soldado=ST.prods.filter(r=>r.conjunto===cj&&r.parte===p.parte&&r.fase==='Soldadura').reduce((s,r)=>s+r.qty,0);
-          return soldado<p.cantidad;
-        });
-        if(sinSoldar.length>0){
-          toast(`⛔ Conjunto no soldado completamente — ${sinSoldar.length} partes pendientes`);
-          pRenderRef(); return;
-        }
-      }
-    }
-  } else if(fase==='Limpieza Mecánica'||fase==='Pintura'){
-    const fasePrevia=fase==='Pintura'?'Limpieza Mecánica':'Soldadura';
-    const c=TEKLA.conjuntos.find(x=>x.conjunto===cj);
-    if(c){
-      const sinFase=c.partes.filter(p=>{
-        const ej=ST.prods.filter(r=>r.conjunto===cj&&r.parte===p.parte&&r.fase===fasePrevia).reduce((s,r)=>s+r.qty,0);
-        return ej<p.cantidad;
-      });
-      if(sinFase.length>0){
-        toast(`⛔ ${fasePrevia} incompleta — ${sinFase.length} partes pendientes`);
-        pRenderRef(); return;
-      }
-    }
-  }
-  const op=ST.ops.find(o=>o.id==opId);
-  const peso=parseFloat(document.getElementById('p-peso').value)||0;
-  const prodRec={id:Date.now(),fecha,turno:document.getElementById('p-turno').value,
-    conjunto:cj,parte,cj,pr:parte,qty,kg:peso,fase,opId,opNom:op?`${op.nom} ${op.ape}`:'—',
-    cal:document.getElementById('p-cal').value,obs:document.getElementById('p-obs').value.trim(),
-    sold_ml:document.getElementById('p-sold-ml')?.value||'',
-    sold_elec:document.getElementById('p-sold-elec')?.value||'',
-    sold_tipo:document.getElementById('p-sold-tipo')?.value||'',
-    sold_pos:document.getElementById('p-sold-pos')?.value||''};
-  ST.prods.push(prodRec); addExec(cj,parte,fase,qty);
-  saveAll();
-  if(GAS.configured()) GAS.post('addRegistro',prodRec).catch(()=>{});
-  renderProd(); renderDashboard();
-  // Mantener conjunto seleccionado y actualizar tabla referencia
-  const cjSel=document.getElementById('p-cj'); if(cjSel) cjSel.value=cj;
 function clearProd(){
   ['p-cj','p-fase','p-op','p-qty','p-peso','p-cal','p-obs'].forEach(id=>{
     const el=document.getElementById(id);
