@@ -4548,7 +4548,7 @@ function renderInformeCharts(cortes, prods, byFase) {
 
 function openModal(cj){
   const c=TEKLA.conjuntos.find(x=>x.conjunto===cj);if(!c)return;
-  const totEj=getCortadoQty(cj,c.marca);
+  const totEj=getVigasCompletas(cj);
   document.getElementById('modal-ttl').textContent=`${c.conjunto} — ${c.perfil} (${c.cantidad} plan)`;
   let html=`<div class="kpi-row" style="grid-template-columns:repeat(3,1fr);">
     <div class="kpi"><div class="kpi-lbl">Plan</div><div class="kpi-val">${c.cantidad}</div></div>
@@ -4556,11 +4556,36 @@ function openModal(cj){
     <div class="kpi k-warn"><div class="kpi-lbl">Pendiente</div><div class="kpi-val">${Math.max(0,c.cantidad-totEj)}</div></div>
   </div>
   <div style="font-size:11px;font-weight:800;color:var(--sd);margin:.75rem 0 .5rem;">Partes del conjunto</div>
-  <div class="tw"><table><thead><tr><th>Parte</th><th>Perfil</th><th class="r">Plan</th><th class="r">Long (mm)</th><th class="r">Pu (kg)</th><th class="r">Ejec.</th><th class="r">Pend.</th></tr></thead>
-  <tbody>${c.partes.map(p=>{const ej=getCortadoQty(cj,p.parte);const pend=Math.max(0,p.cantidad-ej);return`<tr class="${pend>0?'pend-row':'done-row'}"><td>${p.parte}</td><td class="mono">${p.perfil}</td><td class="r">${p.cantidad}</td><td class="r">${p.longitud||'—'}</td><td class="r">${p.peso_unit.toFixed(2)}</td><td class="r" style="color:#166534;font-weight:700;">${ej}</td><td class="r"><strong style="color:${pend>0?'#b45309':'#166534'}">${pend}</strong></td></tr>`;}).join('')}
+  <div class="tw"><table><thead><tr><th>Parte</th><th>Perfil</th><th class="r">Plan</th><th class="r">Long (mm)</th><th class="r">Pu (kg)</th><th class="r">Ejec. (vigas)</th><th class="r">Pend.</th></tr></thead>
+  <tbody>${c.partes.map(p=>{
+    const vigasPosibles=getVigasPorParte(cj,p.parte,p.perfil,p.cantidad);
+    const pend=Math.max(0,c.cantidad-vigasPosibles);
+    return`<tr class="${pend>0?'pend-row':'done-row'}">
+      <td>${p.parte}</td><td class="mono">${p.perfil}</td>
+      <td class="r">${p.cantidad}</td>
+      <td class="r">${p.longitud||'—'}</td>
+      <td class="r">${p.peso_unit.toFixed(2)}</td>
+      <td class="r" style="color:#166534;font-weight:700;">${vigasPosibles}</td>
+      <td class="r"><strong style="color:${pend>0?'#b45309':'#166534'}">${pend}</strong></td>
+    </tr>`;
+  }).join('')}
   </tbody></table></div>`;
   document.getElementById('modal-body').innerHTML=html;
   document.getElementById('modal-bg').classList.add('open');
+}
+
+function getVigasPorParte(cj, parte, perfil, planQty){
+  // Para vigas HI descompuestas, calcular por sub-piezas
+  const piezasHI = PIEZAS_HI_SUP[perfil];
+  if(piezasHI){
+    return getVigasCompletas(cj);
+  }
+  // Para piezas normales: qty cortada ÷ (planQty / c.cantidad)
+  const c = TEKLA.conjuntos.find(x=>x.conjunto===cj);
+  const planVigas = c?.cantidad||1;
+  const pzPorViga = Math.round(planQty/planVigas); // piezas por viga
+  const qtyCortada = getCortadoQty(cj, parte);
+  return pzPorViga>0 ? Math.floor(qtyCortada/pzPorViga) : qtyCortada;
 }
 function closeModal(){document.getElementById('modal-bg').classList.remove('open');}
 
