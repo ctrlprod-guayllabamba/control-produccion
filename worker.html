@@ -975,7 +975,7 @@ function saveRec(rec) {
 }
 
 function myExec(cj,pr,fase){return _cache.filter(r=>r.cj===cj&&r.pr===pr&&r.fase===fase).reduce((s,r)=>s+r.qty,0);}
-function totalExec(cj,pr,fase){
+function totalExec(cj,pr,fase){   const all = _cache.length > 0 ? _cache : LS.g(WORKER_RECS_LS, []);   return all.filter(r=>(r.cj||r.conjunto)===cj&&(r.pr||r.parte)===pr&&r.fase===fase).reduce((s,r)=>s+(Number(r.qty)||0),0); }cj,pr,fase){
   const all = LS.g(WORKER_RECS_LS, []);
   return all.filter(r=>r.cj===cj&&r.pr===pr&&r.fase===fase).reduce((s,r)=>s+r.qty,0);
 }
