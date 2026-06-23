@@ -3772,45 +3772,116 @@ function pRenderVigas(){
   if(!cont||!c) return;
 
   cont.innerHTML = pVigasData.map((v,i)=>{
-    // Calcular peso de esta viga según partes marcadas
+    // Calcular peso real según partes y cantidades marcadas
     let pesoViga = 0;
     c.partes.forEach(p=>{
-      if(v.partes[p.parte]) pesoViga += p.peso_unit||0;
+      const piezasHI = PIEZAS_HI_SUP[p.perfil];
+      if(piezasHI){
+        // Para HI: sumar peso de cada subparte ingresada
+        piezasHI.forEach(sp=>{
+          const qty = Number(v.subQty?.[p.parte]?.[sp.tipo]||0);
+          if(qty>0) pesoViga += sp.esp * sp.ancho * (p.longitud||3000) * 7.85e-6 * qty;
+        });
+      } else {
+        const qty = Number(v.qty?.[p.parte]||0);
+        if(qty>0) pesoViga += (p.peso_unit||0) * qty;
+      }
     });
-    const completa = c.partes.every(p=>v.partes[p.parte]);
+    const completa = c.partes.every(p=>{
+      const piezasHI = PIEZAS_HI_SUP[p.perfil];
+      if(piezasHI){
+        return piezasHI.every(sp=> Number(v.subQty?.[p.parte]?.[sp.tipo]||0)>0);
+      }
+      return Number(v.qty?.[p.parte]||0)>0;
+    });
 
     return `<div style="border:2px solid ${completa?'#86efac':'#bfdbfe'};border-radius:12px;padding:.875rem;margin-bottom:.625rem;background:${completa?'#f0fdf4':'#f8faff'}">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.625rem">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem">
         <span style="font-size:13px;font-weight:700;color:${completa?'#065f46':'#1e40af'}">
           ${completa?'✅':'🔶'} Viga ${i+1} ${completa?'— COMPLETA':'— EN PROGRESO'}
         </span>
         <div style="display:flex;gap:6px;align-items:center">
-          ${pesoViga>0?`<span style="font-size:11px;font-weight:700;color:#065f46">⚖ ${pesoViga.toFixed(1)} kg</span>`:''}
+          ${pesoViga>0?`<span style="font-size:12px;font-weight:700;color:#065f46">⚖ ${pesoViga.toFixed(1)} kg</span>`:''}
           ${pVigasData.length>1?`<button onclick="pRemoveViga(${i})" style="background:#fee2e2;color:#991b1b;border:none;border-radius:6px;padding:2px 8px;font-size:12px;cursor:pointer">✕</button>`:''}
         </div>
       </div>
-      <!-- Checkboxes por parte -->
-      <div style="display:flex;flex-wrap:wrap;gap:6px">
-        ${c.partes.map(p=>{
-          const checked = v.partes[p.parte]||false;
-          const pesoP = p.peso_unit||0;
-          return `<label style="display:flex;align-items:center;gap:4px;background:${checked?'#dcfce7':'#f1f5f9'};border:1.5px solid ${checked?'#86efac':'#cbd5e1'};border-radius:8px;padding:6px 10px;cursor:pointer;font-size:12px;font-weight:${checked?'700':'400'};color:${checked?'#065f46':'#374151'}">
-            <input type="checkbox" ${checked?'checked':''} onchange="pToggleParte(${i},'${p.parte}',this.checked)" style="width:14px;height:14px;cursor:pointer">
-            ${p.parte}
-            <span style="font-size:10px;color:#6b7280;font-family:monospace">${p.perfil}</span>
-            <span style="font-size:10px;color:#065f46;font-weight:700">${pesoP.toFixed(1)}kg</span>
-          </label>`;
-        }).join('')}
-      </div>
+
+      <!-- Partes -->
+      ${c.partes.map(p=>{
+        const piezasHI = PIEZAS_HI_SUP[p.perfil];
+        if(piezasHI){
+          // Parte con subpartes (ej: pr64 HI300)
+          const tieneAlgo = piezasHI.some(sp=>Number(v.subQty?.[p.parte]?.[sp.tipo]||0)>0);
+          return `<div style="border:1.5px solid ${tieneAlgo?'#86efac':'#e2e8f0'};border-radius:10px;padding:.625rem .75rem;margin-bottom:.5rem;background:${tieneAlgo?'#f0fdf4':'#fff'}">
+            <div style="font-size:12px;font-weight:700;color:#1e40af;margin-bottom:.5rem">
+              📐 ${p.parte} <span style="font-family:monospace;font-size:10px;font-weight:400;color:#6b7280">${p.perfil}</span>
+              <span style="font-size:10px;color:#6b7280;font-weight:400"> — ingresa subpartes colocadas</span>
+            </div>
+            <div style="display:grid;grid-template-columns:${piezasHI.map(()=>'1fr').join(' ')};gap:8px">
+              ${piezasHI.map(sp=>{
+                const qty = v.subQty?.[p.parte]?.[sp.tipo]||0;
+                const color = sp.tipo==='Alma'?'#0e7490':'#92400e';
+                const bg = sp.tipo==='Alma'?'#f0fdfe':'#fffbeb';
+                const border = sp.tipo==='Alma'?'#a5f3fc':'#fcd34d';
+                return `<div style="background:${bg};border:1.5px solid ${border};border-radius:8px;padding:6px 8px;text-align:center">
+                  <div style="font-size:10px;font-weight:700;color:${color};margin-bottom:4px">
+                    ${sp.tipo==='Alma'?'🔷':'🔶'} ${sp.tipo}
+                    <span style="font-size:9px;font-weight:400">(${sp.esp}×${sp.ancho}mm)</span>
+                  </div>
+                  <input type="number" value="${qty}" min="0" inputmode="numeric" placeholder="0"
+                    style="width:100%;text-align:center;font-size:18px;font-weight:800;border:1.5px solid ${border};border-radius:6px;padding:4px;color:${color};background:white"
+                    oninput="pSetSubQty(${i},'${p.parte}','${sp.tipo}',this.value)">
+                  <div style="font-size:9px;color:#6b7280;margin-top:2px">${sp.qty} por viga</div>
+                </div>`;
+              }).join('')}
+            </div>
+          </div>`;
+        } else {
+          // Parte simple (pr65, pr98)
+          const qty = v.qty?.[p.parte]||0;
+          const tieneAlgo = qty>0;
+          return `<div style="border:1.5px solid ${tieneAlgo?'#86efac':'#e2e8f0'};border-radius:10px;padding:.625rem .75rem;margin-bottom:.5rem;background:${tieneAlgo?'#f0fdf4':'#fff'};display:flex;align-items:center;gap:12px">
+            <div style="flex:1">
+              <div style="font-size:12px;font-weight:700;color:#374151">
+                📋 ${p.parte} <span style="font-family:monospace;font-size:10px;font-weight:400;color:#6b7280">${p.perfil}</span>
+              </div>
+              <div style="font-size:10px;color:#6b7280">${(p.peso_unit||0).toFixed(2)} kg/ud</div>
+            </div>
+            <div style="text-align:center">
+              <div style="font-size:10px;color:#6b7280;margin-bottom:2px">CANT.</div>
+              <input type="number" value="${qty}" min="0" inputmode="numeric" placeholder="0"
+                style="width:70px;text-align:center;font-size:20px;font-weight:800;border:2px solid ${tieneAlgo?'#86efac':'#cbd5e1'};border-radius:8px;padding:4px;color:#065f46"
+                oninput="pSetQty(${i},'${p.parte}',this.value)">
+            </div>
+            ${qty>0?`<div style="font-size:12px;font-weight:700;color:#065f46">⚖ ${((p.peso_unit||0)*qty).toFixed(1)} kg</div>`:''}
+          </div>`;
+        }
+      }).join('')}
     </div>`;
   }).join('');
 
   pCalcResumenDia();
 }
 
-function pToggleParte(vigaIdx, parte, checked){
+function pSetSubQty(vigaIdx, parte, subtipo, val){
   if(!pVigasData[vigaIdx]) return;
-  pVigasData[vigaIdx].partes[parte] = checked;
+  if(!pVigasData[vigaIdx].subQty) pVigasData[vigaIdx].subQty={};
+  if(!pVigasData[vigaIdx].subQty[parte]) pVigasData[vigaIdx].subQty[parte]={};
+  pVigasData[vigaIdx].subQty[parte][subtipo]=parseInt(val)||0;
+  pCalcResumenDia();
+  // Actualizar solo el peso sin re-render completo
+  const cj=document.getElementById('p-cj')?.value;
+  const c=TEKLA.conjuntos.find(x=>x.conjunto===cj);
+  if(!c) return;
+  // Re-render para actualizar colores
+  pRenderVigas();
+}
+
+function pSetQty(vigaIdx, parte, val){
+  if(!pVigasData[vigaIdx]) return;
+  if(!pVigasData[vigaIdx].qty) pVigasData[vigaIdx].qty={};
+  pVigasData[vigaIdx].qty[parte]=parseInt(val)||0;
+  pCalcResumenDia();
   pRenderVigas();
 }
 
@@ -3821,20 +3892,33 @@ function pCalcResumenDia(){
   const grid = document.getElementById('p-resumen-grid');
   if(!c||!resumen||!grid) return;
 
-  const vigasCompletas = pVigasData.filter(v=>c.partes.every(p=>v.partes[p.parte])).length;
-  const vigasIncompletas = pVigasData.filter(v=>!c.partes.every(p=>v.partes[p.parte])&&Object.values(v.partes).some(x=>x)).length;
-
   let pesoTotal = 0;
   pVigasData.forEach(v=>{
-    c.partes.forEach(p=>{ if(v.partes[p.parte]) pesoTotal += p.peso_unit||0; });
+    c.partes.forEach(p=>{
+      const piezasHI = PIEZAS_HI_SUP[p.perfil];
+      if(piezasHI){
+        piezasHI.forEach(sp=>{
+          const qty = Number(v.subQty?.[p.parte]?.[sp.tipo]||0);
+          if(qty>0) pesoTotal += sp.esp * sp.ancho * (p.longitud||3000) * 7.85e-6 * qty;
+        });
+      } else {
+        const qty = Number(v.qty?.[p.parte]||0);
+        if(qty>0) pesoTotal += (p.peso_unit||0) * qty;
+      }
+    });
   });
 
-  // Qty para el campo oculto
-  const qtyTotal = pVigasData.length;
-  document.getElementById('p-qty').value = qtyTotal;
+  const vigasCompletas = pVigasData.filter(v=>c.partes.every(p=>{
+    const piezasHI = PIEZAS_HI_SUP[p.perfil];
+    if(piezasHI) return piezasHI.every(sp=>Number(v.subQty?.[p.parte]?.[sp.tipo]||0)>0);
+    return Number(v.qty?.[p.parte]||0)>0;
+  })).length;
+  const vigasIncompletas = pVigasData.length - vigasCompletas;
+
+  document.getElementById('p-qty').value = pVigasData.length;
   document.getElementById('p-peso').value = pesoTotal.toFixed(2);
 
-  resumen.style.display = pVigasData.length>0 ? '' : 'none';
+  resumen.style.display = pVigasData.length>0?'':'none';
   grid.innerHTML = `
     <div style="text-align:center">
       <div style="font-size:9px;opacity:.7;font-weight:700">✅ COMPLETAS</div>
