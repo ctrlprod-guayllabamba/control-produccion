@@ -1420,7 +1420,9 @@ async function loadFromServer(){
           if(r.fase==='Corte'||r.tipo==='corte'){
             r.fase='Corte'; ST.cortes.push(r); addExec(r.conjunto,r.parte,'Corte',r.qty);
           } else {
-            ST.prods.push(r); addExec(r.conjunto,r.parte,r.fase,r.qty);
+            ST.prods.push(r);
+            const ejQty = Number(r.vigasCompletas||r.qty)||0;
+            addExec(r.conjunto,r.parte,r.fase,ejQty);
           }
         });
         LS.save('cortes',ST.cortes); LS.save('prods',ST.prods);
