@@ -1020,8 +1020,14 @@ function buildCjList(){
 function selectCj(cjId){
   selCj=TEKLA.find(x=>x.cj===cjId);
   if(!selCj)return;
-  if(POR_PARTE.includes(selFase)){buildParteList();go('sc-parte');}
-  else{selParte=null;buildForm();go('sc-form');}
+  // Para Corte: mostrar lista de partes
+  // Para Armado/Soldadura/etc: ir directo al formulario de vigas
+  if(selFase==='Corte'){buildParteList();go('sc-parte');}
+  else if(['Armado','Soldadura','Perforaciones','Limpieza Mecánica','Pintura'].includes(selFase)){
+    selParte=null; buildForm(); go('sc-form');
+  } else {
+    buildParteList();go('sc-parte');
+  }
 }
 
 // ======= PARTE LIST =======
@@ -1139,7 +1145,7 @@ function selectParte(prId){
     loadMyRecs().then(()=>{ _actualizarPanelParte(); });
     _actualizarPanelParte(); // mostrar con lo que hay en caché mientras carga
   } else {
-    buildForm();go('sc-form');
+    buildForm(); go('sc-form');
   }
 }
 
@@ -3097,7 +3103,261 @@ function guardarCorte(){
 }
 
 // ======= OTRAS FASES FORM =======
+// ══════════════════════════════════════════════════
+// WORKER — FLUJO DE ARMADO POR VIGAS (igual supervisor)
+// ══════════════════════════════════════════════════
+let wkVigasData = [];
+
 function buildForm(){
+  const f=FASES.find(x=>x.id===selFase);
+  const isPP=POR_PARTE.includes(selFase);
+
+  // Para Armado/Soldadura/etc — usar flujo de vigas
+  if(['Armado','Soldadura','Perforaciones','Limpieza Mecánica','Pintura'].includes(selFase)){
+    _buildFormVigas();
+  } else {
+    _buildFormSimple();
+  }
+}
+
+function _buildFormVigas(){
+  const c = TEKLA.find(x=>x.cj===selCj.cj);
+  if(!c){ go('sc-form'); return; }
+
+  // Panel progreso
+  const fase = selFase;
+  const ej = totalExec(selCj.cj,'—',fase);
+  const plan = c.partes.reduce((s,p)=>s+p.plan,0)/c.partes.length; // vigas plan = plan del conjunto
+  // Buscar plan de vigas del conjunto
+  const planVigas = selCj.partes[0]?.plan || 0; // primera parte como referencia de vigas
+
+  wkVigasData = [{qty:{}, subQty:{}}];
+
+  const infoHtml = `
+    <div style="background:#fffbeb;border:1.5px solid #fcd34d;border-radius:10px;padding:.75rem;margin-bottom:.75rem">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:.5rem">
+        <div style="background:#fff;border-radius:8px;padding:6px;text-align:center;border:1px solid #e5e7eb">
+          <div style="font-size:9px;font-weight:800;color:#6b7280">📐 PLAN</div>
+          <div style="font-size:18px;font-weight:800;color:#1a2b4a">${selCj.partes.reduce((s,p)=>Math.min(s,p.plan),999)} vigas</div>
+        </div>
+        <div style="background:#f0fdf4;border-radius:8px;padding:6px;text-align:center;border:1px solid #86efac">
+          <div style="font-size:9px;font-weight:800;color:#065f46">✅ ${fase}</div>
+          <div style="font-size:18px;font-weight:800;color:#065f46">${ej} vigas</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="font-size:11px;font-weight:800;color:#1e40af;text-transform:uppercase;margin-bottom:.5rem">
+      🔧 Vigas trabajadas hoy
+    </div>
+    <div id="wk-vigas-list"></div>
+    <button onclick="wkAddViga()" style="width:100%;padding:.625rem;background:#eef4ff;color:#1e40af;border:1.5px dashed #93c5fd;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:.75rem">
+      + Agregar viga
+    </button>
+
+    <div id="wk-vigas-resumen" style="display:none;background:#1a2b4a;color:#fff;border-radius:10px;padding:.875rem;margin-bottom:.75rem">
+      <div style="font-size:10px;font-weight:700;opacity:.7;margin-bottom:.5rem">Resumen del día</div>
+      <div id="wk-vigas-resumen-grid" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px"></div>
+    </div>
+
+    <div class="field"><label>¿Cómo salió el trabajo?</label>
+      <div class="cal-row">
+        <div class="cal-btn ok-sel" id="cal-ok" onclick="setCal('ok')"><span class="ci">✅</span>Buenas</div>
+        <div class="cal-btn" id="cal-rep" onclick="setCal('rep')"><span class="ci">⚠️</span>Reproceso</div>
+        <div class="cal-btn" id="cal-rec" onclick="setCal('rec')"><span class="ci">❌</span>Rechazo</div>
+      </div>
+    </div>
+    <div class="field"><label>Notas (opcional)</label>
+      <textarea id="f-obs" placeholder="Dificultad, material..."></textarea>
+    </div>
+    <button class="btn-main" onclick="wkGuardarVigas()">✔ Guardar trabajo del día</button>`;
+
+  document.getElementById('form-content').innerHTML = infoHtml;
+  document.getElementById('sb-form').innerHTML = stepbar(2,['Conjunto','Armado']);
+  document.getElementById('form-back-btn').onclick = ()=>go('sc-cj');
+  go('sc-form');
+  wkRenderVigas();
+}
+
+function wkRenderVigas(){
+  const cont = document.getElementById('wk-vigas-list');
+  if(!cont) return;
+  const partes = selCj?.partes || [];
+
+  cont.innerHTML = wkVigasData.map((v,i)=>{
+    let pesoViga = 0;
+    partes.forEach(p=>{
+      const piezasHI = PIEZAS_HI[p.perfil];
+      if(piezasHI){
+        piezasHI.forEach(sp=>{
+          const qty = Number(v.subQty?.[p.pr]?.[sp.tipo]||0);
+          if(qty>0) pesoViga += sp.esp * sp.ancho * (p.long||3000) * D * qty;
+        });
+      } else {
+        const qty = Number(v.qty?.[p.pr]||0);
+        if(qty>0) pesoViga += (p.pu||0) * qty;
+      }
+    });
+    const completa = partes.every(p=>{
+      const piezasHI = PIEZAS_HI[p.perfil];
+      if(piezasHI) return piezasHI.every(sp=>Number(v.subQty?.[p.pr]?.[sp.tipo]||0)>0);
+      return Number(v.qty?.[p.pr]||0)>0;
+    });
+
+    return `<div style="border:2px solid ${completa?'#86efac':'#bfdbfe'};border-radius:12px;padding:.875rem;margin-bottom:.75rem;background:${completa?'#f0fdf4':'#f8faff'}">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem">
+        <span style="font-size:13px;font-weight:700;color:${completa?'#065f46':'#1e40af'}">
+          ${completa?'✅':'🔶'} Viga ${i+1} ${completa?'— COMPLETA':'— EN PROGRESO'}
+        </span>
+        <div style="display:flex;gap:6px;align-items:center">
+          ${pesoViga>0?`<span data-viga-peso="${i}" style="font-size:11px;font-weight:700;color:#065f46">⚖ ${pesoViga.toFixed(1)} kg</span>`:`<span data-viga-peso="${i}"></span>`}
+          ${wkVigasData.length>1?`<button onclick="wkRmViga(${i})" style="background:#fee2e2;color:#991b1b;border:none;border-radius:6px;padding:3px 10px;font-size:12px;cursor:pointer">✕</button>`:''}
+        </div>
+      </div>
+
+      ${partes.map(p=>{
+        const piezasHI = PIEZAS_HI[p.perfil];
+        if(piezasHI){
+          return `<div style="border:1.5px solid #bfdbfe;border-radius:10px;padding:.625rem;margin-bottom:.5rem;background:#fff">
+            <div style="font-size:12px;font-weight:700;color:#1e40af;margin-bottom:.5rem">
+              📐 ${p.pr} <span style="font-size:10px;font-weight:400;color:#6b7280;font-family:monospace">${p.perfil}</span>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+              ${piezasHI.map(sp=>{
+                const qty=v.subQty?.[p.pr]?.[sp.tipo]||0;
+                const color=sp.tipo==='Alma'?'#0e7490':'#92400e';
+                const bg=sp.tipo==='Alma'?'#f0fdfe':'#fffbeb';
+                const border=sp.tipo==='Alma'?'#a5f3fc':'#fcd34d';
+                return `<div style="background:${bg};border:1.5px solid ${border};border-radius:8px;padding:6px;text-align:center">
+                  <div style="font-size:10px;font-weight:700;color:${color};margin-bottom:4px">
+                    ${sp.tipo==='Alma'?'🔷':'🔶'} ${sp.tipo}<br>
+                    <span style="font-size:9px;font-weight:400">${sp.esp}×${sp.ancho}mm · ${sp.qty}/viga</span>
+                  </div>
+                  <input type="number" value="${qty||''}" min="0" inputmode="numeric" placeholder="0"
+                    style="width:100%;text-align:center;font-size:22px;font-weight:800;border:1.5px solid ${border};border-radius:6px;padding:4px;color:${color}"
+                    oninput="wkSetSubQty(${i},'${p.pr}','${sp.tipo}',this.value)">
+                </div>`;
+              }).join('')}
+            </div>
+          </div>`;
+        } else {
+          const qty = v.qty?.[p.pr]||0;
+          const planVigas = Math.round((p.plan||0)/(selCj.partes[0]?.plan||1));
+          return `<div style="border:1.5px solid ${qty>0?'#86efac':'#e2e8f0'};border-radius:10px;padding:.625rem;margin-bottom:.5rem;background:${qty>0?'#f0fdf4':'#fff'};display:flex;align-items:center;gap:10px">
+            <div style="flex:1">
+              <div style="font-size:12px;font-weight:700;color:#374151">📋 ${p.pr} <span style="font-family:monospace;font-size:10px;font-weight:400;color:#6b7280">${p.perfil}</span></div>
+              <div style="font-size:10px;color:#6b7280">${(p.pu||0).toFixed(3)} kg/ud${planVigas>1?` · ${planVigas} pzas/viga`:''}</div>
+            </div>
+            <input type="number" value="${qty||''}" min="0" inputmode="numeric" placeholder="0"
+              style="width:70px;text-align:center;font-size:22px;font-weight:800;border:2px solid ${qty>0?'#86efac':'#cbd5e1'};border-radius:8px;padding:4px;color:#065f46"
+              oninput="wkSetQty(${i},'${p.pr}',this.value)">
+            ${qty>0?`<span style="font-size:11px;font-weight:700;color:#065f46">⚖${((p.pu||0)*qty).toFixed(1)}kg</span>`:''}
+          </div>`;
+        }
+      }).join('')}
+    </div>`;
+  }).join('');
+
+  wkCalcResumenVigas();
+}
+
+function wkAddViga(){ wkVigasData.push({qty:{},subQty:{}}); wkRenderVigas(); }
+function wkRmViga(i){ wkVigasData.splice(i,1); wkRenderVigas(); }
+
+function wkSetSubQty(vi,pr,tipo,val){
+  if(!wkVigasData[vi]) return;
+  if(!wkVigasData[vi].subQty) wkVigasData[vi].subQty={};
+  if(!wkVigasData[vi].subQty[pr]) wkVigasData[vi].subQty[pr]={};
+  wkVigasData[vi].subQty[pr][tipo]=parseInt(val)||0;
+  wkCalcResumenVigas();
+}
+
+function wkSetQty(vi,pr,val){
+  if(!wkVigasData[vi]) return;
+  if(!wkVigasData[vi].qty) wkVigasData[vi].qty={};
+  wkVigasData[vi].qty[pr]=parseInt(val)||0;
+  wkCalcResumenVigas();
+}
+
+function wkCalcResumenVigas(){
+  const partes = selCj?.partes||[];
+  let pesoTotal=0;
+  wkVigasData.forEach(v=>{
+    partes.forEach(p=>{
+      const piezasHI=PIEZAS_HI[p.perfil];
+      if(piezasHI){
+        piezasHI.forEach(sp=>{ const q=Number(v.subQty?.[p.pr]?.[sp.tipo]||0); if(q>0) pesoTotal+=sp.esp*sp.ancho*(p.long||3000)*D*q; });
+      } else {
+        const q=Number(v.qty?.[p.pr]||0); if(q>0) pesoTotal+=(p.pu||0)*q;
+      }
+    });
+  });
+  const vigasCompletas=wkVigasData.filter(v=>partes.every(p=>{
+    const piezasHI=PIEZAS_HI[p.perfil];
+    if(piezasHI) return piezasHI.every(sp=>Number(v.subQty?.[p.pr]?.[sp.tipo]||0)>0);
+    return Number(v.qty?.[p.pr]||0)>0;
+  })).length;
+  const res=document.getElementById('wk-vigas-resumen');
+  const grid=document.getElementById('wk-vigas-resumen-grid');
+  if(res&&grid){
+    res.style.display=wkVigasData.length>0?'':'none';
+    grid.innerHTML=`
+      <div style="text-align:center"><div style="font-size:9px;opacity:.7;font-weight:700">✅ COMPLETAS</div><div style="font-size:18px;font-weight:800;color:#86efac">${vigasCompletas}</div></div>
+      <div style="text-align:center"><div style="font-size:9px;opacity:.7;font-weight:700">🔶 EN PROG.</div><div style="font-size:18px;font-weight:800;color:#fde68a">${wkVigasData.length-vigasCompletas}</div></div>
+      <div style="text-align:center"><div style="font-size:9px;opacity:.7;font-weight:700">⚖ KG REAL</div><div style="font-size:16px;font-weight:800;color:#93c5fd">${pesoTotal.toFixed(1)}</div></div>`;
+  }
+}
+
+async function wkGuardarVigas(){
+  if(!W||!selCj) return;
+  const partes=selCj.partes||[];
+  const tieneDatos=wkVigasData.some(v=>partes.some(p=>{
+    const piezasHI=PIEZAS_HI[p.perfil];
+    if(piezasHI) return piezasHI.some(sp=>Number(v.subQty?.[p.pr]?.[sp.tipo]||0)>0);
+    return Number(v.qty?.[p.pr]||0)>0;
+  }));
+  if(!tieneDatos){alert('Ingresa al menos una cantidad');return;}
+
+  let pesoTotal=0;
+  wkVigasData.forEach(v=>{
+    partes.forEach(p=>{
+      const piezasHI=PIEZAS_HI[p.perfil];
+      if(piezasHI){
+        piezasHI.forEach(sp=>{ const q=Number(v.subQty?.[p.pr]?.[sp.tipo]||0); if(q>0) pesoTotal+=sp.esp*sp.ancho*(p.long||3000)*D*q; });
+      } else { const q=Number(v.qty?.[p.pr]||0); if(q>0) pesoTotal+=(p.pu||0)*q; }
+    });
+  });
+  const vigasCompletas=wkVigasData.filter(v=>partes.every(p=>{
+    const piezasHI=PIEZAS_HI[p.perfil];
+    if(piezasHI) return piezasHI.every(sp=>Number(v.subQty?.[p.pr]?.[sp.tipo]||0)>0);
+    return Number(v.qty?.[p.pr]||0)>0;
+  })).length;
+
+  const rec={
+    id:Date.now(), tipo:'produccion', fecha:todayISO(), hora:timeNow(),
+    opId:W.id, opNom:`${W.nom} ${W.ape}`, opRol:W.rol,
+    fase:selFase, cj:selCj.cj, conjunto:selCj.cj,
+    parte:partes.map(p=>p.pr).join('+'), pr:'—',
+    qty:wkVigasData.length, vigasCompletas, pesoReal:pesoTotal, peso:pesoTotal,
+    calidad, obs:document.getElementById('f-obs')?.value.trim()||'',
+    detalle_vigas:JSON.stringify(wkVigasData),
+  };
+
+  saveRec(rec);
+  setSync(true,'ok');
+
+  document.getElementById('ok-detail').innerHTML=
+    `🔧 <strong>${selFase}</strong> · ${selCj.cj}<br>
+     ✅ ${vigasCompletas} vigas completas + ${wkVigasData.length-vigasCompletas} en progreso<br>
+     ⚖ ${pesoTotal.toFixed(1)} kg`;
+  loadMyRecs().then(()=>{
+    document.getElementById('ok-hist').innerHTML=renderHistItems(_cache.filter(r=>r.fecha===todayISO()));
+  });
+  renderHomeHist();
+  go('sc-ok');
+}
+
+function _buildFormSimple(){
   const f=FASES.find(x=>x.id===selFase);
   const isPP=POR_PARTE.includes(selFase);
   const label=isPP&&selParte?selParte.pr:selCj.cj;
