@@ -4165,15 +4165,16 @@ function renderProd(){
   const recs=ST.prods.filter(r=>(!q||(r.conjunto+r.parte+r.fase+r.opNom).toLowerCase().includes(q))&&(!ff||r.fase===ff));
   const calBadge=c=>c==='ok'?'<span class="badge b-done">OK</span>':c==='rep'?'<span class="badge b-prog">Rep.</span>':'<span class="badge b-rej">Rec.</span>';
   document.getElementById('pr-tbody').innerHTML=recs.length?recs.map(r=>`<tr>
-    <td>${r.fecha}</td><td><strong>${r.conjunto}</strong></td><td>${r.parte}</td>
-    <td>${r.fase}</td><td>${r.opNom}</td>
-    <td class="r">${r.qty}</td><td class="r">${r.kg.toFixed(1)}</td>
+    <td>${r.fecha}</td><td><strong>${r.conjunto||r.cj}</strong></td><td style="font-size:10px">${r.parte||'—'}</td>
+    <td>${r.fase}</td><td>${r.opNom||'—'}</td>
+    <td class="r"><strong>${r.vigasCompletas||r.qty||0}</strong><br><span style="font-size:9px;color:#6b7280">${r.qty||0} total</span></td>
+    <td class="r">${(r.peso||r.pesoReal||r.kg||0).toFixed(1)}</td>
     <td class="r">${r.sold_ml?`<span style="font-size:11px;font-weight:700;color:#1e40af;">${r.sold_ml} ml</span>`:'—'}</td>
-    <td>${calBadge(r.cal)}</td>
+    <td>${calBadge(r.calidad||r.cal||'ok')}</td>
     <td class="c no-print"><button class="btn btn-d btn-sm" onclick="ST.prods=ST.prods.filter(x=>x.id!==${r.id});saveAll();renderProd()">✕</button></td>
   </tr>`).join(''):'<tr><td colspan="9" style="text-align:center;padding:1.5rem;color:var(--gm);">Sin registros</td></tr>';
-  const tot=recs.reduce((s,r)=>s+r.qty,0);
-  const totkg=recs.reduce((s,r)=>s+r.kg,0);
+  const tot=recs.reduce((s,r)=>s+(r.vigasCompletas||r.qty||0),0);
+  const totkg=recs.reduce((s,r)=>s+(r.peso||r.pesoReal||r.kg||0),0);
   document.getElementById('pr-tot').textContent=recs.length?`Total: ${tot} unidades — ${totkg.toFixed(1)} kg`:'';
 }
 
