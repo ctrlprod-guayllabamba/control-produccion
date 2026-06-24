@@ -3743,17 +3743,16 @@ let pVigasData = []; // array de vigas del día con sus partes
 
 function pBuildVigas(){
   const cj = document.getElementById('p-cj')?.value;
-  const fase = document.getElementById('p-fase')?.value||'Armado';
   const sec = document.getElementById('p-vigas-section');
   if(!cj||!sec){ if(sec) sec.style.display='none'; return; }
   sec.style.display = '';
-  pVigasData = [{partes:{}}]; // empezar con una viga
+  pVigasData = [{qty:{}, subQty:{}}];
   pRenderVigas();
   pUpdateInfo();
 }
 
 function pAddViga(){
-  pVigasData.push({partes:{}});
+  pVigasData.push({qty:{}, subQty:{}});
   pRenderVigas();
 }
 
@@ -3764,10 +3763,11 @@ function pRemoveViga(i){
 }
 
 function pRenderVigas(){
+  try {
   const cj = document.getElementById('p-cj')?.value;
   const c = TEKLA.conjuntos.find(x=>x.conjunto===cj);
   const cont = document.getElementById('p-vigas-list');
-  if(!cont||!c) return;
+  if(!cont||!c){ return; }
 
   cont.innerHTML = pVigasData.map((v,i)=>{
     // Calcular peso real según partes y cantidades marcadas
@@ -3870,10 +3870,10 @@ function pRenderVigas(){
   }).join('');
 
   pCalcResumenDia();
+  } catch(e){ console.error('pRenderVigas error:',e); }
 }
 
 function pSetSubQty(vigaIdx, parte, subtipo, val){
-  if(!pVigasData[vigaIdx]) return;
   if(!pVigasData[vigaIdx].subQty) pVigasData[vigaIdx].subQty={};
   if(!pVigasData[vigaIdx].subQty[parte]) pVigasData[vigaIdx].subQty[parte]={};
   pVigasData[vigaIdx].subQty[parte][subtipo]=parseInt(val)||0;
