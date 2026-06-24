@@ -3120,6 +3120,52 @@ function buildForm(){
   }
 }
 
+// ── Resumen global de conjuntos para el panel de armado/fases ────────────
+function buildResumenConjuntos(fase, selCjId){
+  return TEKLA.map(c=>{
+    const planVigas  = c.partes.reduce((s,p)=>Math.min(s,p.plan),999);
+    const ejVigas    = totalExec(c.cj,'—',fase);
+    const pendVigas  = Math.max(0, planVigas - ejVigas);
+    const pesoPlan   = c.partes.reduce((s,p)=>s + p.plan*p.pu, 0);
+    const pesoEjKg   = pesoPlan>0 ? Math.round(ejVigas*(pesoPlan/(planVigas||1))) : 0;
+    const pesoPlanKg = Math.round(pesoPlan);
+    const pesoPendKg = Math.max(0, pesoPlanKg - pesoEjKg);
+    const pct        = planVigas>0 ? Math.min(100, ejVigas/planVigas*100) : 0;
+    const isSel      = c.cj === selCjId;
+    const color      = pct>=100 ? '#065f46' : pct>=50 ? '#1e40af' : '#92400e';
+    const bg         = pct>=100 ? '#f0fdf4' : pct>=50 ? '#eff6ff' : '#fffbeb';
+    const border     = pct>=100 ? '#86efac' : pct>=50 ? '#bfdbfe' : '#fcd34d';
+    return `<div style="border:1.5px solid ${isSel?'#f97316':border};border-radius:10px;padding:.6rem;background:${isSel?'#fff7ed':bg};margin-bottom:.5rem">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.3rem">
+        <div style="font-size:11px;font-weight:800;color:${isSel?'#ea580c':color}">${isSel?'▶ ':''}${c.cj}</div>
+        <div style="font-size:9px;background:${color};color:#fff;border-radius:4px;padding:1px 6px;font-weight:700">${pct.toFixed(0)}%</div>
+      </div>
+      <div style="font-size:9px;color:#6b7280;margin-bottom:.35rem">${c.desc}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-bottom:.35rem">
+        <div style="background:rgba(0,0,0,.05);border-radius:6px;padding:4px;text-align:center">
+          <div style="font-size:8px;font-weight:700;color:#6b7280">PROG.</div>
+          <div style="font-size:13px;font-weight:800;color:#1a2b4a">${planVigas}</div>
+          <div style="font-size:8px;color:#9ca3af">${pesoPlanKg.toLocaleString()} kg</div>
+        </div>
+        <div style="background:rgba(0,100,0,.07);border-radius:6px;padding:4px;text-align:center">
+          <div style="font-size:8px;font-weight:700;color:#065f46">EJECT.</div>
+          <div style="font-size:13px;font-weight:800;color:#065f46">${ejVigas}</div>
+          <div style="font-size:8px;color:#6b7280">${pesoEjKg.toLocaleString()} kg</div>
+        </div>
+        <div style="background:rgba(220,38,38,.06);border-radius:6px;padding:4px;text-align:center">
+          <div style="font-size:8px;font-weight:700;color:#b91c1c">PEND.</div>
+          <div style="font-size:13px;font-weight:800;color:#b91c1c">${pendVigas}</div>
+          <div style="font-size:8px;color:#9ca3af">${pesoPendKg.toLocaleString()} kg</div>
+        </div>
+      </div>
+      <div style="height:5px;background:#e5e7eb;border-radius:3px;overflow:hidden">
+        <div style="height:100%;width:${pct.toFixed(1)}%;background:${color};border-radius:3px"></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+// ─────────────────────────────────────────────────────────────────────────
+
 function _buildFormVigas(){
   const c = TEKLA.find(x=>x.cj===selCj.cj);
   if(!c){ go('sc-form'); return; }
@@ -3134,6 +3180,14 @@ function _buildFormVigas(){
   wkVigasData = [{qty:{}, subQty:{}}];
 
   const infoHtml = `
+    <details style="margin-bottom:.75rem" open>
+      <summary style="cursor:pointer;font-size:11px;font-weight:800;color:#1e40af;text-transform:uppercase;padding:.5rem .75rem;background:#eff6ff;border:1.5px solid #bfdbfe;border-radius:10px;list-style:none;display:flex;align-items:center;gap:6px">
+        <span>📊</span><span>Resumen global — ${fase}</span>
+        <span style="margin-left:auto;font-size:10px;opacity:.6">▼ ver/ocultar</span>
+      </summary>
+      <div style="margin-top:.5rem" id="wk-resumen-global"></div>
+    </details>
+
     <div style="background:#fffbeb;border:1.5px solid #fcd34d;border-radius:10px;padding:.75rem;margin-bottom:.75rem">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:.5rem">
         <div style="background:#fff;border-radius:8px;padding:6px;text-align:center;border:1px solid #e5e7eb">
@@ -3176,6 +3230,8 @@ function _buildFormVigas(){
   document.getElementById('sb-form').innerHTML = stepbar(2,['Conjunto','Armado']);
   document.getElementById('form-back-btn').onclick = ()=>go('sc-cj');
   go('sc-form');
+  const rgEl = document.getElementById('wk-resumen-global');
+  if(rgEl) rgEl.innerHTML = buildResumenConjuntos(fase, selCj?.cj);
   wkRenderVigas();
 }
 

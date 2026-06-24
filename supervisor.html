@@ -862,6 +862,13 @@ global.Chart = class {
 <div class="g2">
   <div class="card">
     <div class="card-hdr">🔧 Registro de Armado / Producción</div>
+    <details id="sup-resumen-det" style="margin-bottom:.75rem">
+      <summary style="cursor:pointer;font-size:11px;font-weight:800;color:#1e40af;text-transform:uppercase;padding:.5rem .75rem;background:#eff6ff;border:1.5px solid #bfdbfe;border-radius:10px;list-style:none;display:flex;align-items:center;gap:6px">
+        <span>📊</span><span id="sup-resumen-title">Resumen global — Armado</span>
+        <span style="margin-left:auto;font-size:10px;opacity:.6">▼ ver/ocultar</span>
+      </summary>
+      <div id="sup-resumen-global" style="margin-top:.5rem"><div style="padding:1rem;text-align:center;color:#9ca3af;font-size:12px">Cargando...</div></div>
+    </details>
     <div class="frow">
       <div class="fg"><label>Fecha</label><input type="date" id="p-fecha"></div>
       <div class="fg"><label>Turno</label><select id="p-turno"><option>Diurno</option><option>Nocturno</option></select></div>
@@ -3737,11 +3744,64 @@ function initProdSelects(){
   const selOp=document.getElementById('p-op');
   selOp.innerHTML='<option value="">Seleccionar...</option>'+ST.ops.map(o=>`<option value="${o.id}">${o.nom} ${o.ape} (${o.rol})</option>`).join('');
   const f=document.getElementById('p-fecha');if(f&&!f.value)f.value=today();
+  // Render resumen global al abrir la pestaña
+  const fase0 = document.getElementById('p-fase')?.value||'Armado';
+  const cj0   = document.getElementById('p-cj')?.value||'';
+  const rgEl0 = document.getElementById('sup-resumen-global');
+  const rtEl0 = document.getElementById('sup-resumen-title');
+  if(rgEl0) rgEl0.innerHTML = buildResumenConjuntosSup(fase0, cj0);
+  if(rtEl0) rtEl0.textContent = 'Resumen global — ' + fase0;
 }
 // ══════════════════════════════════════════════════
 // PRODUCCIÓN — SISTEMA GRANULAR POR VIGA
 // ══════════════════════════════════════════════════
 let pVigasData = []; // array de vigas del día con sus partes
+
+// ── Resumen global de conjuntos para el formulario de Armado/Producción ──
+function buildResumenConjuntosSup(fase, selCj){
+  return TEKLA.conjuntos.map(c=>{
+    const planVigas  = c.cantidad;
+    const ej = ST.prods.filter(r=>(r.conjunto||r.cj)===c.conjunto&&r.fase===fase)
+                        .reduce((s,r)=>s+(Number(r.vigasCompletas||r.qty)||0),0);
+    const pend       = Math.max(0, planVigas - ej);
+    const pesoPlanKg = Math.round(c.peso_total||0);
+    const pesoEjKg   = Math.round(ej * (c.peso_unit||0));
+    const pesoPendKg = Math.max(0, pesoPlanKg - pesoEjKg);
+    const pct        = planVigas>0 ? Math.min(100, ej/planVigas*100) : 0;
+    const isSel      = c.conjunto === selCj;
+    const color      = pct>=100 ? '#065f46' : pct>=50 ? '#1e40af' : '#92400e';
+    const bg         = pct>=100 ? '#f0fdf4' : pct>=50 ? '#eff6ff' : '#fffbeb';
+    const border     = pct>=100 ? '#86efac' : pct>=50 ? '#bfdbfe' : '#fcd34d';
+    return `<div style="border:1.5px solid ${isSel?'#f97316':border};border-radius:10px;padding:.6rem;background:${isSel?'#fff7ed':bg};margin-bottom:.5rem">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.3rem">
+        <div style="font-size:11px;font-weight:800;color:${isSel?'#ea580c':color}">${isSel?'▶ ':''}${c.conjunto}</div>
+        <div style="font-size:9px;background:${color};color:#fff;border-radius:4px;padding:1px 6px;font-weight:700">${pct.toFixed(0)}%</div>
+      </div>
+      <div style="font-size:9px;color:#6b7280;margin-bottom:.35rem">${c.cantidad} uds — ${c.perfil}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-bottom:.35rem">
+        <div style="background:rgba(0,0,0,.05);border-radius:6px;padding:4px;text-align:center">
+          <div style="font-size:8px;font-weight:700;color:#6b7280">PROG.</div>
+          <div style="font-size:14px;font-weight:800;color:#1a2b4a">${planVigas}</div>
+          <div style="font-size:8px;color:#9ca3af">${pesoPlanKg.toLocaleString()} kg</div>
+        </div>
+        <div style="background:rgba(0,100,0,.07);border-radius:6px;padding:4px;text-align:center">
+          <div style="font-size:8px;font-weight:700;color:#065f46">EJECT.</div>
+          <div style="font-size:14px;font-weight:800;color:#065f46">${ej}</div>
+          <div style="font-size:8px;color:#6b7280">${pesoEjKg.toLocaleString()} kg</div>
+        </div>
+        <div style="background:rgba(220,38,38,.06);border-radius:6px;padding:4px;text-align:center">
+          <div style="font-size:8px;font-weight:700;color:#b91c1c">PEND.</div>
+          <div style="font-size:14px;font-weight:800;color:#b91c1c">${pend}</div>
+          <div style="font-size:8px;color:#9ca3af">${pesoPendKg.toLocaleString()} kg</div>
+        </div>
+      </div>
+      <div style="height:5px;background:#e5e7eb;border-radius:3px;overflow:hidden">
+        <div style="height:100%;width:${pct.toFixed(1)}%;background:${color};border-radius:3px"></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+// ──────────────────────────────────────────────────────────────────────────
 
 function pBuildVigas(){
   const cj = document.getElementById('p-cj')?.value;
@@ -4008,6 +4068,11 @@ function pUpdateInfo(){
       msg.textContent=ejConEsta===plan?`✅ ¡COMPLETO! Con este registro se termina el ${fase} de E-T-1`:`⚠ Supera el plan en ${ejConEsta-plan} vigas`;
     } else msg.style.display='none';
   }
+  // Actualizar resumen global
+  const rgEl = document.getElementById('sup-resumen-global');
+  const rtEl = document.getElementById('sup-resumen-title');
+  if(rgEl) rgEl.innerHTML = buildResumenConjuntosSup(fase, cj);
+  if(rtEl) rtEl.textContent = 'Resumen global — ' + (fase||'Armado');
 }
 function toggleSoldExtra(){
   const fase = document.getElementById('p-fase')?.value;
