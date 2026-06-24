@@ -1199,6 +1199,8 @@ global.Chart = class {
           <option value="rango">📊 Rango personalizado</option>
           <option value="operario">👷 Por operario</option>
           <option value="conjunto">🔧 Por conjunto</option>
+          <option value="avance_proceso">📈 Avance semanal por proceso</option>
+          <option value="avance_peso">⚖️ Avance semanal por peso / Curva S</option>
         </select>
       </div>
       <!-- Fecha simple (diario/semanal/mensual) -->
@@ -1730,19 +1732,21 @@ function addExec(conjunto, parte, fase, qty) {
 
 // Get total executed for a parte in Corte (from cortes)
 function getCortadoQty(conjunto, parte) {
-  return ST.cortes.filter(c=>c.conjunto===conjunto&&c.parte===parte).reduce((s,c)=>{
-    // Para registros descompuestos usar qty_subpiezas si existe
-    if(c.descompuesto && c.qty_subpiezas){
-      try{
-        const subs=JSON.parse(c.qty_subpiezas||'[]');
-        // Retornar el mínimo de vigas completas calculado correctamente
-        const PIEZAS_POR_VIGA={'Alma':1,'Patín':2,'Patin':2};
-        const vigas=subs.map(sp=>Math.floor((sp.qty||0)/(PIEZAS_POR_VIGA[sp.nombre]||1)));
-        return s+(vigas.length>0?Math.min(...vigas):c.qty);
-      }catch(e){ return s+c.qty; }
-    }
-    return s+c.qty;
-  },0);
+  // Para partes HI descompuestas, calcular vigas completas a partir de las sub-piezas reales
+  const cjData = TEKLA.conjuntos.find(x=>x.conjunto===conjunto);
+  const parteData = cjData?.partes.find(p=>p.parte===parte);
+  const perfil = parteData?.perfil || '';
+  const piezasHI = PIEZAS_HI_SUP[perfil];
+  if(piezasHI){
+    // Usar getSubpiezaQty para obtener qty real por sub-pieza y calcular vigas mínimas
+    const vigasPorSub = piezasHI.map(sp=>{
+      const qty = getSubpiezaQty(conjunto, parte, sp.tipo);
+      return Math.floor(qty / (sp.qty||1));
+    });
+    return vigasPorSub.length > 0 ? Math.min(...vigasPorSub) : 0;
+  }
+  // Para partes normales: suma directa de qty
+  return ST.cortes.filter(c=>c.conjunto===conjunto&&c.parte===parte).reduce((s,c)=>s+c.qty,0);
 }
 
 // Obtener qty real de una sub-pieza específica (para panel de progreso por sub-pieza)
@@ -1763,21 +1767,24 @@ function getSubpiezaQty(conjunto, parte, nombreSubpieza) {
   const parteData = cjData?.partes.find(p=>p.parte===parte);
   const perfil = parteData?.perfil || '';
 
-  return ST.cortes.filter(c=>c.conjunto===conjunto&&c.parte===parte&&c.descompuesto).reduce((s,c)=>{
+  // Filtro robusto: acepta descompuesto como boolean true o string "true"/"TRUE"/"1"
+  const isDesp = c => c.descompuesto===true||c.descompuesto==='true'||c.descompuesto==='TRUE'||c.descompuesto==='1'||c.descompuesto==1;
+
+  return ST.cortes.filter(c=>(c.conjunto===conjunto||c.cj===conjunto)&&(c.parte===parte||c.pr===parte)&&isDesp(c)).reduce((s,c)=>{
     // Intentar qty_subpiezas primero
     if(c.qty_subpiezas){
       try{
         const subs=JSON.parse(c.qty_subpiezas||'[]');
-        // Clasificar por espesor, no por nombre
-        const match=subs.find(sp=>clasificarSubpieza(sp, perfil)===nombreSubpieza);
-        if(match) return s+match.qty;
+        // SUMAR todas las sub-piezas que clasifiquen como nombreSubpieza (no solo la primera)
+        const total=subs.filter(sp=>clasificarSubpieza(sp,perfil)===nombreSubpieza).reduce((a,sp)=>a+(sp.qty||0),0);
+        if(total>0) return s+total;
       }catch(e){}
     }
-    // Fallback: leer pl_cortes_por_plancha y clasificar por espesor
+    // Fallback: leer pl_cortes_por_plancha y SUMAR todas las que coincidan
     try{
       const piezas=JSON.parse(c.pl_cortes_por_plancha||'[]');
-      const match=piezas.find(p=>clasificarSubpieza(p, perfil)===nombreSubpieza);
-      return s+(match?match.qty:0);
+      const total=piezas.filter(p=>clasificarSubpieza(p,perfil)===nombreSubpieza).reduce((a,p)=>a+(p.qty||0),0);
+      return s+total;
     }catch(e){ return s; }
   },0);
 }
@@ -4872,7 +4879,7 @@ function setRptDate(){const el=document.getElementById('rpt-fecha');if(el&&!el.v
 function onRptTipoChange(){
   const tipo=document.getElementById('rpt-tipo')?.value||'diario';
   // Show/hide controls based on type
-  document.getElementById('rpt-fecha-wrap').style.display  = ['diario','semanal','mensual'].includes(tipo)?'':'none';
+  document.getElementById('rpt-fecha-wrap').style.display  = ['diario','semanal','mensual','avance_proceso','avance_peso'].includes(tipo)?'':'none';
   document.getElementById('rpt-desde-wrap').style.display  = tipo==='rango'?'':'none';
   document.getElementById('rpt-hasta-wrap').style.display  = tipo==='rango'?'':'none';
   document.getElementById('rpt-op-wrap').style.display        = tipo==='operario'?'':'none';
@@ -4943,6 +4950,12 @@ function renderInforme(){
     };
     let lblFecha2 = cjDesde||cjHasta ? ` | ${cjDesde||'inicio'} → ${cjHasta||'hoy'}` : '';
     lbl=cj ? `Informe por Conjunto — ${cj}${lblFecha2}` : `Informe — Todos los conjuntos${lblFecha2}`;
+  } else if(tipo==='avance_proceso'){
+    renderInformeAvanceProceso(fecha);
+    return;
+  } else if(tipo==='avance_peso'){
+    renderInformeAvancePeso(fecha);
+    return;
   } else {
     filtro=r=>true; lbl='Informe General';
   }
@@ -5006,6 +5019,266 @@ function renderInforme(){
       ${['Elaborado por','Revisado por','Aprobado por'].map(l=>`<div style="text-align:center;"><div style="font-size:10px;color:var(--gm);margin-bottom:2rem;">${l}:</div><div style="border-top:1px solid var(--tx);padding-top:5px;font-size:10px;color:var(--gm);">Firma y sello</div></div>`).join('')}
     </div>
   </div>`;
+}
+
+
+// ======================= INFORME AVANCE SEMANAL POR PROCESO =======================
+function getISOWeek(dateStr){
+  const d=new Date(dateStr+'T12:00:00');
+  const day=d.getDay()||7;
+  d.setDate(d.getDate()-day+4);
+  const yearStart=new Date(d.getFullYear(),0,1);
+  return Math.ceil(((d-yearStart)/86400000+1)/7);
+}
+function getWeekRange(year,week){
+  const jan4=new Date(year,0,4);
+  const dayOfWeek=jan4.getDay()||7;
+  const weekStart=new Date(jan4);
+  weekStart.setDate(jan4.getDate()-(dayOfWeek-1)+(week-1)*7);
+  const weekEnd=new Date(weekStart);
+  weekEnd.setDate(weekStart.getDate()+6);
+  return {
+    start:weekStart.toISOString().split('T')[0],
+    end:weekEnd.toISOString().split('T')[0],
+    label:`S${String(week).padStart(2,'0')} (${weekStart.toLocaleDateString('es-EC',{day:'2-digit',month:'2-digit'})}–${weekEnd.toLocaleDateString('es-EC',{day:'2-digit',month:'2-digit'})})`
+  };
+}
+function getAllWeeks(allRecs){
+  const set=new Set();
+  allRecs.forEach(r=>{
+    if(!r.fecha) return;
+    const d=new Date(r.fecha+'T12:00:00');
+    set.add(`${d.getFullYear()}-${String(getISOWeek(r.fecha)).padStart(2,'0')}`);
+  });
+  return [...set].sort();
+}
+
+function renderInformeAvanceProceso(refFecha){
+  const allRecs=[...ST.cortes,...ST.prods];
+  if(!allRecs.length){ document.getElementById('informe-area').innerHTML='<div class="card" style="padding:2rem;text-align:center;color:#9ca3af;">Sin registros de producción.</div>'; return; }
+  const weeks=getAllWeeks(allRecs);
+  if(!weeks.length) return;
+  const FASE_COLORS={'Corte':'#1e40af','Armado':'#065f46','Soldadura':'#92400e','Perforaciones':'#9d174d','Limpieza Mecánica':'#5b21b6','Pintura':'#991b1b'};
+
+  // Build data per week per fase
+  const weekData=weeks.map(wk=>{
+    const[yr,wn]=wk.split('-').map(Number);
+    const wr=getWeekRange(yr,wn);
+    const recsW=allRecs.filter(r=>r.fecha>=wr.start&&r.fecha<=wr.end);
+    const byFase={};
+    FASES.forEach(f=>{
+      if(f==='Corte') byFase[f]=recsW.filter(r=>r.fase==='Corte').reduce((s,r)=>s+r.qty,0);
+      else byFase[f]=recsW.filter(r=>r.fase===f).reduce((s,r)=>s+(Number(r.vigasCompletas||r.qty)||0),0);
+    });
+    const kgW=recsW.filter(r=>r.fase==='Corte').reduce((s,r)=>s+Number(r.pesoParts||r.pesoPzas||0),0);
+    return{wk,label:wr.label,start:wr.start,end:wr.end,byFase,kgCorte:kgW,total:Object.values(byFase).reduce((a,b)=>a+b,0)};
+  });
+
+  // Table rows
+  const rows=weekData.map((w,i)=>{
+    const cols=FASES.map(f=>`<td class="r" style="color:${w.byFase[f]>0?FASE_COLORS[f]:'#d1d5db'};font-weight:${w.byFase[f]>0?'700':'400'}">${w.byFase[f]||'—'}</td>`).join('');
+    return`<tr><td style="font-weight:700;white-space:nowrap">${w.label}</td>${cols}<td class="r" style="font-weight:800;color:#1a2b4a">${w.total}</td><td class="r" style="color:#1e40af">${w.kgCorte.toFixed(0)} kg</td></tr>`;
+  }).join('');
+
+  // Totals row
+  const totFase=FASES.map(f=>weekData.reduce((s,w)=>s+w.byFase[f],0));
+  const totAll=totFase.reduce((a,b)=>a+b,0);
+  const totKg=weekData.reduce((s,w)=>s+w.kgCorte,0);
+  const totRow=`<tr style="background:#1a2b4a;color:#fff;font-weight:800"><td>TOTAL</td>${totFase.map(v=>`<td class="r">${v}</td>`).join('')}<td class="r">${totAll}</td><td class="r">${totKg.toFixed(0)} kg</td></tr>`;
+
+  document.getElementById('informe-area').innerHTML=`
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:1rem;margin-bottom:1rem;border-bottom:2px solid var(--sd);">
+      <div>
+        <div style="font-size:17px;font-weight:800;color:var(--sd);text-transform:uppercase;">📈 Avance Semanal por Proceso</div>
+        <div style="font-size:12px;color:var(--gm);margin-top:3px;">${TEKLA.proyecto} · ${TEKLA.codigo}</div>
+        <div style="font-size:11px;color:var(--gm);">${weeks.length} semanas registradas</div>
+      </div>
+      <div style="text-align:right;font-size:10px;color:var(--gm);">Generado: ${new Date().toLocaleString('es-EC')}</div>
+    </div>
+    <!-- KPIs -->
+    <div class="kpi-row" style="margin-bottom:1rem">
+      ${FASES.map((f,i)=>`<div class="kpi" style="background:${FASE_COLORS[f]}18;border:1px solid ${FASE_COLORS[f]}44"><div class="kpi-lbl" style="color:${FASE_COLORS[f]}">${f}</div><div class="kpi-val" style="color:${FASE_COLORS[f]}">${totFase[i]}</div><div class="kpi-sub">uds acum.</div></div>`).join('')}
+    </div>
+    <!-- Chart barras agrupadas -->
+    <div style="background:var(--su);border-radius:9px;padding:12px;margin-bottom:1rem;">
+      <div style="font-size:11px;font-weight:800;color:var(--sd);margin-bottom:8px;">Producción por semana y fase (uds)</div>
+      <canvas id="rpt-avp-chart" height="120"></canvas>
+    </div>
+    <!-- Tabla -->
+    <div style="font-size:12px;font-weight:800;color:var(--sd);margin:.75rem 0 .5rem;">Detalle semanal</div>
+    <div class="tw"><table>
+      <thead><tr><th>Semana</th>${FASES.map(f=>`<th class="r" style="color:${FASE_COLORS[f]}">${f}</th>`).join('')}<th class="r">Total</th><th class="r">Corte kg</th></tr></thead>
+      <tbody>${rows}${totRow}</tbody>
+    </table></div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:2rem;margin-top:2rem;padding-top:1.5rem;border-top:1px solid var(--gl);">
+      ${['Elaborado por','Revisado por','Aprobado por'].map(l=>`<div style="text-align:center;"><div style="font-size:10px;color:var(--gm);margin-bottom:2rem;">${l}:</div><div style="border-top:1px solid var(--tx);padding-top:5px;font-size:10px;color:var(--gm);">Firma y sello</div></div>`).join('')}
+    </div>
+  </div>`;
+
+  setTimeout(()=>{
+    try{
+      const labels=weekData.map(w=>w.label);
+      mkChart('rpt-avp-chart','bar',{
+        labels,
+        datasets:FASES.map(f=>({
+          label:f,
+          data:weekData.map(w=>w.byFase[f]||0),
+          backgroundColor:FASE_COLORS[f]+'cc',
+          borderRadius:3
+        }))
+      },{
+        plugins:{legend:{position:'bottom',labels:{font:{size:9},boxWidth:10}}},
+        scales:{x:{stacked:false,grid:{display:false},ticks:{font:{size:8}}},
+                y:{stacked:false,beginAtZero:true,grid:{color:'#eee'},ticks:{font:{size:9}}}},
+        responsive:true
+      });
+    }catch(e){console.warn(e);}
+  },100);
+}
+
+// ======================= INFORME AVANCE SEMANAL POR PESO / CURVA S =======================
+function renderInformeAvancePeso(refFecha){
+  const allRecs=[...ST.cortes,...ST.prods];
+  if(!allRecs.length){ document.getElementById('informe-area').innerHTML='<div class="card" style="padding:2rem;text-align:center;color:#9ca3af;">Sin registros de producción.</div>'; return; }
+  const weeks=getAllWeeks(allRecs);
+  if(!weeks.length) return;
+  const FASE_COLORS={'Corte':'#1e40af','Armado':'#065f46','Soldadura':'#92400e','Perforaciones':'#9d174d','Limpieza Mecánica':'#5b21b6','Pintura':'#991b1b'};
+
+  // Total plan kg
+  const totalPlanKg=TEKLA.conjuntos.reduce((s,c)=>s+c.peso_total,0);
+
+  // Build kg per week per fase
+  const weekData=weeks.map(wk=>{
+    const[yr,wn]=wk.split('-').map(Number);
+    const wr=getWeekRange(yr,wn);
+    const recsW=allRecs.filter(r=>r.fecha>=wr.start&&r.fecha<=wr.end);
+    const byFaseKg={};
+    FASES.forEach(f=>{
+      if(f==='Corte') byFaseKg[f]=recsW.filter(r=>r.fase==='Corte').reduce((s,r)=>s+Number(r.pesoParts||r.pesoPzas||0),0);
+      else byFaseKg[f]=recsW.filter(r=>r.fase===f).reduce((s,r)=>s+Number(r.kg||r.peso||0),0);
+    });
+    const totKgW=Object.values(byFaseKg).reduce((a,b)=>a+b,0);
+    return{wk,label:wr.label,start:wr.start,end:wr.end,byFaseKg,totKg:totKgW};
+  });
+
+  // Acumulados por fase para curva S
+  const acumByFase={};
+  FASES.forEach(f=>{ acumByFase[f]=0; });
+  const weekAcum=weekData.map(w=>{
+    const acum={};
+    FASES.forEach(f=>{ acumByFase[f]+=(w.byFaseKg[f]||0); acum[f]=acumByFase[f]; });
+    const totAcum=Object.values(acumByFase).reduce((a,b)=>a+b,0);
+    const pctAcum=totalPlanKg>0?Math.min(100,totAcum/totalPlanKg*100):0;
+    return{...w,acum,totAcum,pctAcum};
+  });
+
+  // Table rows
+  const rows=weekAcum.map(w=>{
+    const cortKg=w.byFaseKg['Corte']||0;
+    const cortAcum=w.acum['Corte']||0;
+    return`<tr>
+      <td style="font-weight:700;white-space:nowrap">${w.label}</td>
+      ${FASES.map(f=>`<td class="r" style="color:${(w.byFaseKg[f]||0)>0?FASE_COLORS[f]:'#d1d5db'};font-weight:${(w.byFaseKg[f]||0)>0?'700':'400'}">${(w.byFaseKg[f]||0)>0?(w.byFaseKg[f]).toFixed(0):'—'}</td>`).join('')}
+      <td class="r" style="font-weight:800;color:#1a2b4a">${w.totKg.toFixed(0)}</td>
+      <td class="r" style="font-weight:800;color:#1e40af">${w.totAcum.toFixed(0)}</td>
+      <td class="r">
+        <div style="display:flex;align-items:center;gap:6px;min-width:100px">
+          <div style="flex:1;height:8px;background:#e5e7eb;border-radius:4px;overflow:hidden">
+            <div style="height:100%;width:${w.pctAcum.toFixed(1)}%;background:${w.pctAcum>=100?'#22c55e':w.pctAcum>=50?'#3b82f6':'#f59e0b'};border-radius:4px"></div>
+          </div>
+          <span style="font-size:10px;font-weight:800;color:${w.pctAcum>=100?'#166534':w.pctAcum>=50?'#1e40af':'#92400e'};white-space:nowrap">${w.pctAcum.toFixed(1)}%</span>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+
+  const totFaseKg=FASES.map(f=>weekData.reduce((s,w)=>s+(w.byFaseKg[f]||0),0));
+  const totAll=totFaseKg.reduce((a,b)=>a+b,0);
+  const pctFinal=totalPlanKg>0?Math.min(100,totAll/totalPlanKg*100):0;
+  const totRow=`<tr style="background:#1a2b4a;color:#fff;font-weight:800"><td>TOTAL ACUM.</td>${totFaseKg.map(v=>`<td class="r">${v.toFixed(0)}</td>`).join('')}<td class="r">${totAll.toFixed(0)}</td><td class="r">${totAll.toFixed(0)}</td><td class="r">${pctFinal.toFixed(1)}%</td></tr>`;
+
+  document.getElementById('informe-area').innerHTML=`
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:1rem;margin-bottom:1rem;border-bottom:2px solid var(--sd);">
+      <div>
+        <div style="font-size:17px;font-weight:800;color:var(--sd);text-transform:uppercase;">⚖️ Avance Semanal por Peso — Curva S</div>
+        <div style="font-size:12px;color:var(--gm);margin-top:3px;">${TEKLA.proyecto} · ${TEKLA.codigo}</div>
+        <div style="font-size:11px;color:var(--gm);">Plan total: ${totalPlanKg.toLocaleString('es-EC',{maximumFractionDigits:0})} kg | ${weeks.length} semanas</div>
+      </div>
+      <div style="text-align:right;font-size:10px;color:var(--gm);">Generado: ${new Date().toLocaleString('es-EC')}</div>
+    </div>
+    <!-- KPIs -->
+    <div class="kpi-row" style="margin-bottom:1rem">
+      <div class="kpi k-blue"><div class="kpi-lbl">Plan total</div><div class="kpi-val">${(totalPlanKg/1000).toFixed(1)}</div><div class="kpi-sub">toneladas</div></div>
+      <div class="kpi k-green"><div class="kpi-lbl">Ejecutado acum.</div><div class="kpi-val">${(totAll/1000).toFixed(1)}</div><div class="kpi-sub">toneladas</div></div>
+      <div class="kpi k-warn"><div class="kpi-lbl">Pendiente</div><div class="kpi-val">${((totalPlanKg-totAll)/1000).toFixed(1)}</div><div class="kpi-sub">toneladas</div></div>
+      <div class="kpi" style="background:#f0fdf4;border:1px solid #86efac"><div class="kpi-lbl">Avance</div><div class="kpi-val" style="color:${pctFinal>=100?'#166534':pctFinal>=50?'#1e40af':'#92400e'}">${pctFinal.toFixed(1)}%</div><div class="kpi-sub">del plan kg</div></div>
+    </div>
+    <!-- Curva S -->
+    <div style="background:var(--su);border-radius:9px;padding:12px;margin-bottom:1rem;">
+      <div style="font-size:11px;font-weight:800;color:var(--sd);margin-bottom:8px;">Curva S — Avance acumulado (kg) vs semanas</div>
+      <canvas id="rpt-curvaS-chart" height="140"></canvas>
+    </div>
+    <!-- Barras semanales por fase kg -->
+    <div style="background:var(--su);border-radius:9px;padding:12px;margin-bottom:1rem;">
+      <div style="font-size:11px;font-weight:800;color:var(--sd);margin-bottom:8px;">Producción semanal por fase (kg)</div>
+      <canvas id="rpt-avpeso-bar" height="110"></canvas>
+    </div>
+    <!-- Tabla -->
+    <div style="font-size:12px;font-weight:800;color:var(--sd);margin:.75rem 0 .5rem;">Detalle semanal (kg)</div>
+    <div class="tw"><table>
+      <thead><tr><th>Semana</th>${FASES.map(f=>`<th class="r" style="color:${FASE_COLORS[f]}">${f} kg</th>`).join('')}<th class="r">Sem. kg</th><th class="r">Acum. kg</th><th class="r" style="min-width:140px">% Avance</th></tr></thead>
+      <tbody>${rows}${totRow}</tbody>
+    </table></div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:2rem;margin-top:2rem;padding-top:1.5rem;border-top:1px solid var(--gl);">
+      ${['Elaborado por','Revisado por','Aprobado por'].map(l=>`<div style="text-align:center;"><div style="font-size:10px;color:var(--gm);margin-bottom:2rem;">${l}:</div><div style="border-top:1px solid var(--tx);padding-top:5px;font-size:10px;color:var(--gm);">Firma y sello</div></div>`).join('')}
+    </div>
+  </div>`;
+
+  setTimeout(()=>{
+    try{
+      const labels=weekAcum.map(w=>w.label);
+      const acumCorte=weekAcum.map(w=>+(w.acum['Corte']||0).toFixed(1));
+      const acumTotal=weekAcum.map(w=>+w.totAcum.toFixed(1));
+      const planLine=weekAcum.map((_,i)=>+(totalPlanKg*(i+1)/weekAcum.length).toFixed(1)); // línea plan lineal
+
+      // Curva S
+      mkChart('rpt-curvaS-chart','line',{
+        labels,
+        datasets:[
+          {label:'Plan (lineal ref.)',data:planLine,borderColor:'#9ca3af',borderDash:[6,3],borderWidth:2,pointRadius:0,fill:false,tension:0.3},
+          {label:'Ejecutado acum. (kg)',data:acumTotal,borderColor:'#1e40af',backgroundColor:'#1e40af22',borderWidth:2.5,pointRadius:4,fill:true,tension:0.4},
+          {label:'Corte acum. (kg)',data:acumCorte,borderColor:'#065f46',backgroundColor:'transparent',borderWidth:1.5,pointRadius:3,borderDash:[4,2],tension:0.4}
+        ]
+      },{
+        plugins:{legend:{position:'bottom',labels:{font:{size:9},boxWidth:10}}},
+        scales:{
+          x:{grid:{display:false},ticks:{font:{size:8}}},
+          y:{beginAtZero:true,grid:{color:'#eee'},ticks:{font:{size:9},callback:v=>v>=1000?(v/1000).toFixed(1)+'t':v}}
+        },
+        responsive:true
+      });
+
+      // Barras por fase kg
+      mkChart('rpt-avpeso-bar','bar',{
+        labels,
+        datasets:FASES.map(f=>({
+          label:f,
+          data:weekData.map(w=>(w.byFaseKg[f]||0).toFixed(1)),
+          backgroundColor:FASE_COLORS[f]+'cc',
+          borderRadius:3
+        }))
+      },{
+        plugins:{legend:{position:'bottom',labels:{font:{size:9},boxWidth:10}}},
+        scales:{
+          x:{stacked:true,grid:{display:false},ticks:{font:{size:8}}},
+          y:{stacked:true,beginAtZero:true,grid:{color:'#eee'},ticks:{font:{size:9},callback:v=>v>=1000?(v/1000).toFixed(1)+'t':v}}
+        },
+        responsive:true
+      });
+    }catch(e){console.warn(e);}
+  },100);
 }
 
 // ======================= MODAL =======================
