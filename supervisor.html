@@ -1767,8 +1767,18 @@ function getSubpiezaQty(conjunto, parte, nombreSubpieza) {
   const parteData = cjData?.partes.find(p=>p.parte===parte);
   const perfil = parteData?.perfil || '';
 
-  // Filtro robusto: acepta descompuesto como boolean true o string "true"/"TRUE"/"1"
-  const isDesp = c => c.descompuesto===true||c.descompuesto==='true'||c.descompuesto==='TRUE'||c.descompuesto==='1'||c.descompuesto==1;
+  // Filtro robusto: acepta descompuesto como boolean, string, o si las sub-piezas internas lo indican
+  const isDesp = c => {
+    if(c.descompuesto===true||c.descompuesto==='true'||c.descompuesto==='TRUE'||c.descompuesto==='1'||c.descompuesto==1) return true;
+    // Si pl_cortes_por_plancha tiene piezas con descompuesto:true, el registro es descompuesto
+    try{
+      const pl=JSON.parse(c.pl_cortes_por_plancha||'[]');
+      if(pl.some(p=>p.descompuesto===true||p.descompuesto==='true'||p.descompuesto==='TRUE')) return true;
+    }catch(e){}
+    // Si perfil del registro es HI (tiene PIEZAS_HI_SUP), asumir descompuesto
+    if(c.perfil && PIEZAS_HI_SUP[c.perfil]) return true;
+    return false;
+  };
 
   return ST.cortes.filter(c=>(c.conjunto===conjunto||c.cj===conjunto)&&(c.parte===parte||c.pr===parte)&&isDesp(c)).reduce((s,c)=>{
     // Intentar qty_subpiezas primero
@@ -1788,7 +1798,7 @@ function getSubpiezaQty(conjunto, parte, nombreSubpieza) {
         if(total>0) return s+total;
       }
     }catch(e){}
-    // Fallback 2: campo subpiezas (worker descompuesto)
+    // Fallback 2: campo subpiezas (worker descompuesto - definición, no qty real)
     try{
       const subs2=JSON.parse(c.subpiezas||'[]');
       if(subs2.length){
@@ -1796,9 +1806,43 @@ function getSubpiezaQty(conjunto, parte, nombreSubpieza) {
         if(total>0) return s+total;
       }
     }catch(e){}
+    // Fallback 3: si no hay datos de sub-piezas pero el registro es HI descompuesto,
+    // inferir qty de sub-pieza desde qty de vigas y PIEZAS_HI_SUP
+    if(perfil && PIEZAS_HI_SUP[perfil] && c.qty>0){
+      const spDef = PIEZAS_HI_SUP[perfil].find(sp=>sp.tipo===nombreSubpieza);
+      if(spDef) return s + (c.qty * spDef.qty);
+    }
     return s;
   },0);
 }
+
+
+// ── DEBUG TEMPORAL — ejecutar debugSubpiezas() en consola ────────────────
+window.debugSubpiezas = function(cj='E-T-1', pr='pr64'){
+  const registros = ST.cortes.filter(c=>
+    (c.conjunto===cj||c.cj===cj) && (c.parte===pr||c.pr===pr)
+  );
+  console.group(`ST.cortes para ${cj}/${pr} — ${registros.length} registros`);
+  if(!registros.length){
+    const todos = ST.cortes.slice(0,3);
+    console.warn('0 registros — muestra de los primeros 3:');
+    todos.forEach((r,i)=>console.log(i, {cj:r.cj,pr:r.pr,conjunto:r.conjunto,parte:r.parte,descompuesto:r.descompuesto,qty:r.qty}));
+  }
+  registros.forEach((r,i)=>{
+    const desp = r.descompuesto;
+    let pl = [];
+    try{ pl = JSON.parse(r.pl_cortes_por_plancha||'[]'); }catch(e){}
+    let subs = [];
+    try{ subs = JSON.parse(r.subpiezas||'[]'); }catch(e){}
+    console.log(`[${i}] desp=${JSON.stringify(desp)} qty=${r.qty} pl_cortes(${pl.length}):`, pl.slice(0,2), `subpiezas(${subs.length}):`, subs.slice(0,2));
+    if(pl.length) console.log('  pl[0] esp type:', typeof pl[0].esp, 'val:', pl[0].esp);
+  });
+  console.groupEnd();
+  // También mostrar resultado de getSubpiezaQty
+  console.log('getSubpiezaQty Alma:', getSubpiezaQty(cj,pr,'Alma'));
+  console.log('getSubpiezaQty Patín:', getSubpiezaQty(cj,pr,'Patín'));
+};
+// ─────────────────────────────────────────────────────────────────────────
 
 function getCortadoKg(conjunto, parte) {
   return ST.cortes.filter(c=>c.conjunto===conjunto&&c.parte===parte)
