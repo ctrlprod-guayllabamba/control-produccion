@@ -964,7 +964,7 @@ global.Chart = class {
     </div>
     <div class="act-row">
       <button class="btn btn-g" onclick="clearProd()">Limpiar</button>
-      <button class="btn btn-p" onclick="addProd()">Registrar</button>
+      <button class="btn btn-p" id="btn-registrar-prod" onclick="window._completandoRecId?actualizarVigasIncompletas():addProd()">Registrar</button>
     </div>
   </div>
 
@@ -3968,6 +3968,11 @@ function pCalcResumenDia(){
 function pUpdatePartes(){
   const cj=document.getElementById('p-cj').value;
   if(!cj){ document.getElementById('p-cj-info').style.display='none'; document.getElementById('p-vigas-section').style.display='none'; return; }
+  // Recargar del GAS para tener datos frescos
+  loadFromServer().then(()=>{
+    pBuildVigas();
+    pUpdateInfo();
+  });
   pBuildVigas();
   pRenderRef();
 }
@@ -3982,8 +3987,9 @@ function pUpdateInfo(){
 
   const plan=c.cantidad;
   const pu=c.peso_unit||0;
-  // Ejecutado en esta fase = vigas registradas
-  const ej=ST.prods.filter(r=>(r.conjunto||r.cj)===cj&&r.fase===fase).reduce((s,r)=>s+(Number(r.qty)||0),0);
+  // Ejecutado = vigas COMPLETAS en esta fase
+  const ej=ST.prods.filter(r=>(r.conjunto||r.cj)===cj&&r.fase===fase)
+    .reduce((s,r)=>s+(Number(r.vigasCompletas||r.qty)||0),0);
   const pend=Math.max(0,plan-ej);
   const pct=plan>0?Math.min(100,(ej/plan*100)):0;
 
@@ -4245,19 +4251,11 @@ function completarVigas(recId){
   pRenderVigas();
   pUpdateInfo();
 
-  // Guardar referencia al registro que se está completando
   window._completandoRecId = recId;
-
+  const btn=document.getElementById('btn-registrar-prod');
+  if(btn){ btn.textContent='✅ Actualizar incompletas'; btn.style.background='#f59e0b'; btn.style.borderColor='#f59e0b'; }
   document.getElementById('p-cj').scrollIntoView({behavior:'smooth',block:'start'});
   toast(`✏ Completando ${incompletas.length} viga(s) — agrega las partes faltantes y registra`);
-
-  // Cambiar temporalmente el botón REGISTRAR para que actualice en lugar de crear
-  const btnReg=document.querySelector('[onclick="addProd()"]');
-  if(btnReg){
-    btnReg.textContent='✅ Actualizar vigas incompletas';
-    btnReg.style.background='#f59e0b';
-    btnReg.onclick=()=>actualizarVigasIncompletas();
-  }
 }
 
 function actualizarVigasIncompletas(){
@@ -4313,18 +4311,10 @@ function actualizarVigasIncompletas(){
   saveAll();
   if(GAS.configured()) GAS.post('addRegistro',rec).catch(()=>{});
 
-  // Restaurar botón
   window._completandoRecId=null;
-  const btnReg=document.querySelector('[onclick="actualizarVigasIncompletas()"]');
-  if(btnReg){
-    btnReg.textContent='Registrar';
-    btnReg.style.background='';
-    btnReg.onclick=()=>addProd();
-  }
-
-  clearProd();
-  renderProd();
-  renderDashboard();
+  const btn=document.getElementById('btn-registrar-prod');
+  if(btn){ btn.textContent='Registrar'; btn.style.background=''; btn.style.borderColor=''; }
+  clearProd(); renderProd(); renderDashboard();
   toast(`✅ Vigas actualizadas — ${nuevasCompletas} completas · ${pesoTotal.toFixed(1)} kg`);
 }
 
