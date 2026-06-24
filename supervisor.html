@@ -1914,11 +1914,11 @@ function renderDashboard() {
   });
   const faseEjec = FASES.map(f=>{
     if(f==='Corte') return ST.cortes.reduce((s,c)=>s+c.qty,0);
-    return ST.prods.filter(p=>p.fase===f).reduce((s,p)=>s+p.qty,0);
+    return ST.prods.filter(p=>p.fase===f).reduce((s,p)=>s+(Number(p.vigasCompletas||p.qty)||0),0);
   });
   const faseKg = FASES.map(f=>{
     if(f==='Corte') return ST.cortes.reduce((s,c)=>s+(c.pesoParts||c.pesoPzas||0),0);
-    return ST.prods.filter(p=>p.fase===f).reduce((s,p)=>s+(p.kg||p.pesoPzas||0),0);
+    return ST.prods.filter(p=>p.fase===f).reduce((s,p)=>s+(Number(p.peso||p.pesoReal||p.kg||0)),0);
   });
   mkChart('chart-fases','bar',{
     labels: FASES.map(f=>f.length>12?f.slice(0,12)+'…':f),
@@ -2043,10 +2043,10 @@ function renderPendientes() {
       conjunto:c.conjunto, tipo:c.perfil, vigasPlan, vigasCompletas, pendVigas,
       pendKg: pendVigas*c.peso_unit, kgPct: kgAv.pct, kgEjec: kgAv.kgEjec, kgPlan: kgAv.kgPlan,
       detalle, ejCorte,
-      ejArm:  ST.prods.filter(r=>r.conjunto===c.conjunto&&r.fase==='Armado').reduce((s,r)=>s+r.qty,0),
-      ejSold: ST.prods.filter(r=>r.conjunto===c.conjunto&&r.fase==='Soldadura').reduce((s,r)=>s+r.qty,0),
-      ejPerf: ST.prods.filter(r=>r.conjunto===c.conjunto&&r.fase==='Perforaciones').reduce((s,r)=>s+r.qty,0),
-      ejPint: ST.prods.filter(r=>r.conjunto===c.conjunto&&r.fase==='Pintura').reduce((s,r)=>s+r.qty,0),
+      ejArm:  ST.prods.filter(r=>r.conjunto===c.conjunto&&r.fase==='Armado').reduce((s,r)=>s+(Number(r.vigasCompletas||r.qty)||0),0),
+      ejSold: ST.prods.filter(r=>r.conjunto===c.conjunto&&r.fase==='Soldadura').reduce((s,r)=>s+(Number(r.vigasCompletas||r.qty)||0),0),
+      ejPerf: ST.prods.filter(r=>r.conjunto===c.conjunto&&r.fase==='Perforaciones').reduce((s,r)=>s+(Number(r.vigasCompletas||r.qty)||0),0),
+      ejPint: ST.prods.filter(r=>r.conjunto===c.conjunto&&r.fase==='Pintura').reduce((s,r)=>s+(Number(r.vigasCompletas||r.qty)||0),0),
     });
   });
   rows.sort((a,b)=>b.pendVigas-a.pendVigas);
@@ -3970,12 +3970,8 @@ function pCalcResumenDia(){
 function pUpdatePartes(){
   const cj=document.getElementById('p-cj').value;
   if(!cj){ document.getElementById('p-cj-info').style.display='none'; document.getElementById('p-vigas-section').style.display='none'; return; }
-  // Recargar del GAS para tener datos frescos
-  loadFromServer().then(()=>{
-    pBuildVigas();
-    pUpdateInfo();
-  });
   pBuildVigas();
+  pUpdateInfo();
   pRenderRef();
 }
 
