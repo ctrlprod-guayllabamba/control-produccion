@@ -1758,7 +1758,7 @@ function clasificarSubpieza(sp, perfil) {
   };
   const almaEsp = ALMA_ESP[perfil];
   if(!almaEsp) return sp.nombre; // si no conocemos el perfil, usar nombre original
-  return (sp.esp === almaEsp) ? 'Alma' : 'Patín';
+  return (Number(sp.esp) === Number(almaEsp)) ? 'Alma' : 'Patín';
 }
 
 function getSubpiezaQty(conjunto, parte, nombreSubpieza) {
@@ -1780,12 +1780,23 @@ function getSubpiezaQty(conjunto, parte, nombreSubpieza) {
         if(total>0) return s+total;
       }catch(e){}
     }
-    // Fallback: leer pl_cortes_por_plancha y SUMAR todas las que coincidan
+    // Fallback 1: leer pl_cortes_por_plancha (tiene esp numérico)
     try{
       const piezas=JSON.parse(c.pl_cortes_por_plancha||'[]');
-      const total=piezas.filter(p=>clasificarSubpieza(p,perfil)===nombreSubpieza).reduce((a,p)=>a+(p.qty||0),0);
-      return s+total;
-    }catch(e){ return s; }
+      if(piezas.length){
+        const total=piezas.filter(p=>clasificarSubpieza(p,perfil)===nombreSubpieza).reduce((a,p)=>a+(p.qty||0),0);
+        if(total>0) return s+total;
+      }
+    }catch(e){}
+    // Fallback 2: campo subpiezas (worker descompuesto)
+    try{
+      const subs2=JSON.parse(c.subpiezas||'[]');
+      if(subs2.length){
+        const total=subs2.filter(p=>clasificarSubpieza(p,perfil)===nombreSubpieza).reduce((a,p)=>a+(p.qty||0),0);
+        if(total>0) return s+total;
+      }
+    }catch(e){}
+    return s;
   },0);
 }
 
