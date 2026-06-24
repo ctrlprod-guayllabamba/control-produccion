@@ -333,9 +333,12 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);min-height
   </div>
 </div>
 
-<!-- Mantener sc-cortes y sc-sob como alias vacíos para compatibilidad -->
-<div class="sc" id="sc-cortes" style="display:none"></div>
-<div class="sc" id="sc-sob" style="display:none"></div>
+<!-- FORMULARIO OTRAS FASES (Armado, Soldadura, etc.) -->
+<div class="sc" id="sc-form">
+  <button class="btn-back" id="form-back-btn">← Volver</button>
+  <div id="sb-form"></div>
+  <div id="form-content"></div>
+</div>
   <button class="btn-back" onclick="go('sc-parte')">← Cambiar pieza</button>
   <div id="sb-plancha"></div>
   <div class="info-box" style="background:#eef4ff;border:1px solid #bfdbfe;color:#1e40af">
@@ -1033,6 +1036,14 @@ function getPrevFase(fase){
 function buildParteList(){
   document.getElementById('sb-parte').innerHTML=stepbar(2,['Conjunto','Pieza (pr)','Cantidad']);
   document.getElementById('parte-sub').textContent=`${selCj.cj} — ¿Cuál pieza trabajaste?`;
+  // Cargar registros del GAS primero para que el candado de fases sea correcto
+  loadMyRecs().then(()=>{
+    _renderParteList();
+  });
+  _renderParteList(); // mostrar mientras carga
+}
+
+function _renderParteList(){
   const prevFase = getPrevFase(selFase);
   
   document.getElementById('parte-list').innerHTML=selCj.partes.map(p=>{
@@ -1041,9 +1052,10 @@ function buildParteList(){
     const pend    = Math.max(0, p.plan - done);
     const pct     = p.plan > 0 ? Math.min(100, done/p.plan*100) : 0;
     
-    // Check prerequisite phase
+    // Check prerequisite phase - solo bloquear si cache tiene datos y prevDone=0
     const prevDone = prevFase ? totalExec(selCj.cj, p.pr, prevFase) : p.plan;
-    const hasPrereq = prevFase ? prevDone > 0 : true;
+    const cacheLoaded = _cache.length > 0;
+    const hasPrereq = prevFase ? (prevDone > 0 || !cacheLoaded) : true;
     const prevPct   = p.plan > 0 ? Math.min(100, prevDone/p.plan*100) : 0;
     
     // Blocked if previous phase not started
