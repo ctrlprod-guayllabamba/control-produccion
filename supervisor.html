@@ -1425,7 +1425,11 @@ async function loadFromServer(){
           r.esIrreg  = r.pl_irreg == 1 || r.pl_tipo === 'figura_irreg';
           r.irregDetalle = r.pl_irreg_detalle || '';
           if(r.fase==='Corte'||r.tipo==='corte'){
-            r.fase='Corte'; ST.cortes.push(r); addExec(r.conjunto,r.parte,'Corte',r.qty);
+            r.fase='Corte';
+            // Normalizar campos cj→conjunto, pr→parte (worker usa cj/pr, supervisor usa conjunto/parte)
+            r.conjunto = r.conjunto || r.cj || '';
+            r.parte    = r.parte    || r.pr || '—';
+            ST.cortes.push(r); addExec(r.conjunto,r.parte,'Corte',r.qty);
           } else {
             ST.prods.push(r);
             const ejQty = Number(r.vigasCompletas||r.qty)||0;
@@ -1462,7 +1466,11 @@ async function loadFromServer(){
 function _loadFromLS(){
   const ops=LS.load('ops',null); if(ops&&ops.length) ST.ops=ops;
   ST.cortes=LS.load('cortes',[]); ST.prods=LS.load('prods',[]); ST.exec={};
-  ST.cortes.forEach(r=>addExec(r.conjunto||r.cj,r.parte||r.pr||'—','Corte',r.qty));
+  ST.cortes.forEach(r=>{
+    r.conjunto = r.conjunto || r.cj || '';
+    r.parte    = r.parte    || r.pr || '—';
+    addExec(r.conjunto,r.parte,'Corte',r.qty);
+  });
   ST.prods.forEach(r=>addExec(r.conjunto||r.cj,r.parte||r.pr||'—',r.fase,r.qty));
 }
 // ============================================================
