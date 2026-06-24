@@ -4175,6 +4175,22 @@ function renderProd(){
       return Number(v.qty?.[p.parte]||0)>0;
     })).length:0;
 
+    let pesoMostrar = r.peso||r.pesoReal||r.kg||0;
+    // Si peso es 0, intentar calcular desde detalle_vigas
+    if(pesoMostrar<=0 && r.detalle_vigas){
+      try {
+        const vigas=JSON.parse(r.detalle_vigas||'[]');
+        const cjData=TEKLA.conjuntos.find(x=>x.conjunto===(r.conjunto||r.cj));
+        if(cjData) vigas.forEach(v=>{
+          cjData.partes.forEach(p=>{
+            const piezasHI=PIEZAS_HI_SUP[p.perfil];
+            if(piezasHI){
+              piezasHI.forEach(sp=>{ const q=Number(v.subQty?.[p.parte]?.[sp.tipo]||0); if(q>0) pesoMostrar+=sp.esp*sp.ancho*(p.longitud||3000)*7.85e-6*q; });
+            } else { const q=Number(v.qty?.[p.parte]||0); if(q>0) pesoMostrar+=(p.peso_unit||0)*q; }
+          });
+        });
+      } catch(e){}
+    }
     return `<tr>
     <td>${r.fecha}</td>
     <td><strong>${cj}</strong></td>
@@ -4185,7 +4201,7 @@ function renderProd(){
       <strong>${r.vigasCompletas||r.qty||0}</strong>
       ${incompletas>0?`<br><span style="font-size:9px;color:#b45309;font-weight:700">⚠ ${incompletas} incomp.</span>`:''}
     </td>
-    <td class="r">${(r.peso||r.pesoReal||r.kg||0).toFixed(1)}</td>
+    <td class="r">${pesoMostrar.toFixed(1)}</td>
     <td class="r">${r.sold_ml?`<span style="font-size:11px;font-weight:700;color:#1e40af;">${r.sold_ml} ml</span>`:'—'}</td>
     <td>${calBadge(r.calidad||r.cal||'ok')}</td>
     <td class="c no-print" style="white-space:nowrap">
