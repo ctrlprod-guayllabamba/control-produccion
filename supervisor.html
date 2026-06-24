@@ -4207,12 +4207,6 @@ function completarVigas(recId){
   const c=TEKLA.conjuntos.find(x=>x.conjunto===cj);
   if(!c) return;
 
-  // Pre-cargar el formulario con el conjunto y cargar solo las vigas incompletas
-  document.getElementById('p-cj').value=cj;
-  document.getElementById('p-fase').value=rec.fase||'Armado';
-  document.getElementById('p-fecha').value=rec.fecha||today();
-
-  // Cargar solo las vigas incompletas del registro
   const vigas=(() => { try{ return JSON.parse(rec.detalle_vigas||'[]'); }catch(e){ return []; } })();
   const incompletas=vigas.filter(v=>!c.partes.every(p=>{
     const piezasHI=PIEZAS_HI_SUP[p.perfil];
@@ -4220,15 +4214,102 @@ function completarVigas(recId){
     return Number(v.qty?.[p.parte]||0)>0;
   }));
 
-  pVigasData = incompletas.length>0 ? incompletas.map(v=>({...v})) : [{qty:{},subQty:{}}];
+  if(incompletas.length===0){ toast('✅ No hay vigas incompletas'); return; }
+
+  // Pre-cargar el formulario con las vigas incompletas
+  document.getElementById('p-cj').value=cj;
+  document.getElementById('p-fase').value=rec.fase||'Armado';
+  document.getElementById('p-fecha').value=rec.fecha||today();
+  const opSel=document.getElementById('p-op');
+  if(opSel&&rec.opId) opSel.value=rec.opId;
+
+  pVigasData = incompletas.map(v=>JSON.parse(JSON.stringify(v)));
   const sec=document.getElementById('p-vigas-section');
   if(sec) sec.style.display='';
   pRenderVigas();
   pUpdateInfo();
 
-  // Scroll al formulario
+  // Guardar referencia al registro que se está completando
+  window._completandoRecId = recId;
+
   document.getElementById('p-cj').scrollIntoView({behavior:'smooth',block:'start'});
-  toast(`✏ Editando ${incompletas.length} viga(s) incompleta(s) de ${cj} — completa las partes faltantes y registra`);
+  toast(`✏ Completando ${incompletas.length} viga(s) — agrega las partes faltantes y registra`);
+
+  // Cambiar temporalmente el botón REGISTRAR para que actualice en lugar de crear
+  const btnReg=document.querySelector('[onclick="addProd()"]');
+  if(btnReg){
+    btnReg.textContent='✅ Actualizar vigas incompletas';
+    btnReg.style.background='#f59e0b';
+    btnReg.onclick=()=>actualizarVigasIncompletas();
+  }
+}
+
+function actualizarVigasIncompletas(){
+  const recId=window._completandoRecId;
+  const rec=ST.prods.find(r=>r.id===recId);
+  if(!rec){ addProd(); return; } // fallback a crear nuevo
+
+  const cj=document.getElementById('p-cj').value;
+  const c=TEKLA.conjuntos.find(x=>x.conjunto===cj);
+  if(!c){ toast('⚠ Selecciona el conjunto'); return; }
+
+  // Fusionar vigas incompletas actualizadas con las completas originales
+  const vigasOriginales=(() => { try{ return JSON.parse(rec.detalle_vigas||'[]'); }catch(e){ return []; } })();
+  const vigasCompletas=vigasOriginales.filter(v=>c.partes.every(p=>{
+    const piezasHI=PIEZAS_HI_SUP[p.perfil];
+    if(piezasHI) return piezasHI.every(sp=>Number(v.subQty?.[p.parte]?.[sp.tipo]||0)>0);
+    return Number(v.qty?.[p.parte]||0)>0;
+  }));
+
+  // Las vigas que estamos completando ahora
+  const vigasActualizadas=[...vigasCompletas, ...pVigasData];
+
+  // Recalcular peso total
+  let pesoTotal=0;
+  vigasActualizadas.forEach(v=>{
+    c.partes.forEach(p=>{
+      const piezasHI=PIEZAS_HI_SUP[p.perfil];
+      if(piezasHI){
+        piezasHI.forEach(sp=>{
+          const qty=Number(v.subQty?.[p.parte]?.[sp.tipo]||0);
+          if(qty>0) pesoTotal+=sp.esp*sp.ancho*(p.longitud||3000)*7.85e-6*qty;
+        });
+      } else {
+        const qty=Number(v.qty?.[p.parte]||0);
+        if(qty>0) pesoTotal+=(p.peso_unit||0)*qty;
+      }
+    });
+  });
+
+  const nuevasCompletas=vigasActualizadas.filter(v=>c.partes.every(p=>{
+    const piezasHI=PIEZAS_HI_SUP[p.perfil];
+    if(piezasHI) return piezasHI.every(sp=>Number(v.subQty?.[p.parte]?.[sp.tipo]||0)>0);
+    return Number(v.qty?.[p.parte]||0)>0;
+  })).length;
+
+  // Actualizar el registro existente
+  rec.detalle_vigas=JSON.stringify(vigasActualizadas);
+  rec.qty=vigasActualizadas.length;
+  rec.vigasCompletas=nuevasCompletas;
+  rec.peso=pesoTotal;
+  rec.pesoReal=pesoTotal;
+
+  saveAll();
+  if(GAS.configured()) GAS.post('addRegistro',rec).catch(()=>{});
+
+  // Restaurar botón
+  window._completandoRecId=null;
+  const btnReg=document.querySelector('[onclick="actualizarVigasIncompletas()"]');
+  if(btnReg){
+    btnReg.textContent='Registrar';
+    btnReg.style.background='';
+    btnReg.onclick=()=>addProd();
+  }
+
+  clearProd();
+  renderProd();
+  renderDashboard();
+  toast(`✅ Vigas actualizadas — ${nuevasCompletas} completas · ${pesoTotal.toFixed(1)} kg`);
 }
 
 // ======================= FASES KANBAN =======================

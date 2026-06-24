@@ -3318,6 +3318,34 @@ async function wkGuardarVigas(){
   }));
   if(!tieneDatos){alert('Ingresa al menos una cantidad');return;}
 
+  const vigasCompletas=wkVigasData.filter(v=>partes.every(p=>{
+    const piezasHI=PIEZAS_HI[p.perfil];
+    if(piezasHI) return piezasHI.every(sp=>Number(v.subQty?.[p.pr]?.[sp.tipo]||0)>0);
+    return Number(v.qty?.[p.pr]||0)>0;
+  })).length;
+
+  // ── Verificar plan Tekla ─────────────────────────────
+  const planVigas = Math.min(...partes.map(p=>p.plan));
+  const yaArmado = totalExec(selCj.cj,'—',selFase);
+  const pendiente = Math.max(0, planVigas - yaArmado);
+
+  if(vigasCompletas > pendiente){
+    const exceso = vigasCompletas - pendiente;
+    const ok = confirm(
+      `⚠ ADVERTENCIA — SOBREPASA EL PLAN\n\n` +
+      `Plan: ${planVigas} vigas\n` +
+      `Ya ${selFase.toLowerCase()}: ${yaArmado} vigas\n` +
+      `Pendiente: ${pendiente} vigas\n` +
+      `Estás registrando: ${vigasCompletas} vigas completas\n` +
+      `Exceso: +${exceso} vigas\n\n` +
+      `¿Confirmar de todas formas? El supervisor será notificado.`
+    );
+    if(!ok) return;
+    await enviarAlertaSobrepaso(vigasCompletas, yaArmado, planVigas, 'sobrepaso_armado');
+  } else if(vigasCompletas === pendiente){
+    alert(`✅ ¡PLAN COMPLETADO!\n\nCon este registro se alcanza el 100% del ${selFase} de ${selCj.cj}.\n\n🎉 ${planVigas} vigas ${selFase.toLowerCase()}.`);
+  }
+
   let pesoTotal=0;
   wkVigasData.forEach(v=>{
     partes.forEach(p=>{
@@ -3327,11 +3355,6 @@ async function wkGuardarVigas(){
       } else { const q=Number(v.qty?.[p.pr]||0); if(q>0) pesoTotal+=(p.pu||0)*q; }
     });
   });
-  const vigasCompletas=wkVigasData.filter(v=>partes.every(p=>{
-    const piezasHI=PIEZAS_HI[p.perfil];
-    if(piezasHI) return piezasHI.every(sp=>Number(v.subQty?.[p.pr]?.[sp.tipo]||0)>0);
-    return Number(v.qty?.[p.pr]||0)>0;
-  })).length;
 
   const rec={
     id:Date.now(), tipo:'produccion', fecha:todayISO(), hora:timeNow(),
