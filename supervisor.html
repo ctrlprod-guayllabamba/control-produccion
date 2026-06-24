@@ -982,7 +982,7 @@ global.Chart = class {
       <table>
         <thead><tr>
           <th>Fecha</th><th>Conjunto</th><th>Parte</th><th>Fase</th>
-          <th>Operario</th><th class="r">Qty</th><th class="r">Kg</th>
+          <th>Operario</th><th class="r">Vigas completas</th><th class="r">Kg ejecutado</th>
           <th class="r">Sold. (ml)</th><th>Cal.</th><th class="c no-print">Acc.</th>
         </tr></thead>
         <tbody id="pr-tbody"></tbody>
@@ -4162,20 +4162,73 @@ function clearProd(){
 function renderProd(){
   const q=(document.getElementById('pr-q')?.value||'').toLowerCase();
   const ff=document.getElementById('pr-fase')?.value||'';
-  const recs=ST.prods.filter(r=>(!q||(r.conjunto+r.parte+r.fase+r.opNom).toLowerCase().includes(q))&&(!ff||r.fase===ff));
+  const recs=ST.prods.filter(r=>(!q||(r.conjunto+r.parte+r.fase+(r.opNom||'')).toLowerCase().includes(q))&&(!ff||r.fase===ff));
   const calBadge=c=>c==='ok'?'<span class="badge b-done">OK</span>':c==='rep'?'<span class="badge b-prog">Rep.</span>':'<span class="badge b-rej">Rec.</span>';
-  document.getElementById('pr-tbody').innerHTML=recs.length?recs.map(r=>`<tr>
-    <td>${r.fecha}</td><td><strong>${r.conjunto||r.cj}</strong></td><td style="font-size:10px">${r.parte||'—'}</td>
-    <td>${r.fase}</td><td>${r.opNom||'—'}</td>
-    <td class="r"><strong>${r.vigasCompletas||r.qty||0}</strong><br><span style="font-size:9px;color:#6b7280">${r.qty||0} total</span></td>
+
+  document.getElementById('pr-tbody').innerHTML=recs.length?recs.map(r=>{
+    const cj=r.conjunto||r.cj;
+    const c=TEKLA.conjuntos.find(x=>x.conjunto===cj);
+    const vigas=(() => { try{ return JSON.parse(r.detalle_vigas||'[]'); }catch(e){ return []; } })();
+    const incompletas=c?vigas.filter(v=>!c.partes.every(p=>{
+      const piezasHI=PIEZAS_HI_SUP[p.perfil];
+      if(piezasHI) return piezasHI.every(sp=>Number(v.subQty?.[p.parte]?.[sp.tipo]||0)>0);
+      return Number(v.qty?.[p.parte]||0)>0;
+    })).length:0;
+
+    return `<tr>
+    <td>${r.fecha}</td>
+    <td><strong>${cj}</strong></td>
+    <td style="font-size:10px">${r.parte||'—'}</td>
+    <td>${r.fase}</td>
+    <td>${r.opNom||'—'}</td>
+    <td class="r">
+      <strong>${r.vigasCompletas||r.qty||0}</strong>
+      ${incompletas>0?`<br><span style="font-size:9px;color:#b45309;font-weight:700">⚠ ${incompletas} incomp.</span>`:''}
+    </td>
     <td class="r">${(r.peso||r.pesoReal||r.kg||0).toFixed(1)}</td>
     <td class="r">${r.sold_ml?`<span style="font-size:11px;font-weight:700;color:#1e40af;">${r.sold_ml} ml</span>`:'—'}</td>
     <td>${calBadge(r.calidad||r.cal||'ok')}</td>
-    <td class="c no-print"><button class="btn btn-d btn-sm" onclick="ST.prods=ST.prods.filter(x=>x.id!==${r.id});saveAll();renderProd()">✕</button></td>
-  </tr>`).join(''):'<tr><td colspan="9" style="text-align:center;padding:1.5rem;color:var(--gm);">Sin registros</td></tr>';
+    <td class="c no-print" style="white-space:nowrap">
+      ${incompletas>0?`<button class="btn btn-s btn-sm" onclick="completarVigas(${r.id})" style="background:#f59e0b;color:#fff;border-color:#f59e0b;margin-right:2px" title="Completar vigas incompletas">✏</button>`:''}
+      <button class="btn btn-d btn-sm" onclick="ST.prods=ST.prods.filter(x=>x.id!==${r.id});saveAll();renderProd()">✕</button>
+    </td>
+  </tr>`;
+  }).join(''):'<tr><td colspan="9" style="text-align:center;padding:1.5rem;color:var(--gm);">Sin registros</td></tr>';
+
   const tot=recs.reduce((s,r)=>s+(r.vigasCompletas||r.qty||0),0);
   const totkg=recs.reduce((s,r)=>s+(r.peso||r.pesoReal||r.kg||0),0);
-  document.getElementById('pr-tot').textContent=recs.length?`Total: ${tot} unidades — ${totkg.toFixed(1)} kg`:'';
+  document.getElementById('pr-tot').textContent=recs.length?`Total: ${tot} vigas completas — ${totkg.toFixed(1)} kg`:'';
+}
+
+function completarVigas(recId){
+  const rec=ST.prods.find(r=>r.id===recId);
+  if(!rec) return;
+  const cj=rec.conjunto||rec.cj;
+  const c=TEKLA.conjuntos.find(x=>x.conjunto===cj);
+  if(!c) return;
+
+  // Pre-cargar el formulario con el conjunto y cargar solo las vigas incompletas
+  document.getElementById('p-cj').value=cj;
+  document.getElementById('p-fase').value=rec.fase||'Armado';
+  document.getElementById('p-fecha').value=rec.fecha||today();
+
+  // Cargar solo las vigas incompletas del registro
+  const vigas=(() => { try{ return JSON.parse(rec.detalle_vigas||'[]'); }catch(e){ return []; } })();
+  const incompletas=vigas.filter(v=>!c.partes.every(p=>{
+    const piezasHI=PIEZAS_HI_SUP[p.perfil];
+    if(piezasHI) return piezasHI.every(sp=>Number(v.subQty?.[p.parte]?.[sp.tipo]||0)>0);
+    return Number(v.qty?.[p.parte]||0)>0;
+  }));
+
+  pVigasData = incompletas.length>0 ? incompletas.map(v=>({...v})) : [{qty:{},subQty:{}}];
+  const sec=document.getElementById('p-vigas-section');
+  if(sec) sec.style.display='';
+  pRenderVigas();
+  pUpdateInfo();
+
+  // Scroll al formulario
+  document.getElementById('p-cj').scrollIntoView({behavior:'smooth',block:'start'});
+  toast(`✏ Editando ${incompletas.length} viga(s) incompleta(s) de ${cj} — completa las partes faltantes y registra`);
 }
 
 // ======================= FASES KANBAN =======================
