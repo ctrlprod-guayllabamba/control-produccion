@@ -4224,16 +4224,6 @@ function pCalcPeso(){
   // El peso ahora se calcula en pCalcResumenDia() basado en las vigas
   pCalcResumenDia?.();
 }
-    infoEl.style.display='block';
-    if(sinCorte && fase!=='Corte'){
-      infoEl.style.background='#fee2e2';
-      infoEl.style.border='1.5px solid #fca5a5';
-      infoEl.style.borderRadius='8px';
-      txtEl.innerHTML=`<span style="color:#991b1b;font-weight:800;">⛔ SECUENCIA INVÁLIDA — Esta parte no tiene cortes registrados.</span><br>
-        <span style="color:#991b1b;font-size:11px;">Debes registrar el corte antes de avanzar a ${fase}.</span>`;
-    } else if(cortado>0 && qty>cortado){
-      infoEl.style.background='#fff3cd';
-}
 function addProd(){
   const fecha=document.getElementById('p-fecha').value;
   const cj=document.getElementById('p-cj').value;
