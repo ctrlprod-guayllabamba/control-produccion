@@ -1785,12 +1785,15 @@ function getSubpiezaQty(conjunto, parte, nombreSubpieza) {
     if(c.pl_cortes_por_plancha){
       try{
         const piezas = JSON.parse(c.pl_cortes_por_plancha||'[]');
-        const t = piezas.filter(p=>clasificarSubpieza(p,perfil)===nombreSubpieza).reduce((a,p)=>a+(p.qty||0),0);
-        if(t>0){ total+=t; continue; }
+        if(piezas.length > 0){
+          // Si hay datos en pl_cortes, usarlos y NO ejecutar fallback 3
+          const t = piezas.filter(p=>clasificarSubpieza(p,perfil)===nombreSubpieza).reduce((a,p)=>a+(p.qty||0),0);
+          total += t;
+          continue; // saltar fallback 3 siempre que haya pl_cortes, aunque t===0
+        }
       }catch(e){}
     }
-    // Fuente 3 (último recurso): inferir desde qty vigas × definición HI
-    // Solo si NO tiene ninguna data de sub-piezas
+    // Fuente 3 (último recurso): solo si NO hay pl_cortes_por_plancha en absoluto
     if(perfil && PIEZAS_HI_SUP[perfil] && c.qty>0){
       const spDef = PIEZAS_HI_SUP[perfil].find(sp=>sp.tipo===nombreSubpieza);
       if(spDef) total += (c.qty * spDef.qty);
