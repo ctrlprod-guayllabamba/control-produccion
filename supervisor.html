@@ -2047,22 +2047,52 @@ function renderDashboard() {
     const d=new Date(); d.setDate(d.getDate()-i);
     days.push(d.toISOString().split('T')[0]);
   }
-  const allRecs = [...ST.cortes.map(c=>({...c,_fase:'Corte'})),...ST.prods];
-  const tendData = days.map(d=>allRecs.filter(r=>r.fecha===d).reduce((s,r)=>s+r.qty,0));
-  const tendCorte = days.map(d=>ST.cortes.filter(r=>r.fecha===d).reduce((s,r)=>s+r.qty,0));
+  // Normalizar fecha a YYYY-MM-DD
+  const fxDate = f => (f||'').substring(0,10);
+  const allRecs = [
+    ...ST.cortes.map(c=>({...c,_fase:'Corte', _d:fxDate(c.fecha), _kg:Number(c.pesoParts||c.pesoPzas||0)})),
+    ...ST.prods.map(p=>({...p,_fase:p.fase,   _d:fxDate(p.fecha),  _kg:Number(p.peso||p.pesoReal||p.kg||0)}))
+  ];
+  // Curva S acumulada por proceso
+  const FASES_TEND = [
+    {label:'Corte',         color:'#e8631a', dash:[]},
+    {label:'Armado',        color:'#1a2b4a', dash:[]},
+    {label:'Soldadura',     color:'#7c3aed', dash:[]},
+    {label:'Perforaciones', color:'#0891b2', dash:[]},
+    {label:'Pintura',       color:'#166534', dash:[]},
+  ];
+  const faseSets = FASES_TEND.map(f=>{
+    let acum = 0;
+    const data = days.map(d=>{
+      const kg = allRecs
+        .filter(r=>r._d===d && (r.fase===f.label||r._fase===f.label))
+        .reduce((s,r)=>s+r._kg, 0);
+      acum += kg;
+      return acum > 0 ? Math.round(acum) : null;
+    });
+    // Si no tiene datos, omitir
+    const tieneData = data.some(v=>v!==null&&v>0);
+    if(!tieneData) return null;
+    return {
+      label: f.label,
+      data,
+      borderColor: f.color,
+      backgroundColor: 'transparent',
+      fill: false, tension:.4, pointRadius:3,
+      pointBackgroundColor: f.color,
+      borderDash: f.dash, borderWidth:2,
+      spanGaps: true,
+    };
+  }).filter(Boolean);
   mkChart('chart-tendencia','line',{
-    labels:days.map(d=>d.slice(5)),  // MM-DD
-    datasets:[
-      {label:'Total producción',data:tendData,borderColor:'#1a2b4a',backgroundColor:'rgba(26,43,74,.08)',
-       fill:true,tension:.4,pointRadius:4,pointBackgroundColor:'#1a2b4a'},
-      {label:'Solo corte',data:tendCorte,borderColor:'#e8631a',backgroundColor:'rgba(232,99,26,.08)',
-       fill:true,tension:.4,pointRadius:3,pointBackgroundColor:'#e8631a',borderDash:[4,4]},
-    ]
+    labels: days.map(d=>d.slice(5)),
+    datasets: faseSets
   },{
     plugins:{legend:{position:'top'}},
     scales:{
       x:{grid:{color:'#f0f2f6'},ticks:{font:{size:10}}},
-      y:{grid:{color:'#f0f2f6'},ticks:{font:{size:10}},beginAtZero:true}
+      y:{grid:{color:'#f0f2f6'},ticks:{font:{size:10}},beginAtZero:true,
+         title:{display:true,text:'kg acumulados'}}
     }
   });
 
