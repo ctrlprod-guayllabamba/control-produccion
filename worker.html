@@ -951,11 +951,15 @@ async function sincronizarDesdeServidor(){
       const localPending = LS.g(WORKER_RECS_LS, []).filter(r => !serverIds.has(String(r.id)) && !r._synced);
       const merged = [...allRecs, ...localPending];
       LS.s(WORKER_RECS_LS, merged);
-      _cache = merged.filter(r => r.opId == W?.id || !r.opId);
+      // _cache debe incluir TODOS los registros para calcular progreso global correctamente
+      _cache = merged;
       renderHomeHist();
+      // Refrescar la lista de piezas si estamos en esa pantalla
+      if(selCj) buildParteList();
+      if(document.getElementById('sc-cj')?.classList.contains('on')) buildCjList();
       alert(`✅ Sincronizado — ${allRecs.length} registros del servidor${localPending.length ? ' + ' + localPending.length + ' locales pendientes' : ''}`);
     } else {
-      alert('No se encontraron registros en el servidor');
+      alert('⚠️ No se encontraron registros en el servidor.\nSi hubo registros eliminados, usa "Limpiar datos locales" para resetear.');
     }
   }catch(e){
     alert('Error al sincronizar: ' + e.message);
@@ -2525,7 +2529,7 @@ function wkGuardarCorte(){
     let _alertas = [];
     for(const sp of wkSubPiezas){
       if(!sp.qty || sp.qty <= 0) continue;
-      const _planSp = _planVigas * (_piezasHI.find(p=>p.nombre===sp.nombre)?.qty || 1);
+      const _planSp = _planVigas * (_piezasHI.find(p=>p.tipo===sp.nombre || p.tipo===sp.tipo || Number(p.esp)===Number(sp.esp))?.qty || 1);
       // Sumar ya cortado de esta sub-pieza en registros anteriores
       let _yaCortadoSp = 0;
       for(const r of _yaEjecutado){
