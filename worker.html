@@ -1012,6 +1012,24 @@ function saveRec(rec) {
 }
 
 function myExec(cj,pr,fase){return _cache.filter(r=>r.cj===cj&&r.pr===pr&&r.fase===fase).reduce((s,r)=>s+r.qty,0);}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// totalExec — CRITERIOS FIJOS (NO MODIFICAR sin revisar supervisor también)
+// -----------------------------------------------------------------------
+// REGLA GENERAL: Para partes normales (PL, L, etc.) suma qty directamente.
+//
+// REGLA HI (vigas descompuestas):
+//   - NO sumar qty del registro — ese campo representa piezas de la plancha,
+//     no vigas completas. Ej: un registro puede tener qty=32 (solo Patines).
+//   - CLASIFICAR sub-piezas por ESPESOR (esp), NO por nombre:
+//       HI300-10-12×300 → esp=10 → Alma (qty:1/viga), esp=12 → Patín (qty:2/viga)
+//   - VIGAS COMPLETAS = min( floor(almas/1), floor(patines/2) )
+//   - Carlos puede registrar planchas de solo Alma o solo Patín en registros
+//     separados cuando una sub-pieza ya está completa — esto es válido.
+//
+// CONSISTENCIA: Este mismo criterio usa el supervisor en getSubpiezaQty()
+//   y getVigasCompletas(). Si se cambia aquí, cambiar allá también.
+// ═══════════════════════════════════════════════════════════════════════════
 function totalExec(cj,pr,fase){
   const all = _cache.length > 0 ? _cache : LS.g(WORKER_RECS_LS, []);
   const recs = all.filter(r=>(r.cj||r.conjunto)===cj&&(r.pr||r.parte)===pr&&r.fase===fase);
@@ -1027,12 +1045,14 @@ function totalExec(cj,pr,fase){
       try{
         const cortes = JSON.parse(r.pl_cortes_por_plancha || '[]');
         for(const c of cortes){
+          // Clasificar por espesor (esp), NO por nombre — el nombre puede variar
           const espNum = Number(c.esp);
           const spDef = piezasHI.find(sp => Number(sp.esp) === espNum);
           if(spDef) subQty[spDef.tipo] = (subQty[spDef.tipo] || 0) + (Number(c.qty) || 0);
         }
       }catch(e){}
     }
+    // Vigas completas = mínimo entre todas las sub-piezas considerando qty por viga
     const vigasPorSub = piezasHI.map(sp => Math.floor((subQty[sp.tipo] || 0) / (sp.qty || 1)));
     return vigasPorSub.length > 0 ? Math.min(...vigasPorSub) : 0;
   }

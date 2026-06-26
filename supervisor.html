@@ -488,7 +488,7 @@ global.Chart = class {
       <canvas id="chart-material" height="200"></canvas>
     </div>
     <div class="card">
-      <div class="card-hdr">Tendencia de producción — últimos 14 días</div>
+      <div class="card-hdr">Tendencia de producción — últimos 30 días</div>
       <canvas id="chart-tendencia" height="200"></canvas>
     </div>
   </div>
@@ -1749,15 +1749,37 @@ function getCortadoQty(conjunto, parte) {
   return ST.cortes.filter(c=>c.conjunto===conjunto&&c.parte===parte).reduce((s,c)=>s+c.qty,0);
 }
 
-// Obtener qty real de una sub-pieza específica (para panel de progreso por sub-pieza)
-// Clasificar sub-pieza por espesor según perfil, independiente del orden o nombre ingresado
+// ═══════════════════════════════════════════════════════════════════════════
+// clasificarSubpieza / getSubpiezaQty / getVigasCompletas
+// CRITERIOS FIJOS (NO MODIFICAR sin revisar worker también)
+// -----------------------------------------------------------------------
+// CLASIFICACIÓN POR ESPESOR (esp), NO por nombre:
+//   El operador puede escribir "Patin", "Patín", "patin" o cualquier variante.
+//   La fuente de verdad es el espesor de la plancha:
+//     HI300-10-12×300 → esp=10 → Alma (1/viga),  esp=12 → Patín (2/viga)
+//     HI250-10-20×300 → esp=10 → Alma (1/viga),  esp=20 → Patín (2/viga)
+//     HI250-10-20×250 → esp=10 → Alma (1/viga),  esp=20 → Patín (2/viga)
+//     HI234-8-12×180  → esp=8  → Alma (1/viga),  esp=12 → Patín (2/viga)
+//
+// FUENTES DE DATOS (en orden de prioridad):
+//   1. qty_subpiezas (campo directo si existe)
+//   2. pl_cortes_por_plancha (registros descompuestos del worker — tienen esp real)
+//   3. Fallback: qty × qty_por_viga (solo si no hay pl_cortes en absoluto)
+//
+// VIGAS COMPLETAS = min( floor(almas/1), floor(patines/2) )
+//   Carlos puede registrar planchas de solo Alma o solo Patín en registros
+//   separados cuando una sub-pieza ya está completa — esto es válido y correcto.
+//
+// CONSISTENCIA: Este mismo criterio usa el worker en totalExec().
+//   Si se cambia aquí, cambiar allá también.
+// ═══════════════════════════════════════════════════════════════════════════
 function clasificarSubpieza(sp, perfil) {
-  // Definir qué espesor corresponde a Alma y Patín por perfil
+  // Clasificar por espesor según perfil — NO usar el nombre del campo
   const ALMA_ESP = {
     'HI300-10-12*300': 10, 'HI250-10-20*300': 10, 'HI250-10-20*250': 10, 'HI234-8-12*180': 8
   };
   const almaEsp = ALMA_ESP[perfil];
-  if(!almaEsp) return sp.nombre; // si no conocemos el perfil, usar nombre original
+  if(!almaEsp) return sp.nombre; // perfil no HI: usar nombre original
   return (Number(sp.esp) === Number(almaEsp)) ? 'Alma' : 'Patín';
 }
 
@@ -2019,9 +2041,9 @@ function renderDashboard() {
     }
   });
 
-  // == CHART 4: Tendencia últimos 14 días ==
+  // == CHART 4: Tendencia últimos 30 días ==
   const days = [];
-  for(let i=13;i>=0;i--){
+  for(let i=29;i>=0;i--){
     const d=new Date(); d.setDate(d.getDate()-i);
     days.push(d.toISOString().split('T')[0]);
   }
@@ -2443,7 +2465,7 @@ function _calcStockSaldos(){
         colada:s.colada||c.pl_num||'—',
         grado:s.grado||s.mat||c.pl_mat||'A588-50',
         tipo:s.tipo||'plancha',
-        esp:s.esp||0, ancho:s.ancho||0, largo:s.largo||0,
+        esp:s.esp||0, ancho:s.ancho||0, largo:s.largo||0, ancho_corte:s.ancho_corte||0, largo_corte:s.largo_corte||0,
         qty:s.qty||1, pesoOriginal:peso, saldo:peso,
         fecha:c.fecha, parte:c.parte||c.pr,
       };
