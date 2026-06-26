@@ -5050,7 +5050,7 @@ function renderInforme(){
   const byFase={};
   FASES.forEach(f=>{
     if(f==='Corte') byFase[f]={qty:totCorteQty,kg:totKgCorte};
-    else byFase[f]={qty:prods.filter(p=>p.fase===f).reduce((s,p)=>s+p.qty,0),kg:prods.filter(p=>p.fase===f).reduce((s,p)=>s+p.kg,0)};
+    else byFase[f]={qty:prods.filter(p=>p.fase===f).reduce((s,p)=>s+(Number(p.qty)||0),0),kg:prods.filter(p=>p.fase===f).reduce((s,p)=>s+Number(p.kg||p.peso||p.pesoReal||0),0)};
   })
   setTimeout(()=>renderInformeCharts(cortes,prods,byFase),100);;
   // Pending summary
