@@ -2091,7 +2091,7 @@ function renderDashboard() {
     plugins:{legend:{position:'top'}},
     scales:{
       x:{grid:{color:'#f0f2f6'},ticks:{font:{size:10}}},
-      y:{grid:{color:'#f0f2f6'},ticks:{font:{size:10}},beginAtZero:true,
+      y:{grid:{color:'#f0f2f6'},ticks:{font:{size:10},stepSize:1000,callback:v=>v.toLocaleString()+' kg'},beginAtZero:true,
          title:{display:true,text:'kg acumulados'}}
     }
   });
