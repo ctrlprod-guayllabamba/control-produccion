@@ -2473,11 +2473,22 @@ function _calcStockSaldos(){
   ST.cortes.forEach(c=>{
     const planchas=(()=>{try{return JSON.parse(c.pl_planchas||'[]');}catch(e){return[];}})();
     planchas.forEach(m=>{
-      if(m.tipo==='desde_stock'&&m.stockRef&&sobs[m.stockRef]){
-        // Descontar el peso usado
-        const pesoUsado=m.peso||sobs[m.stockRef].pesoOriginal;
-        sobs[m.stockRef].saldo=Math.max(0,sobs[m.stockRef].saldo-pesoUsado);
-        // Si generó nuevo sobrante en ese corte, ese sobrante ya está como nuevo registro
+      if(m.tipo==='desde_stock'){
+        // Descontar por key exacto
+        if(m.stockRef && sobs[m.stockRef]){
+          const pesoUsado=m.peso||sobs[m.stockRef].pesoOriginal;
+          sobs[m.stockRef].saldo=Math.max(0,sobs[m.stockRef].saldo-pesoUsado);
+        }
+        // Descontar también sobrantes con misma colada+esp registrados ANTES del corte actual
+        if(m.colada && m.colada !== '—'){
+          Object.values(sobs).forEach(s=>{
+            if(s.colada===m.colada && s.esp===(m.esp||0) && s._key!==m.stockRef){
+              if(c.id > s._recId){
+                s.saldo = Math.max(0, s.saldo - (m.peso||s.pesoOriginal));
+              }
+            }
+          });
+        }
       }
     });
   });

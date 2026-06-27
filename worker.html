@@ -2046,33 +2046,62 @@ function wkMatHTML(m,i){
 }
 
 function wkStockDisponible(){
-  // Lee sobrantes del cache del servidor
-  const recs = _cache.concat(
-    (()=>{try{return JSON.parse(localStorage.getItem('prod_server_cortes')||'[]');}catch(e){return[];}})()
-  );
-  const items=[];
-  const seen=new Set();
+  const recs = _cache.length > 0 ? _cache : (()=>{try{return JSON.parse(localStorage.getItem(WORKER_RECS_LS)||'[]');}catch(e){return[];}})();
+  
+  // 1. Recopilar todos los sobrantes generados
+  const saldos = {};
   recs.forEach(c=>{
     const sobs=(()=>{try{return JSON.parse(c.sob_por_plancha||'[]');}catch(e){return[];}})();
     sobs.forEach((s,si)=>{
       const peso=Number(s.sobPeso||s.peso||0);
       if(peso<=0||s.dest==='waste') return;
       const key=c.id+'_'+si;
-      if(seen.has(key)) return;
-      seen.add(key);
-      items.push({
+      if(saldos[key]) return; // ya registrado
+      saldos[key]={
         _key:key, _recId:c.id, _sobIdx:si,
         colada:s.colada||c.pl_num||'—',
         grado:s.grado||s.mat||c.pl_mat||'A588-50',
         tipo:s.tipo||'plancha',
         esp:s.esp||0, ancho:s.ancho||0, largo:s.largo||0,
         ancho_corte:s.ancho_corte||0, largo_corte:s.largo_corte||0,
-        qty:s.qty||1, peso,
+        esq:s.esq||'tl', cortes_extra:s.cortes_extra||null,
+        qty:s.qty||1, pesoOriginal:peso, saldo:peso,
         cj:c.conjunto||c.cj, parte:c.parte||c.pr,
-      });
+      };
     });
   });
-  return items;
+
+  // 2. Descontar lo que ya se usó en cortes posteriores
+  // Usar stockRef (key exacto) O stockRecId+stockSobIdx para compatibilidad
+  recs.forEach(c=>{
+    const planchas=(()=>{try{return JSON.parse(c.pl_planchas||'[]');}catch(e){return[];}})();
+    planchas.forEach(m=>{
+      if(m.tipo==='desde_stock'){
+        // Descontar por key exacto
+        if(m.stockRef && saldos[m.stockRef]){
+          saldos[m.stockRef].saldo = Math.max(0, saldos[m.stockRef].saldo - (m.peso||saldos[m.stockRef].pesoOriginal));
+        }
+        // También marcar agotado cualquier sobrante con la misma colada+esp que fue usado
+        // Esto evita que un sobrante "re-registrado" con misma colada aparezca disponible
+        if(m.colada && m.colada !== '—'){
+          Object.values(saldos).forEach(s=>{
+            if(s.colada === m.colada && s.esp === (m.esp||0) && s._key !== m.stockRef){
+              // Solo descontar si el registro que lo usó es POSTERIOR al que generó el sobrante
+              if(c.id > s._recId){
+                s.saldo = Math.max(0, s.saldo - (m.peso||s.pesoOriginal));
+              }
+            }
+          });
+        }
+      }
+    });
+  });
+
+  // 3. Retornar solo los que tienen saldo > 0.01 kg
+  return Object.values(saldos)
+    .filter(s=>s.saldo>0.01)
+    .sort((a,b)=>b._recId-a._recId) // más recientes primero
+    .map(s=>({...s, peso:s.saldo}));
 }
 
 function wkSelStock(i){
@@ -3724,26 +3753,30 @@ const FICON={Corte:'✂',Armado:'🔧',Soldadura:'🔥',Perforaciones:'🔩','Li
 // Función SVG universal — soporta múltiples cortes en cualquier esquina
 // cortes = [{ac, lc, esq: 'tl'|'tr'|'bl'|'br'}]
 function calcPoligonoSobrante_wk(W, H, cortes, sc){
-  if(!cortes || cortes.length === 0) return [{x:0,y:0},{x:W,y:0},{x:W,y:H},{x:0,y:H}];
-  const c0 = cortes[0];
-  const cw0 = Math.round((c0.ac||0) * sc);
-  const ch0 = Math.round((c0.lc||0) * sc);
-  const esq0 = c0.esq || 'tl';
-  let pts;
-  if(esq0 === 'tl')      pts = [{x:0,y:ch0},{x:cw0,y:ch0},{x:cw0,y:0},{x:W,y:0},{x:W,y:H},{x:0,y:H}];
-  else if(esq0 === 'tr') pts = [{x:0,y:0},{x:W-cw0,y:0},{x:W-cw0,y:ch0},{x:W,y:ch0},{x:W,y:H},{x:0,y:H}];
-  else if(esq0 === 'br') pts = [{x:0,y:0},{x:W,y:0},{x:W,y:H-ch0},{x:W-cw0,y:H-ch0},{x:W-cw0,y:H},{x:0,y:H}];
-  else                   pts = [{x:0,y:0},{x:W,y:0},{x:W,y:H},{x:cw0,y:H},{x:cw0,y:H-ch0},{x:0,y:H-ch0}];
-  if(cortes.length > 1){
-    const c1 = cortes[1];
-    const cw1 = Math.round((c1.ac||0) * sc);
-    const ch1 = Math.round((c1.lc||0) * sc);
-    const esq1 = c1.esq || 'tr';
-    if(esq1 === 'tl')      pts.splice(0, 0, {x:0,y:ch0+ch1},{x:cw1,y:ch0+ch1},{x:cw1,y:ch0});
-    else if(esq1 === 'tr') pts.splice(2, 0, {x:W-cw1,y:ch0},{x:W-cw1,y:ch0+ch1},{x:W,y:ch0+ch1});
-    else if(esq1 === 'br') pts.splice(4, 0, {x:W,y:H-ch0-ch1},{x:W-cw1,y:H-ch0-ch1},{x:W-cw1,y:H-ch0});
-    else                   pts.splice(4, 0, {x:cw1,y:H-ch0},{x:cw1,y:H-ch0-ch1},{x:0,y:H-ch0-ch1});
-  }
+  let pts = [{x:0,y:0},{x:W,y:0},{x:W,y:H},{x:0,y:H}];
+  cortes.forEach(c => {
+    const cw = Math.round(c.ac * sc);
+    const ch = Math.round(c.lc * sc);
+    if(!cw || !ch) return;
+    const esq = c.esq || 'tl';
+    if(esq === 'tl'){
+      pts = pts.filter(p=>!(p.x===0&&p.y===0));
+      const idx = pts.findIndex(p=>p.x===W&&p.y===0);
+      pts.splice(idx, 0, {x:cw,y:0}, {x:cw,y:ch}, {x:0,y:ch});
+    } else if(esq === 'tr'){
+      pts = pts.filter(p=>!(p.x===W&&p.y===0));
+      const idx = pts.findIndex(p=>p.x===W&&p.y===H);
+      pts.splice(idx, 0, {x:W,y:ch}, {x:W-cw,y:ch}, {x:W-cw,y:0});
+    } else if(esq === 'br'){
+      pts = pts.filter(p=>!(p.x===W&&p.y===H));
+      const idx = pts.findIndex(p=>p.x===0&&p.y===H);
+      pts.splice(idx, 0, {x:W-cw,y:H}, {x:W-cw,y:H-ch}, {x:W,y:H-ch});
+    } else if(esq === 'bl'){
+      pts = pts.filter(p=>!(p.x===0&&p.y===H));
+      const idx = pts.findIndex(p=>p.x===0&&p.y===0);
+      pts.splice(idx, 0, {x:0,y:H-ch}, {x:cw,y:H-ch}, {x:cw,y:H});
+    }
+  });
   return pts;
 }
 
