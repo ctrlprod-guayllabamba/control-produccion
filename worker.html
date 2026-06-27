@@ -3724,30 +3724,26 @@ const FICON={Corte:'✂',Armado:'🔧',Soldadura:'🔥',Perforaciones:'🔩','Li
 // Función SVG universal — soporta múltiples cortes en cualquier esquina
 // cortes = [{ac, lc, esq: 'tl'|'tr'|'bl'|'br'}]
 function calcPoligonoSobrante_wk(W, H, cortes, sc){
-  let pts = [{x:0,y:0},{x:W,y:0},{x:W,y:H},{x:0,y:H}];
-  cortes.forEach(c => {
-    const cw = Math.round(c.ac * sc);
-    const ch = Math.round(c.lc * sc);
-    if(!cw || !ch) return;
-    const esq = c.esq || 'tl';
-    if(esq === 'tl'){
-      pts = pts.filter(p=>!(p.x===0&&p.y===0));
-      const idx = pts.findIndex(p=>p.x===W&&p.y===0);
-      pts.splice(idx, 0, {x:cw,y:0}, {x:cw,y:ch}, {x:0,y:ch});
-    } else if(esq === 'tr'){
-      pts = pts.filter(p=>!(p.x===W&&p.y===0));
-      const idx = pts.findIndex(p=>p.x===W&&p.y===H);
-      pts.splice(idx, 0, {x:W,y:ch}, {x:W-cw,y:ch}, {x:W-cw,y:0});
-    } else if(esq === 'br'){
-      pts = pts.filter(p=>!(p.x===W&&p.y===H));
-      const idx = pts.findIndex(p=>p.x===0&&p.y===H);
-      pts.splice(idx, 0, {x:W-cw,y:H}, {x:W-cw,y:H-ch}, {x:W,y:H-ch});
-    } else if(esq === 'bl'){
-      pts = pts.filter(p=>!(p.x===0&&p.y===H));
-      const idx = pts.findIndex(p=>p.x===0&&p.y===0);
-      pts.splice(idx, 0, {x:0,y:H-ch}, {x:cw,y:H-ch}, {x:cw,y:H});
-    }
-  });
+  if(!cortes || cortes.length === 0) return [{x:0,y:0},{x:W,y:0},{x:W,y:H},{x:0,y:H}];
+  const c0 = cortes[0];
+  const cw0 = Math.round((c0.ac||0) * sc);
+  const ch0 = Math.round((c0.lc||0) * sc);
+  const esq0 = c0.esq || 'tl';
+  let pts;
+  if(esq0 === 'tl')      pts = [{x:0,y:ch0},{x:cw0,y:ch0},{x:cw0,y:0},{x:W,y:0},{x:W,y:H},{x:0,y:H}];
+  else if(esq0 === 'tr') pts = [{x:0,y:0},{x:W-cw0,y:0},{x:W-cw0,y:ch0},{x:W,y:ch0},{x:W,y:H},{x:0,y:H}];
+  else if(esq0 === 'br') pts = [{x:0,y:0},{x:W,y:0},{x:W,y:H-ch0},{x:W-cw0,y:H-ch0},{x:W-cw0,y:H},{x:0,y:H}];
+  else                   pts = [{x:0,y:0},{x:W,y:0},{x:W,y:H},{x:cw0,y:H},{x:cw0,y:H-ch0},{x:0,y:H-ch0}];
+  if(cortes.length > 1){
+    const c1 = cortes[1];
+    const cw1 = Math.round((c1.ac||0) * sc);
+    const ch1 = Math.round((c1.lc||0) * sc);
+    const esq1 = c1.esq || 'tr';
+    if(esq1 === 'tl')      pts.splice(0, 0, {x:0,y:ch0+ch1},{x:cw1,y:ch0+ch1},{x:cw1,y:ch0});
+    else if(esq1 === 'tr') pts.splice(2, 0, {x:W-cw1,y:ch0},{x:W-cw1,y:ch0+ch1},{x:W,y:ch0+ch1});
+    else if(esq1 === 'br') pts.splice(4, 0, {x:W,y:H-ch0-ch1},{x:W-cw1,y:H-ch0-ch1},{x:W-cw1,y:H-ch0});
+    else                   pts.splice(4, 0, {x:cw1,y:H-ch0},{x:cw1,y:H-ch0-ch1},{x:0,y:H-ch0-ch1});
+  }
   return pts;
 }
 
