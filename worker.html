@@ -2071,27 +2071,22 @@ function wkStockDisponible(){
     });
   });
 
-  // 2. Rastrear cadena de sobrantes — solo el último de cada cadena queda activo
+  // 2. Rastrear cadena de sobrantes — solo el último queda activo
   recs.forEach(c=>{
     const planchas=(()=>{try{return JSON.parse(c.pl_planchas||'[]');}catch(e){return[];}})();
     planchas.forEach(m=>{
       if(m.tipo==='desde_stock'){
-        // Bloquear sobrante exacto consumido
         if(m.stockRef && saldos[m.stockRef]){
           saldos[m.stockRef].saldo = 0;
         }
-        // Bloquear anteriores de la misma cadena (colada+esp)
         if(m.colada && m.colada !== '—'){
-          const nuevosSob = Object.values(saldos).filter(s=>
-            s._recId === c.id &&
-            s.colada === m.colada &&
-            Number(s.esp) === Number(m.esp||0)
+          const hayNuevoSob = Object.values(saldos).some(s=>
+            String(s._recId) === String(c.id) &&
+            s.colada === m.colada
           );
-          if(nuevosSob.length > 0){
+          if(hayNuevoSob){
             Object.values(saldos).forEach(s=>{
-              if(s.colada === m.colada &&
-                 Number(s.esp) === Number(m.esp||0) &&
-                 Number(s._recId) < Number(c.id)){
+              if(s.colada === m.colada && Number(s._recId) < Number(c.id)){
                 s.saldo = 0;
               }
             });

@@ -2469,34 +2469,28 @@ function _calcStockSaldos(){
     }
   });
 
-  // 2. Rastrear cadena de sobrantes — solo el último de cada cadena queda activo
-  // Lógica: cuando un corte usa desde_stock (consume un sobrante) y genera
-  // un nuevo sobrante con la misma colada+esp pero menor peso,
-  // el sobrante anterior queda bloqueado y el nuevo lo reemplaza.
+  // 2. Rastrear cadena de sobrantes — solo el último queda activo
+  // Regla: cuando un corte usa desde_stock de una colada Y genera un nuevo
+  // sobrante con esa misma colada → todos los sobrantes anteriores de esa
+  // colada quedan en saldo=0 (fueron reemplazados por el nuevo).
   ST.cortes.forEach(c=>{
     const planchas=(()=>{try{return JSON.parse(c.pl_planchas||'[]');}catch(e){return[];}})();
     planchas.forEach(m=>{
       if(m.tipo==='desde_stock'){
-        // Bloquear el sobrante exacto que fue consumido (por stockRef)
+        // 1. Bloquear sobrante exacto consumido
         if(m.stockRef && sobs[m.stockRef]){
           sobs[m.stockRef].saldo = 0;
         }
-        // Bloquear también sobrantes anteriores de la misma colada+esp
-        // que fueron reemplazados por uno nuevo con menor peso
+        // 2. Si este corte generó nuevo sobrante con la misma colada,
+        //    bloquear TODOS los anteriores de esa colada
         if(m.colada && m.colada !== '—'){
-          // Los nuevos sobrantes generados en ESTE corte (mismo c.id)
-          const nuevosSob = Object.values(sobs).filter(s=>
-            s._recId === c.id &&
-            s.colada === m.colada &&
-            Number(s.esp) === Number(m.esp||0)
+          const hayNuevoSob = Object.values(sobs).some(s=>
+            String(s._recId) === String(c.id) &&
+            s.colada === m.colada
           );
-          // Si este corte generó un nuevo sobrante con esa colada,
-          // entonces todos los anteriores quedan bloqueados
-          if(nuevosSob.length > 0){
+          if(hayNuevoSob){
             Object.values(sobs).forEach(s=>{
-              if(s.colada === m.colada &&
-                 Number(s.esp) === Number(m.esp||0) &&
-                 Number(s._recId) < Number(c.id)){
+              if(s.colada === m.colada && Number(s._recId) < Number(c.id)){
                 s.saldo = 0;
               }
             });
