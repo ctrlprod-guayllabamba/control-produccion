@@ -1925,11 +1925,13 @@ function wkCalcPesoPieza(p){
 function wkCalcPesoSob(s){
   const t=s.tipo||'plancha', q=s.qty||1; let pu=0;
   if(t==='plancha'&&s.esp&&s.ancho&&s.largo) pu=s.esp*s.ancho*s.largo*D;
-  else if(t==='forma_l'&&s.esp&&s.ancho&&s.largo){
-    // Área L = Rectángulo total - Corte
+  else if((t==='forma_l'||t==='forma_compleja')&&s.esp&&s.ancho&&s.largo){
     const areaTotal=s.ancho*s.largo;
-    const areaCorte=(s.ancho_corte||0)*(s.largo_corte||0);
-    pu=s.esp*(areaTotal-areaCorte)*D;
+    const cortes = s.cortes_extra && s.cortes_extra.length>0
+      ? s.cortes_extra
+      : [{ac:s.ancho_corte||0, lc:s.largo_corte||0}];
+    const areaCortes = cortes.reduce((sum,c)=>sum+(c.ac||0)*(c.lc||0), 0);
+    pu=s.esp*(areaTotal-areaCortes)*D;
   }
   else if(t==='perfil'&&s.kgm&&s.largo) pu=s.kgm*s.largo/1000;
   else if(t==='manual') pu=s.pesoManual||0;
@@ -2098,8 +2100,8 @@ function wkSelStock(i){
     ancho_corte: s.ancho_corte, largo_corte: s.largo_corte,
     qty: 1,
     pesoManual: s.peso,
-    peso: s.tipo==='forma_l'
-      ? s.esp*(s.ancho*s.largo - s.ancho_corte*s.largo_corte)*D
+    peso: (s.tipo==='forma_l'||s.tipo==='forma_compleja')
+      ? (()=>{ const c2=s.cortes_extra&&s.cortes_extra.length>0?s.cortes_extra:[{ac:s.ancho_corte||0,lc:s.largo_corte||0}]; return s.esp*(s.ancho*s.largo-c2.reduce((sm,c)=>sm+(c.ac||0)*(c.lc||0),0))*D; })()
       : s.esp*s.ancho*s.largo*D,
     tipoOrig: s.tipo,
   };

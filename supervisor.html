@@ -2046,7 +2046,8 @@ function renderDashboard() {
 
   // == Tabla conjuntos ==
   document.getElementById('dash-cj').innerHTML = TEKLA.conjuntos.map(c=>{
-    const ej = ST.cortes.filter(x=>(x.conjunto||x.cj)===c.conjunto).reduce((s,x)=>s+x.qty,0);
+    const {vigasCompletas} = getVigasCompletas(c.conjunto);
+    const ej = vigasCompletas;
     const pend = Math.max(0,c.cantidad-ej);
     const pct = c.cantidad>0?Math.min(100,ej/c.cantidad*100):0;
     const pc = pct>=100?'#22c55e':pct>0?'var(--oa)':'var(--gl)';
@@ -2302,10 +2303,14 @@ function supCalcPesoSob(s){
   const t=s.tipo||'plancha', q=s.qty||1;
   let pu=0;
   if(t==='plancha'){ if(s.esp&&s.ancho&&s.largo) pu=s.esp*s.ancho*s.largo*D_SUP; }
-  else if(t==='forma_l'&&s.esp&&s.ancho&&s.largo){
+  else if((t==='forma_l'||t==='forma_compleja')&&s.esp&&s.ancho&&s.largo){
     const areaTotal=s.ancho*s.largo;
-    const areaCorte=(s.ancho_corte||0)*(s.largo_corte||0);
-    pu=s.esp*(areaTotal-areaCorte)*D_SUP;
+    // Para forma_compleja sumar todos los cortes; para forma_l usar el corte único
+    const cortes = s.cortes_extra && s.cortes_extra.length>0
+      ? s.cortes_extra
+      : [{ac:s.ancho_corte||0, lc:s.largo_corte||0}];
+    const areaCortes = cortes.reduce((sum,c)=>sum+(c.ac||0)*(c.lc||0), 0);
+    pu=s.esp*(areaTotal-areaCortes)*D_SUP;
   }
   else if(t==='perfil'){ if(s.kgm&&s.largo) pu=s.kgm*s.largo/1000; }
   else if(t==='manual') pu=s.pesoManual||0;
@@ -3752,8 +3757,10 @@ function sobEditCalcPeso(i){
   const s=window._sobEditData[i]; if(!s) return;
   const D=7.85e-6;
   let peso=0;
-  if(s.tipo==='forma_l'&&s.esp&&s.ancho&&s.largo){
-    const area=s.ancho*s.largo-(s.ancho_corte||0)*(s.largo_corte||0);
+  if((s.tipo==='forma_l'||s.tipo==='forma_compleja')&&s.esp&&s.ancho&&s.largo){
+    const cortes2 = s.cortes_extra && s.cortes_extra.length>0 ? s.cortes_extra : [{ac:s.ancho_corte||0,lc:s.largo_corte||0}];
+    const areaC = cortes2.reduce((sm,c)=>sm+(c.ac||0)*(c.lc||0),0);
+    const area=s.ancho*s.largo-areaC;
     peso=s.esp*area*D*(s.qty||1);
   } else if(s.esp&&s.ancho&&s.largo){
     peso=s.esp*s.ancho*s.largo*D*(s.qty||1);
@@ -5114,7 +5121,7 @@ function renderInforme(){
   const byFase={};
   FASES.forEach(f=>{
     if(f==='Corte') byFase[f]={qty:totCorteQty,kg:totKgCorte};
-    else byFase[f]={qty:prods.filter(p=>p.fase===f).reduce((s,p)=>s+p.qty,0),kg:prods.filter(p=>p.fase===f).reduce((s,p)=>s+p.kg,0)};
+    else byFase[f]={qty:prods.filter(p=>p.fase===f).reduce((s,p)=>s+(Number(p.qty)||0),0),kg:prods.filter(p=>p.fase===f).reduce((s,p)=>s+Number(p.kg||p.peso||p.pesoReal||0),0)};
   })
   setTimeout(()=>renderInformeCharts(cortes,prods,byFase),100);;
   // Pending summary
