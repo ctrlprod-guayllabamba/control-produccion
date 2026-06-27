@@ -2842,7 +2842,8 @@ function supSobranteHTML(s,i){
         <span style="font-size:12px;font-weight:700;color:#166534">📦 Sobrante ${i+1}</span>
         <select id="ss-tipo-${i}" style="font-size:12px;border:1px solid #86efac;border-radius:6px;padding:2px 6px;background:#f0fdf4" onchange="supChgSobTipo(${i})">
           <option value="plancha" ${s.tipo==='plancha'?'selected':''}>Plancha rect.</option>
-          <option value="forma_l" ${s.tipo==='forma_l'?'selected':''}>Forma en L</option>
+          <option value="forma_l" ${s.tipo==='forma_l'?'selected':''}>⌐ Forma en L (1 corte)</option>
+          <option value="forma_compleja" ${s.tipo==='forma_compleja'?'selected':''}>⌐⌐ Forma compleja (2+ cortes)</option>
           <option value="perfil" ${s.tipo==='perfil'?'selected':''}>Perfil (por largo)</option>
           <option value="manual" ${s.tipo==='manual'?'selected':''}>Peso manual</option>
         </select>
@@ -2871,11 +2872,21 @@ function supSobranteHTML(s,i){
       </div>
       <div style="font-size:11px;color:#92400e;font-weight:700;margin-bottom:4px">✂ Corte (zona que falta)</div>
       <div class="frow">
+        <div class="fg fix"><label>Esquina del corte</label>
+          <select id="ss-esq-${i}" onchange="supUpdSob(${i})" style="border-color:#fcd34d;font-size:12px">
+            <option value="tl" ${(s.esq||'tl')==='tl'?'selected':''}>↖ Sup. Izquierda</option>
+            <option value="tr" ${(s.esq||'tl')==='tr'?'selected':''}>↗ Sup. Derecha</option>
+            <option value="bl" ${(s.esq||'tl')==='bl'?'selected':''}>↙ Inf. Izquierda</option>
+            <option value="br" ${(s.esq||'tl')==='br'?'selected':''}>↘ Inf. Derecha</option>
+          </select>
+        </div>
         <div class="fg fix"><label>Ancho corte (mm)</label><input type="number" id="ss-ancho-corte-${i}" value="${s.ancho_corte||''}" placeholder="1380" oninput="supUpdSob(${i})" style="border-color:#fcd34d"></div>
         <div class="fg fix"><label>Largo corte (mm)</label><input type="number" id="ss-largo-corte-${i}" value="${s.largo_corte||''}" placeholder="9000" oninput="supUpdSob(${i})" style="border-color:#fcd34d"></div>
         <div class="fg fix" style="min-width:60px"><label>Cant.</label><input type="number" id="ss-qty-${i}" value="${s.qty||1}" min="1" oninput="supUpdSob(${i})" style="border-color:#86efac"></div>
         <div class="fg"><label>Ubicación</label><input type="text" id="ss-ref-${i}" value="${s.ref||''}" placeholder="Rack A-3..." style="border-color:#86efac"></div>
       </div>
+      <!-- Preview SVG -->
+      <div id="ss-svg-prev-${i}" style="margin-top:6px"></div>
     </div>`:s.tipo==='perfil'?`<div class="frow">
       <div class="fg fix"><label>Largo sobrante (mm)</label><input type="number" id="ss-largo-${i}" value="${s.largo||''}" placeholder="mm" oninput="supUpdSob(${i})" style="border-color:#86efac"></div>
       <div class="fg fix" style="min-width:60px"><label>Cant.</label><input type="number" id="ss-qty-${i}" value="${s.qty||1}" min="1" oninput="supUpdSob(${i})" style="border-color:#86efac"></div>
@@ -2910,12 +2921,21 @@ function supUpdSob(i){
   s.dest=document.getElementById(`ss-dest-${i}`)?.value||'stock';
   s.esp=g(`ss-esp-${i}`); s.ancho=g(`ss-ancho-${i}`); s.largo=g(`ss-largo-${i}`);
   s.ancho_corte=g(`ss-ancho-corte-${i}`); s.largo_corte=g(`ss-largo-corte-${i}`);
+  s.esq=document.getElementById(`ss-esq-${i}`)?.value||'tl';
   s.qty=g(`ss-qty-${i}`)||1; s.kgm=g(`ss-kgm-${i}`);
   s.pesoManual=g(`ss-pm-${i}`); s.desc=sv2(`ss-desc-${i}`);
   const peso=supCalcPesoSob(s);
   s.peso=peso;
   const lbl=document.getElementById(`ss-peso-lbl-${i}`);
   if(lbl) lbl.textContent=peso>0?`→ ${peso.toFixed(2)} kg`:'';
+  // Preview SVG en tiempo real
+  const prev=document.getElementById(`ss-svg-prev-${i}`);
+  if(prev && (s.tipo==='forma_l'||s.tipo==='forma_compleja') && s.esp&&s.ancho&&s.largo&&s.ancho_corte&&s.largo_corte){
+    const cortes = s.cortes_extra && s.cortes_extra.length>0
+      ? s.cortes_extra
+      : [{ac:s.ancho_corte, lc:s.largo_corte, esq:s.esq||'tl'}];
+    prev.innerHTML = formaLSVG(s.esp, s.ancho, s.largo, s.ancho_corte, s.largo_corte, cortes);
+  } else if(prev){ prev.innerHTML=''; }
   supRecalc();
 }
 
@@ -4554,59 +4574,154 @@ function openModalFase(cj, parte, fase) {
 }
 
 // ======================= STOCK =======================
-function formaLSVG(esp, ancho, largo, ancho_corte, largo_corte){
-  // Genera SVG de forma en L estilo AutoCAD
-  // ancho=total width, largo=total height, ancho_corte=cut width, largo_corte=cut height
-  // Escala proporcional, max 160x200px
-  const maxW=160, maxH=200;
+// ═══════════════════════════════════════════════════════════════
+// SISTEMA DE FORMAS COMPLEJAS — Soporta múltiples cortes
+// cortes = [{ac: ancho_corte, lc: largo_corte, esq: 'tl'|'tr'|'bl'|'br'}]
+// esq: tl=top-left, tr=top-right, bl=bottom-left, br=bottom-right
+// ═══════════════════════════════════════════════════════════════
+function calcPoligonoSobrante(W, H, cortes, sc){
+  // Genera puntos del polígono del sobrante substrayendo cortes rectangulares en esquinas
+  // Parte del rectángulo completo y va recortando esquinas
+  // cortes ordenados para construir el polígono correcto
+  // Implementación: usar coordenadas reales y generar path SVG
+  let pts = [{x:0,y:0},{x:W,y:0},{x:W,y:H},{x:0,y:H}]; // rect base en sentido horario
+  
+  cortes.forEach(c => {
+    const cw = Math.round(c.ac * sc);
+    const ch = Math.round(c.lc * sc);
+    if(!cw || !ch) return;
+    const esq = c.esq || 'tl';
+    // Para cada esquina, recortar el rectángulo del polígono
+    if(esq === 'tl'){
+      // Quitar esquina superior izquierda: insertar escotadura en (0,0)
+      pts = pts.filter(p=>!(p.x===0&&p.y===0));
+      // Insertar puntos de escotadura en posición correcta
+      const idx = pts.findIndex(p=>p.x===W&&p.y===0);
+      pts.splice(idx, 0, {x:cw,y:0}, {x:cw,y:ch}, {x:0,y:ch});
+    } else if(esq === 'tr'){
+      pts = pts.filter(p=>!(p.x===W&&p.y===0));
+      const idx = pts.findIndex(p=>p.x===W&&p.y===H);
+      pts.splice(idx, 0, {x:W,y:ch}, {x:W-cw,y:ch}, {x:W-cw,y:0});
+    } else if(esq === 'br'){
+      pts = pts.filter(p=>!(p.x===W&&p.y===H));
+      const idx = pts.findIndex(p=>p.x===0&&p.y===H);
+      pts.splice(idx, 0, {x:W-cw,y:H}, {x:W-cw,y:H-ch}, {x:W,y:H-ch});
+    } else if(esq === 'bl'){
+      pts = pts.filter(p=>!(p.x===0&&p.y===H));
+      const idx = pts.findIndex(p=>p.x===0&&p.y===0);
+      pts.splice(idx, 0, {x:0,y:H-ch}, {x:cw,y:H-ch}, {x:cw,y:H});
+    }
+  });
+  return pts;
+}
+
+function rayasCorte(x, y, cw, ch, uid){
+  // Genera rayas diagonales rojas para zona cortada
+  return `<rect x="${x}" y="${y}" width="${cw}" height="${ch}" fill="#1a1a2e" stroke="#cc0000" stroke-width="0.8"/>
+  <clipPath id="cl${uid}"><rect x="${x}" y="${y}" width="${cw}" height="${ch}"/></clipPath>
+  <g clip-path="url(#cl${uid})">
+    ${Array.from({length:14},(_,i)=>`<line x1="${x+i*12-12}" y1="${y}" x2="${x+cw}" y2="${y+ch-(i*12-12)*ch/cw}" stroke="#cc0000" stroke-width="0.6"/>
+    <line x1="${x}" y1="${y+i*12}" x2="${x+cw-(ch-i*12)*cw/ch}" y2="${y+ch}" stroke="#cc0000" stroke-width="0.6"/>`).join('')}
+  </g>`;
+}
+
+function cotaH(x1, x2, y, label){
+  return `<line x1="${x1}" y1="${y}" x2="${x2}" y2="${y}" stroke="#ff0000" stroke-width="0.7"/>
+  <line x1="${x1}" y1="${y-3}" x2="${x1}" y2="${y+3}" stroke="#ff0000" stroke-width="0.7"/>
+  <line x1="${x2}" y1="${y-3}" x2="${x2}" y2="${y+3}" stroke="#ff0000" stroke-width="0.7"/>
+  <text x="${(x1+x2)/2}" y="${y-4}" text-anchor="middle" font-size="8" fill="#ff0000">${label}</text>`;
+}
+
+function cotaV(x, y1, y2, label){
+  return `<line x1="${x}" y1="${y1}" x2="${x}" y2="${y2}" stroke="#ff0000" stroke-width="0.7"/>
+  <line x1="${x-3}" y1="${y1}" x2="${x+3}" y2="${y1}" stroke="#ff0000" stroke-width="0.7"/>
+  <line x1="${x-3}" y1="${y2}" x2="${x+3}" y2="${y2}" stroke="#ff0000" stroke-width="0.7"/>
+  <text x="${x-5}" y="${(y1+y2)/2}" text-anchor="middle" font-size="8" fill="#ff0000" transform="rotate(-90,${x-5},${(y1+y2)/2})">${label}</text>`;
+}
+
+function formaLSVG(esp, ancho, largo, ancho_corte, largo_corte, cortes_extra){
+  // Compatibilidad hacia atrás: si no hay cortes_extra, usar el corte único TL
+  const todosCortes = cortes_extra && cortes_extra.length > 0
+    ? cortes_extra
+    : [{ac: ancho_corte||0, lc: largo_corte||0, esq: 'tl'}];
+  
+  const maxW=180, maxH=220;
   const scX=maxW/ancho, scY=maxH/largo;
   const sc=Math.min(scX,scY)*0.7;
   const W=Math.round(ancho*sc), H=Math.round(largo*sc);
-  const CW=Math.round(ancho_corte*sc), CH=Math.round(largo_corte*sc);
-  const ox=40, oy=25;
-  const vw=W+ox+30, vh=H+oy+30;
+  const ox=45, oy=28;
+  const vw=W+ox+40, vh=H+oy+35;
+
+  // Calcular polígono del sobrante
+  const pts = calcPoligonoSobrante(W, H, todosCortes, sc);
+  const polyPts = pts.map(p=>`${p.x},${p.y}`).join(' ');
+
+  // Generar rayas para cada corte
+  let rayasHTML = '';
+  todosCortes.forEach((c, i) => {
+    const cw = Math.round(c.ac * sc);
+    const ch = Math.round(c.lc * sc);
+    if(!cw || !ch) return;
+    const esq = c.esq || 'tl';
+    let rx=0, ry=0;
+    if(esq==='tl'){rx=0;ry=0;}
+    else if(esq==='tr'){rx=W-cw;ry=0;}
+    else if(esq==='br'){rx=W-cw;ry=H-ch;}
+    else if(esq==='bl'){rx=0;ry=H-ch;}
+    rayasHTML += rayasCorte(rx, ry, cw, ch, esp+'_'+i);
+  });
+
+  // Cotas principales
+  let cotasHTML = '';
+  cotasHTML += cotaH(0, W, H+14, ancho);   // ancho total abajo
+  cotasHTML += cotaV(-14, 0, H, largo);    // largo total izq
+
+  // Cotas de cada corte
+  todosCortes.forEach((c, i) => {
+    const cw = Math.round(c.ac * sc);
+    const ch = Math.round(c.lc * sc);
+    if(!cw || !ch) return;
+    const esq = c.esq || 'tl';
+    const color = ['#ff6600','#ffcc00','#ff00ff','#00ccff'][i%4];
+    // Cota ancho del corte
+    if(esq==='tl'||esq==='bl'){
+      cotasHTML += `<line x1="0" y1="-${16+i*10}" x2="${cw}" y2="-${16+i*10}" stroke="${color}" stroke-width="0.7"/>
+      <line x1="0" y1="-${19+i*10}" x2="0" y2="-${13+i*10}" stroke="${color}" stroke-width="0.7"/>
+      <line x1="${cw}" y1="-${19+i*10}" x2="${cw}" y2="-${13+i*10}" stroke="${color}" stroke-width="0.7"/>
+      <text x="${cw/2}" y="-${20+i*10}" text-anchor="middle" font-size="7" fill="${color}">${c.ac}</text>`;
+    } else {
+      cotasHTML += `<line x1="${W-cw}" y1="-${16+i*10}" x2="${W}" y2="-${16+i*10}" stroke="${color}" stroke-width="0.7"/>
+      <line x1="${W-cw}" y1="-${19+i*10}" x2="${W-cw}" y2="-${13+i*10}" stroke="${color}" stroke-width="0.7"/>
+      <line x1="${W}" y1="-${19+i*10}" x2="${W}" y2="-${13+i*10}" stroke="${color}" stroke-width="0.7"/>
+      <text x="${W-cw/2}" y="-${20+i*10}" text-anchor="middle" font-size="7" fill="${color}">${c.ac}</text>`;
+    }
+    // Cota largo del corte
+    const xCota = W+(18+i*10);
+    if(esq==='tl'||esq==='tr'){
+      cotasHTML += `<line x1="${xCota}" y1="0" x2="${xCota}" y2="${ch}" stroke="${color}" stroke-width="0.7"/>
+      <line x1="${xCota-3}" y1="0" x2="${xCota+3}" y2="0" stroke="${color}" stroke-width="0.7"/>
+      <line x1="${xCota-3}" y1="${ch}" x2="${xCota+3}" y2="${ch}" stroke="${color}" stroke-width="0.7"/>
+      <text x="${xCota+8}" y="${ch/2}" text-anchor="middle" font-size="7" fill="${color}" transform="rotate(90,${xCota+8},${ch/2})">${c.lc}</text>`;
+    } else {
+      cotasHTML += `<line x1="${xCota}" y1="${H-ch}" x2="${xCota}" y2="${H}" stroke="${color}" stroke-width="0.7"/>
+      <line x1="${xCota-3}" y1="${H-ch}" x2="${xCota+3}" y2="${H-ch}" stroke="${color}" stroke-width="0.7"/>
+      <line x1="${xCota-3}" y1="${H}" x2="${xCota+3}" y2="${H}" stroke="${color}" stroke-width="0.7"/>
+      <text x="${xCota+8}" y="${H-ch/2}" text-anchor="middle" font-size="7" fill="${color}" transform="rotate(90,${xCota+8},${H-ch/2})">${c.lc}</text>`;
+    }
+  });
+
+  // Etiqueta de área útil
+  const areaTotal = ancho * largo;
+  const areaCortes = todosCortes.reduce((s,c)=>s+(c.ac||0)*(c.lc||0), 0);
+  const areaUtil = areaTotal - areaCortes;
+  const pesoUtil = (esp * areaUtil * 7.85e-6).toFixed(1);
+
   return `<svg viewBox="0 0 ${vw} ${vh}" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:${vw}px;background:#1a1a2e;border-radius:6px;padding:4px">
     <g transform="translate(${ox},${oy})">
-      <!-- Zona cortada arriba izquierda con rayas -->
-      <rect x="0" y="0" width="${CW}" height="${CH}" fill="#1a1a2e" stroke="#cc0000" stroke-width="1"/>
-      <clipPath id="fcl_${esp}"><rect x="0" y="0" width="${CW}" height="${CH}"/></clipPath>
-      <g clip-path="url(#fcl_${esp})">
-        ${Array.from({length:12},(_,i)=>`<line x1="${i*14-14}" y1="0" x2="${CW}" y2="${CH-(i*14-14)*CH/CW}" stroke="#cc0000" stroke-width="0.8"/>
-         <line x1="0" y1="${i*14}" x2="${CW-(CH-i*14)*CW/CH}" y2="${CH}" stroke="#cc0000" stroke-width="0.8"/>`).join('')}
-      </g>
-      <!-- Sobrante verde -->
-      <polygon points="0,${CH} ${CW},${CH} ${CW},0 ${W},0 ${W},${H} 0,${H}"
-        fill="none" stroke="#00cc44" stroke-width="1.5"/>
-      <!-- Cota ancho_corte arriba izq -->
-      <line x1="0" y1="-10" x2="${CW}" y2="-10" stroke="#ff0000" stroke-width="0.7"/>
-      <line x1="0" y1="-13" x2="0" y2="-7" stroke="#ff0000" stroke-width="0.7"/>
-      <line x1="${CW}" y1="-13" x2="${CW}" y2="-7" stroke="#ff0000" stroke-width="0.7"/>
-      <text x="${CW/2}" y="-14" text-anchor="middle" font-size="8" fill="#ff0000">${ancho_corte}</text>
-      <!-- Cota ancho sobrante arriba der -->
-      <line x1="${CW}" y1="-10" x2="${W}" y2="-10" stroke="#ff0000" stroke-width="0.7"/>
-      <line x1="${W}" y1="-13" x2="${W}" y2="-7" stroke="#ff0000" stroke-width="0.7"/>
-      <text x="${CW+(W-CW)/2}" y="-14" text-anchor="middle" font-size="8" fill="#ff0000">${ancho-ancho_corte}</text>
-      <!-- Cota largo_corte izq arriba -->
-      <line x1="-12" y1="0" x2="-12" y2="${CH}" stroke="#ff0000" stroke-width="0.7"/>
-      <line x1="-15" y1="0" x2="-9" y2="0" stroke="#ff0000" stroke-width="0.7"/>
-      <line x1="-15" y1="${CH}" x2="-9" y2="${CH}" stroke="#ff0000" stroke-width="0.7"/>
-      <text x="-20" y="${CH/2}" text-anchor="middle" font-size="8" fill="#ff0000" transform="rotate(-90,-20,${CH/2})">${largo_corte}</text>
-      <!-- Cota resto largo izq abajo -->
-      <line x1="-12" y1="${CH}" x2="-12" y2="${H}" stroke="#ff0000" stroke-width="0.7"/>
-      <line x1="-15" y1="${H}" x2="-9" y2="${H}" stroke="#ff0000" stroke-width="0.7"/>
-      <text x="-20" y="${CH+(H-CH)/2}" text-anchor="middle" font-size="8" fill="#ff0000" transform="rotate(-90,-20,${CH+(H-CH)/2})">${largo-largo_corte}</text>
-      <!-- Cota ancho total abajo -->
-      <line x1="0" y1="${H+12}" x2="${W}" y2="${H+12}" stroke="#ff0000" stroke-width="0.7"/>
-      <line x1="0" y1="${H+9}" x2="0" y2="${H+15}" stroke="#ff0000" stroke-width="0.7"/>
-      <line x1="${W}" y1="${H+9}" x2="${W}" y2="${H+15}" stroke="#ff0000" stroke-width="0.7"/>
-      <text x="${W/2}" y="${H+22}" text-anchor="middle" font-size="8" fill="#ff0000">${ancho}</text>
-      <!-- Cota largo total derecha -->
-      <line x1="${W+12}" y1="0" x2="${W+12}" y2="${H}" stroke="#ff0000" stroke-width="0.7"/>
-      <line x1="${W+9}" y1="0" x2="${W+15}" y2="0" stroke="#ff0000" stroke-width="0.7"/>
-      <line x1="${W+9}" y1="${H}" x2="${W+15}" y2="${H}" stroke="#ff0000" stroke-width="0.7"/>
-      <text x="${W+22}" y="${H/2}" text-anchor="middle" font-size="8" fill="#ff0000" transform="rotate(90,${W+22},${H/2})">${largo}</text>
-      <!-- Etiqueta espesor -->
-      <text x="${CW+(W-CW)/2}" y="${CH+(H-CH)/2}" text-anchor="middle" font-size="11" fill="#00cc44" font-weight="bold">${esp}mm</text>
+      ${rayasHTML}
+      <polygon points="${polyPts}" fill="#00cc4422" stroke="#00cc44" stroke-width="1.5"/>
+      ${cotasHTML}
+      <text x="${W/2}" y="${H/2}" text-anchor="middle" font-size="10" fill="#00cc44" font-weight="bold">${esp}mm · ~${pesoUtil}kg</text>
     </g>
   </svg>`;
 }
@@ -4631,8 +4746,9 @@ function renderStock(){
     <div class="kpi"><div class="kpi-lbl">Ítems en stock</div><div class="kpi-val">${nStock}</div><div class="kpi-sub">piezas sobrantes</div></div>`;
 
   document.getElementById('st-tbody').innerHTML=filtered.length?filtered.map(s=>{
-    const esL=s.tipo==='forma_l'&&s.ancho_corte>0&&s.largo_corte>0;
-    const svgDibujo=esL?formaLSVG(s.esp,s.ancho,s.largo,s.ancho_corte,s.largo_corte):'';
+    const esL=(s.tipo==='forma_l'||s.tipo==='forma_compleja')&&s.ancho_corte>0&&s.largo_corte>0;
+    const cortesExtra = s.cortes_extra && s.cortes_extra.length>0 ? s.cortes_extra : [{ac:s.ancho_corte, lc:s.largo_corte, esq:s.esq||'tl'}];
+    const svgDibujo=esL?formaLSVG(s.esp,s.ancho,s.largo,s.ancho_corte,s.largo_corte,cortesExtra):''
     const saldoColor=s.saldo<=0?'#991b1b':s.saldo<s.pesoOriginal?'#b45309':'#166534';
     const saldoLabel=s.saldo<=0
       ?'<span style="color:#991b1b;font-weight:800">AGOTADO</span>'
@@ -4642,7 +4758,7 @@ function renderStock(){
     return `<tr style="cursor:${esL?'pointer':'default'};opacity:${s.saldo<=0?'0.5':'1'}" onclick="${esL?`toggleFormaL('fl_${s._key||s.id}')`:''}" title="${esL?'Clic para ver dibujo':''}">
     <td>${s.fecha||'—'}</td>
     <td><span style="font-weight:700;color:#3730a3;">📋 ${s.colada}</span><br>
-      <span style="font-size:9px;color:var(--gm);">${s.tipo==='forma_l'?'⌐ Forma en L':s.tipo}</span>
+      <span style="font-size:9px;color:var(--gm);">${s.tipo==='forma_l'?'⌐ Forma en L':s.tipo==='forma_compleja'?'⌐⌐ Forma compleja':s.tipo}</span>
     </td>
     <td>${s.grado}</td>
     <td class="r">${s.esp||'—'}</td>

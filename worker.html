@@ -2012,7 +2012,8 @@ function wkMatHTML(m,i){
           </select>
           ${m.stockRef ? `<div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:8px;font-size:12px;color:#065f46">
             ✅ <strong>${m.colada||'—'}</strong> · ${m.esp}×${m.ancho}×${m.largo}mm · <strong>${(m.peso||0).toFixed(1)} kg</strong>
-            ${m.tipo==='forma_l'?'<br><span style="color:#3b6d11">⌐ Forma en L — corte: '+m.ancho_corte+'×'+m.largo_corte+'mm</span>':''}
+            ${(m.tipo==='forma_l'||m.tipoOrig==='forma_l'||m.tipoOrig==='forma_compleja')?'<br><span style="color:#3b6d11">⌐ Forma en L — corte: '+m.ancho_corte+'×'+m.largo_corte+'mm</span>':''}
+          <div id="wm-stock-svg-${i}" style="display:none;margin-top:6px"></div>
           </div>` : '<div style="font-size:11px;color:#6b7280">Selecciona un sobrante para usar como materia prima</div>'}
         </div>`
       : `<div style="margin-top:.375rem;background:#fef3c7;border-radius:8px;padding:.75rem;font-size:12px;color:#92400e">
@@ -2078,6 +2079,13 @@ function wkSelStock(i){
   if(isNaN(idx)||idx<0) return;
   const stocks=wkStockDisponible();
   const s=stocks[idx]; if(!s) return;
+  // Mostrar SVG del sobrante seleccionado
+  const prevEl = document.getElementById(`wm-stock-svg-${i}`);
+  if(prevEl && (s.tipo==='forma_l'||s.tipo==='forma_compleja') && s.ancho_corte>0 && s.largo_corte>0){
+    const cortesE = s.cortes_extra && s.cortes_extra.length>0 ? s.cortes_extra : [{ac:s.ancho_corte,lc:s.largo_corte,esq:s.esq||'tl'}];
+    prevEl.innerHTML = formaLSVG_wk(s.esp,s.ancho,s.largo,s.ancho_corte,s.largo_corte,cortesE);
+    prevEl.style.display='';
+  } else if(prevEl){ prevEl.innerHTML=''; prevEl.style.display='none'; }
   wkMateriales[i]={
     ...wkMateriales[i],
     tipo:'desde_stock',
@@ -3711,45 +3719,121 @@ function setCal(v){
 const FCLS={Corte:'fc',Armado:'fa',Soldadura:'fsold',Perforaciones:'fperf','Limpieza Mecánica':'flim',Pintura:'fpin'};
 const FICON={Corte:'✂',Armado:'🔧',Soldadura:'🔥',Perforaciones:'🔩','Limpieza Mecánica':'🧹',Pintura:'🎨'};
 
-function formaLSVG_wk(esp, ancho, largo, ancho_corte, largo_corte){
-  const maxW=240, maxH=200;
+// Función SVG universal — soporta múltiples cortes en cualquier esquina
+// cortes = [{ac, lc, esq: 'tl'|'tr'|'bl'|'br'}]
+function calcPoligonoSobrante_wk(W, H, cortes, sc){
+  let pts = [{x:0,y:0},{x:W,y:0},{x:W,y:H},{x:0,y:H}];
+  cortes.forEach(c => {
+    const cw = Math.round(c.ac * sc);
+    const ch = Math.round(c.lc * sc);
+    if(!cw || !ch) return;
+    const esq = c.esq || 'tl';
+    if(esq === 'tl'){
+      pts = pts.filter(p=>!(p.x===0&&p.y===0));
+      const idx = pts.findIndex(p=>p.x===W&&p.y===0);
+      pts.splice(idx, 0, {x:cw,y:0}, {x:cw,y:ch}, {x:0,y:ch});
+    } else if(esq === 'tr'){
+      pts = pts.filter(p=>!(p.x===W&&p.y===0));
+      const idx = pts.findIndex(p=>p.x===W&&p.y===H);
+      pts.splice(idx, 0, {x:W,y:ch}, {x:W-cw,y:ch}, {x:W-cw,y:0});
+    } else if(esq === 'br'){
+      pts = pts.filter(p=>!(p.x===W&&p.y===H));
+      const idx = pts.findIndex(p=>p.x===0&&p.y===H);
+      pts.splice(idx, 0, {x:W-cw,y:H}, {x:W-cw,y:H-ch}, {x:W,y:H-ch});
+    } else if(esq === 'bl'){
+      pts = pts.filter(p=>!(p.x===0&&p.y===H));
+      const idx = pts.findIndex(p=>p.x===0&&p.y===0);
+      pts.splice(idx, 0, {x:0,y:H-ch}, {x:cw,y:H-ch}, {x:cw,y:H});
+    }
+  });
+  return pts;
+}
+
+function formaLSVG_wk(esp, ancho, largo, ancho_corte, largo_corte, cortes_extra){
+  const todosCortes = cortes_extra && cortes_extra.length>0
+    ? cortes_extra
+    : [{ac: ancho_corte||0, lc: largo_corte||0, esq: 'tl'}];
+  const maxW=300, maxH=260;
   const sc=Math.min(maxW/ancho, maxH/largo)*0.65;
   const W=Math.round(ancho*sc), H=Math.round(largo*sc);
-  const CW=Math.round(ancho_corte*sc), CH=Math.round(largo_corte*sc);
-  const ox=38, oy=22;
-  const vw=W+ox+28, vh=H+oy+28;
-  return `<svg viewBox="0 0 ${vw} ${vh}" xmlns="http://www.w3.org/2000/svg" style="width:100%;background:#1a1a2e;border-radius:6px;margin-top:6px">
+  const ox=42, oy=25;
+  const vw=W+ox+50, vh=H+oy+35;
+
+  const pts = calcPoligonoSobrante_wk(W, H, todosCortes, sc);
+  const polyPts = pts.map(p=>`${p.x},${p.y}`).join(' ');
+
+  let rayasHTML = '';
+  todosCortes.forEach((c, i) => {
+    const cw = Math.round(c.ac * sc);
+    const ch = Math.round(c.lc * sc);
+    if(!cw || !ch) return;
+    const esq = c.esq || 'tl';
+    let rx=0, ry=0;
+    if(esq==='tl'){rx=0;ry=0;}
+    else if(esq==='tr'){rx=W-cw;ry=0;}
+    else if(esq==='br'){rx=W-cw;ry=H-ch;}
+    else if(esq==='bl'){rx=0;ry=H-ch;}
+    const uid = `wk${esp}_${i}_${ancho}`;
+    rayasHTML += `<rect x="${rx}" y="${ry}" width="${cw}" height="${ch}" fill="#1a1a2e" stroke="#cc0000" stroke-width="0.8"/>
+    <clipPath id="cl${uid}"><rect x="${rx}" y="${ry}" width="${cw}" height="${ch}"/></clipPath>
+    <g clip-path="url(#cl${uid})">
+      ${Array.from({length:12},(_,j)=>`<line x1="${rx+j*14-14}" y1="${ry}" x2="${rx+cw}" y2="${ry+ch}" stroke="#cc0000" stroke-width="0.6"/>
+      <line x1="${rx}" y1="${ry+j*14}" x2="${rx+cw}" y2="${ry+ch}" stroke="#cc0000" stroke-width="0.6"/>`).join('')}
+    </g>`;
+  });
+
+  // Cotas totales
+  let cotasHTML = `
+    <line x1="0" y1="${H+14}" x2="${W}" y2="${H+14}" stroke="#ff0000" stroke-width="0.7"/>
+    <line x1="0" y1="${H+11}" x2="0" y2="${H+17}" stroke="#ff0000" stroke-width="0.7"/>
+    <line x1="${W}" y1="${H+11}" x2="${W}" y2="${H+17}" stroke="#ff0000" stroke-width="0.7"/>
+    <text x="${W/2}" y="${H+24}" text-anchor="middle" font-size="9" fill="#ff0000">${ancho}</text>
+    <line x1="-14" y1="0" x2="-14" y2="${H}" stroke="#ff0000" stroke-width="0.7"/>
+    <line x1="-17" y1="0" x2="-11" y2="0" stroke="#ff0000" stroke-width="0.7"/>
+    <line x1="-17" y1="${H}" x2="-11" y2="${H}" stroke="#ff0000" stroke-width="0.7"/>
+    <text x="-22" y="${H/2}" text-anchor="middle" font-size="9" fill="#ff0000" transform="rotate(-90,-22,${H/2})">${largo}</text>`;
+
+  // Cotas por corte con colores
+  todosCortes.forEach((c, i) => {
+    const cw = Math.round(c.ac * sc);
+    const ch = Math.round(c.lc * sc);
+    if(!cw || !ch) return;
+    const esq = c.esq || 'tl';
+    const color = ['#ff6600','#ffcc00','#ff00ff','#00ccff'][i%4];
+    const xCota = W+(20+i*14);
+    if(esq==='tl'||esq==='tr'){
+      const x1 = esq==='tl' ? 0 : W-cw;
+      cotasHTML += `<line x1="${x1}" y1="-${18+i*12}" x2="${x1+cw}" y2="-${18+i*12}" stroke="${color}" stroke-width="0.8"/>
+      <line x1="${x1}" y1="-${21+i*12}" x2="${x1}" y2="-${15+i*12}" stroke="${color}" stroke-width="0.8"/>
+      <line x1="${x1+cw}" y1="-${21+i*12}" x2="${x1+cw}" y2="-${15+i*12}" stroke="${color}" stroke-width="0.8"/>
+      <text x="${x1+cw/2}" y="-${22+i*12}" text-anchor="middle" font-size="8" fill="${color}">${c.ac}</text>
+      <line x1="${xCota}" y1="0" x2="${xCota}" y2="${ch}" stroke="${color}" stroke-width="0.8"/>
+      <line x1="${xCota-3}" y1="0" x2="${xCota+3}" y2="0" stroke="${color}" stroke-width="0.8"/>
+      <line x1="${xCota-3}" y1="${ch}" x2="${xCota+3}" y2="${ch}" stroke="${color}" stroke-width="0.8"/>
+      <text x="${xCota+10}" y="${ch/2}" text-anchor="middle" font-size="8" fill="${color}" transform="rotate(90,${xCota+10},${ch/2})">${c.lc}</text>`;
+    } else {
+      const x1 = esq==='bl' ? 0 : W-cw;
+      cotasHTML += `<line x1="${x1}" y1="${H+18+i*12}" x2="${x1+cw}" y2="${H+18+i*12}" stroke="${color}" stroke-width="0.8"/>
+      <line x1="${x1}" y1="${H+15+i*12}" x2="${x1}" y2="${H+21+i*12}" stroke="${color}" stroke-width="0.8"/>
+      <line x1="${x1+cw}" y1="${H+15+i*12}" x2="${x1+cw}" y2="${H+21+i*12}" stroke="${color}" stroke-width="0.8"/>
+      <text x="${x1+cw/2}" y="${H+28+i*12}" text-anchor="middle" font-size="8" fill="${color}">${c.ac}</text>
+      <line x1="${xCota}" y1="${H-ch}" x2="${xCota}" y2="${H}" stroke="${color}" stroke-width="0.8"/>
+      <line x1="${xCota-3}" y1="${H-ch}" x2="${xCota+3}" y2="${H-ch}" stroke="${color}" stroke-width="0.8"/>
+      <line x1="${xCota-3}" y1="${H}" x2="${xCota+3}" y2="${H}" stroke="${color}" stroke-width="0.8"/>
+      <text x="${xCota+10}" y="${H-ch/2}" text-anchor="middle" font-size="8" fill="${color}" transform="rotate(90,${xCota+10},${H-ch/2})">${c.lc}</text>`;
+    }
+  });
+
+  const areaUtil = ancho*largo - todosCortes.reduce((s,c)=>s+(c.ac||0)*(c.lc||0),0);
+  const pesoUtil = (esp * areaUtil * 7.85e-6).toFixed(1);
+
+  return `<svg viewBox="0 0 ${vw} ${vh}" xmlns="http://www.w3.org/2000/svg" style="width:100%;background:#1a1a2e;border-radius:8px;margin-top:6px">
     <g transform="translate(${ox},${oy})">
-      <rect x="0" y="0" width="${CW}" height="${CH}" fill="#1a1a2e" stroke="#cc0000" stroke-width="1"/>
-      <clipPath id="wfl${esp}${ancho}"><rect x="0" y="0" width="${CW}" height="${CH}"/></clipPath>
-      <g clip-path="url(#wfl${esp}${ancho})">
-        ${Array.from({length:10},(_,i)=>`<line x1="${i*16-16}" y1="0" x2="${CW}" y2="${CH}" stroke="#cc0000" stroke-width="0.8"/>
-        <line x1="0" y1="${i*16}" x2="${CW}" y2="${CH}" stroke="#cc0000" stroke-width="0.8"/>`).join('')}
-      </g>
-      <polygon points="0,${CH} ${CW},${CH} ${CW},0 ${W},0 ${W},${H} 0,${H}" fill="none" stroke="#00cc44" stroke-width="1.5"/>
-      <line x1="0" y1="-10" x2="${CW}" y2="-10" stroke="#ff0000" stroke-width="0.7"/>
-      <line x1="0" y1="-13" x2="0" y2="-7" stroke="#ff0000" stroke-width="0.7"/>
-      <line x1="${CW}" y1="-13" x2="${CW}" y2="-7" stroke="#ff0000" stroke-width="0.7"/>
-      <text x="${CW/2}" y="-13" text-anchor="middle" font-size="8" fill="#ff0000">${ancho_corte}</text>
-      <line x1="${CW}" y1="-10" x2="${W}" y2="-10" stroke="#ff0000" stroke-width="0.7"/>
-      <line x1="${W}" y1="-13" x2="${W}" y2="-7" stroke="#ff0000" stroke-width="0.7"/>
-      <text x="${CW+(W-CW)/2}" y="-13" text-anchor="middle" font-size="8" fill="#ff0000">${ancho-ancho_corte}</text>
-      <line x1="-12" y1="0" x2="-12" y2="${CH}" stroke="#ff0000" stroke-width="0.7"/>
-      <line x1="-15" y1="0" x2="-9" y2="0" stroke="#ff0000" stroke-width="0.7"/>
-      <line x1="-15" y1="${CH}" x2="-9" y2="${CH}" stroke="#ff0000" stroke-width="0.7"/>
-      <text x="-20" y="${CH/2}" text-anchor="middle" font-size="8" fill="#ff0000" transform="rotate(-90,-20,${CH/2})">${largo_corte}</text>
-      <line x1="-12" y1="${CH}" x2="-12" y2="${H}" stroke="#ff0000" stroke-width="0.7"/>
-      <line x1="-15" y1="${H}" x2="-9" y2="${H}" stroke="#ff0000" stroke-width="0.7"/>
-      <text x="-20" y="${CH+(H-CH)/2}" text-anchor="middle" font-size="8" fill="#ff0000" transform="rotate(-90,-20,${CH+(H-CH)/2})">${largo-largo_corte}</text>
-      <line x1="0" y1="${H+12}" x2="${W}" y2="${H+12}" stroke="#ff0000" stroke-width="0.7"/>
-      <line x1="0" y1="${H+9}" x2="0" y2="${H+15}" stroke="#ff0000" stroke-width="0.7"/>
-      <line x1="${W}" y1="${H+9}" x2="${W}" y2="${H+15}" stroke="#ff0000" stroke-width="0.7"/>
-      <text x="${W/2}" y="${H+22}" text-anchor="middle" font-size="8" fill="#ff0000">${ancho}</text>
-      <line x1="${W+12}" y1="0" x2="${W+12}" y2="${H}" stroke="#ff0000" stroke-width="0.7"/>
-      <line x1="${W+9}" y1="0" x2="${W+15}" y2="0" stroke="#ff0000" stroke-width="0.7"/>
-      <line x1="${W+9}" y1="${H}" x2="${W+15}" y2="${H}" stroke="#ff0000" stroke-width="0.7"/>
-      <text x="${W+22}" y="${H/2}" text-anchor="middle" font-size="8" fill="#ff0000" transform="rotate(90,${W+22},${H/2})">${largo}</text>
-      <text x="${CW+(W-CW)/2}" y="${CH+(H-CH)/2}" text-anchor="middle" font-size="11" fill="#00cc44" font-weight="bold">${esp}mm</text>
+      ${rayasHTML}
+      <polygon points="${polyPts}" fill="#00cc4418" stroke="#00cc44" stroke-width="2"/>
+      ${cotasHTML}
+      <text x="${W/2}" y="${H/2}" text-anchor="middle" font-size="11" fill="#00cc44" font-weight="bold">${esp}mm</text>
+      <text x="${W/2}" y="${H/2+14}" text-anchor="middle" font-size="9" fill="#86efac">~${pesoUtil} kg útil</text>
     </g>
   </svg>`;
 }
@@ -3771,7 +3855,10 @@ function renderHistItems(recs){
         extra+=`<div style="font-size:11px;color:var(--g);margin-top:3px;cursor:${esL?'pointer':'default'}" ${esL?`onclick="document.getElementById('${svgId}').style.display=document.getElementById('${svgId}').style.display==='none'?'':'none'"`:''}">
           📦 ${esL?'⌐ Forma en L · ':''}Sob: ${ps.toFixed(1)} kg${esL?' 👆 toca para ver':''}
         </div>`;
-        if(esL) extra+=`<div id="${svgId}" style="display:none">${formaLSVG_wk(s.esp,s.ancho,s.largo,s.ancho_corte,s.largo_corte)}</div>`;
+        if(esL){
+          const cortesE = s.cortes_extra && s.cortes_extra.length>0 ? s.cortes_extra : [{ac:s.ancho_corte,lc:s.largo_corte,esq:s.esq||'tl'}];
+          extra+=`<div id="${svgId}" style="display:none">${formaLSVG_wk(s.esp,s.ancho,s.largo,s.ancho_corte,s.largo_corte,cortesE)}</div>`;
+        }
       });
       if(!sobs.length&&r.sob_hay==='si'&&r.sob_peso) extra+=`<div style="font-size:11px;color:var(--g);margin-top:1px">📦 Sob: ${r.sob_peso} kg</div>`;
       if(r.desperdicio)extra+=`<div style="font-size:11px;color:var(--r);margin-top:1px">🗑 Desp: ${r.desperdicio} kg</div>`;
