@@ -2469,25 +2469,38 @@ function _calcStockSaldos(){
     }
   });
 
-  // 2. Descontar lo que se usó en cortes posteriores
+  // 2. Rastrear cadena de sobrantes — solo el último de cada cadena queda activo
+  // Lógica: cuando un corte usa desde_stock (consume un sobrante) y genera
+  // un nuevo sobrante con la misma colada+esp pero menor peso,
+  // el sobrante anterior queda bloqueado y el nuevo lo reemplaza.
   ST.cortes.forEach(c=>{
     const planchas=(()=>{try{return JSON.parse(c.pl_planchas||'[]');}catch(e){return[];}})();
     planchas.forEach(m=>{
       if(m.tipo==='desde_stock'){
-        // Descontar por key exacto
+        // Bloquear el sobrante exacto que fue consumido (por stockRef)
         if(m.stockRef && sobs[m.stockRef]){
-          const pesoUsado=m.peso||sobs[m.stockRef].pesoOriginal;
-          sobs[m.stockRef].saldo=Math.max(0,sobs[m.stockRef].saldo-pesoUsado);
+          sobs[m.stockRef].saldo = 0;
         }
-        // Descontar también sobrantes con misma colada+esp registrados ANTES del corte actual
+        // Bloquear también sobrantes anteriores de la misma colada+esp
+        // que fueron reemplazados por uno nuevo con menor peso
         if(m.colada && m.colada !== '—'){
-          Object.values(sobs).forEach(s=>{
-            if(s.colada===m.colada && s.esp===(m.esp||0) && s._key!==m.stockRef){
-              if(c.id > s._recId){
-                s.saldo = Math.max(0, s.saldo - (m.peso||s.pesoOriginal));
+          // Los nuevos sobrantes generados en ESTE corte (mismo c.id)
+          const nuevosSob = Object.values(sobs).filter(s=>
+            s._recId === c.id &&
+            s.colada === m.colada &&
+            Number(s.esp) === Number(m.esp||0)
+          );
+          // Si este corte generó un nuevo sobrante con esa colada,
+          // entonces todos los anteriores quedan bloqueados
+          if(nuevosSob.length > 0){
+            Object.values(sobs).forEach(s=>{
+              if(s.colada === m.colada &&
+                 Number(s.esp) === Number(m.esp||0) &&
+                 Number(s._recId) < Number(c.id)){
+                s.saldo = 0;
               }
-            }
-          });
+            });
+          }
         }
       }
     });

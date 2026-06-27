@@ -2071,36 +2071,40 @@ function wkStockDisponible(){
     });
   });
 
-  // 2. Descontar lo que ya se usó en cortes posteriores
-  // Usar stockRef (key exacto) O stockRecId+stockSobIdx para compatibilidad
+  // 2. Rastrear cadena de sobrantes — solo el último de cada cadena queda activo
   recs.forEach(c=>{
     const planchas=(()=>{try{return JSON.parse(c.pl_planchas||'[]');}catch(e){return[];}})();
     planchas.forEach(m=>{
       if(m.tipo==='desde_stock'){
-        // Descontar por key exacto
+        // Bloquear sobrante exacto consumido
         if(m.stockRef && saldos[m.stockRef]){
-          saldos[m.stockRef].saldo = Math.max(0, saldos[m.stockRef].saldo - (m.peso||saldos[m.stockRef].pesoOriginal));
+          saldos[m.stockRef].saldo = 0;
         }
-        // También marcar agotado cualquier sobrante con la misma colada+esp que fue usado
-        // Esto evita que un sobrante "re-registrado" con misma colada aparezca disponible
+        // Bloquear anteriores de la misma cadena (colada+esp)
         if(m.colada && m.colada !== '—'){
-          Object.values(saldos).forEach(s=>{
-            if(s.colada === m.colada && s.esp === (m.esp||0) && s._key !== m.stockRef){
-              // Solo descontar si el registro que lo usó es POSTERIOR al que generó el sobrante
-              if(c.id > s._recId){
-                s.saldo = Math.max(0, s.saldo - (m.peso||s.pesoOriginal));
+          const nuevosSob = Object.values(saldos).filter(s=>
+            s._recId === c.id &&
+            s.colada === m.colada &&
+            Number(s.esp) === Number(m.esp||0)
+          );
+          if(nuevosSob.length > 0){
+            Object.values(saldos).forEach(s=>{
+              if(s.colada === m.colada &&
+                 Number(s.esp) === Number(m.esp||0) &&
+                 Number(s._recId) < Number(c.id)){
+                s.saldo = 0;
               }
-            }
-          });
+            });
+          }
         }
       }
     });
   });
 
-  // 3. Retornar solo los que tienen saldo > 0.01 kg
+  // 3. Retornar solo los que tienen saldo > 0
   return Object.values(saldos)
     .filter(s=>s.saldo>0.01)
-    .sort((a,b)=>b._recId-a._recId) // más recientes primero
+    .sort((a,b)=>Number(b._recId)-Number(a._recId))
     .map(s=>({...s, peso:s.saldo}));
 }
 
