@@ -5611,46 +5611,36 @@ function renderInformeAvanceProceso(refFecha){
 function renderInformeAvancePeso(refFecha){
   const allRecs=[...ST.cortes,...ST.prods];
   const totalPlanKg=TEKLA.conjuntos.reduce((s,c)=>s+(c.peso_total||0),0);
-
-  // Config cronograma
   const cronoData=getCronoData();
   const fechaIniCrono=localStorage.getItem('crono_fecha_ini')||'2026-06-22';
   const totalSemCrono=parseInt(localStorage.getItem('crono_total_sem')||53);
   const jorSel=localStorage.getItem('crono_jorn')||'5.5d';
   const jorData=JORNADAS[jorSel]||JORNADAS['5.5d'];
   const fechaBase=new Date(fechaIniCrono);
+  const COLORS={'Corte':'#f97316','Armado':'#3b82f6','Soldadura':'#eab308',
+    'Perforaciones':'#8b5cf6','Limpieza Mecánica':'#06b6d4','Pintura':'#ec4899'};
 
-  // Semanas del proyecto
   const semanas=Array.from({length:totalSemCrono},(_,i)=>{
     const ini=new Date(fechaBase); ini.setDate(fechaBase.getDate()+i*7);
     const fin=new Date(ini); fin.setDate(ini.getDate()+6);
-    return{
-      num:i+1,
-      fIni:ini.toISOString().split('T')[0],
-      fFin:fin.toISOString().split('T')[0],
-      lbl:`S${i+1}`,
-      lblFecha:`${ini.getDate()}/${ini.getMonth()+1}`
-    };
+    return{num:i+1,fIni:ini.toISOString().split('T')[0],fFin:fin.toISOString().split('T')[0],
+      lbl:`S${i+1}`,rngIni:`${ini.getDate()}/${ini.getMonth()+1}`,rngFin:`${fin.getDate()}/${fin.getMonth()+1}`};
   });
 
-  // kg programados por semana por proceso
   function getProgSem(d){
-    const semIni=d.semIni||1, kgIni=d.kgIni||0;
+    const semIni=d.semIni||1,kgIni=d.kgIni||0;
     const rendSem=d.rend*(d.nCuadrillas||1)*jorData.dias;
     const pesoResto=Math.max(0,totalPlanKg-kgIni);
     const semanasWork=totalPlanKg>0?(kgIni>0?1+Math.ceil(pesoResto/rendSem):Math.ceil(totalPlanKg/rendSem)):0;
     return semanas.map((_,i)=>{
       const siBase=i-(semIni-1);
       if(siBase===0) return kgIni;
-      if(siBase>0&&siBase<semanasWork){
-        const esUlt=siBase===semanasWork-1;
-        return esUlt?Math.max(0,totalPlanKg-kgIni-rendSem*(siBase-1)):rendSem;
-      }
+      if(siBase>0&&siBase<semanasWork){const esUlt=siBase===semanasWork-1;
+        return esUlt?Math.max(0,totalPlanKg-kgIni-rendSem*(siBase-1)):rendSem;}
       return 0;
     });
   }
 
-  // kg ejecutados reales por semana por proceso
   const weekEjec=semanas.map(s=>{
     const recsW=allRecs.filter(r=>{const f=fxD(r.fecha);return f>=s.fIni&&f<=s.fFin;});
     const byFase={};
@@ -5658,199 +5648,127 @@ function renderInformeAvancePeso(refFecha){
       if(f==='Corte') byFase[f]=recsW.filter(r=>r.fase==='Corte').reduce((a,r)=>a+Number(r.pesoParts||r.pesoPzas||0),0);
       else byFase[f]=recsW.filter(r=>r.fase===f).reduce((a,r)=>a+Number(r.kg||r.peso||0),0);
     });
-    const tot=Object.values(byFase).reduce((a,b)=>a+b,0);
-    return{...s,byFase,tot};
+    return{...s,byFase,tot:Object.values(byFase).reduce((a,b)=>a+b,0)};
   });
 
   const totEjec=weekEjec.reduce((s,w)=>s+w.tot,0);
   const pctFinal=totalPlanKg>0?Math.min(100,totEjec/totalPlanKg*100):0;
-
-  // Proceso seleccionado
   const procesoSel=document.getElementById('rpt-proceso-sel')?.value||'Corte';
-  const COLORS={'Corte':'#ef4444','Armado':'#3b82f6','Soldadura':'#eab308','Perforaciones':'#8b5cf6','Limpieza Mecánica':'#06b6d4','Pintura':'#ec4899'};
-
-  // Semanas con datos o programadas (para tabla)
   const hoy=new Date().toISOString().split('T')[0];
   const semVis=semanas.filter(s=>s.fIni<=hoy||weekEjec[s.num-1]?.tot>0);
 
-  // Tabla estilo cronograma: filas=semanas, columnas=procesos
   const progData={};
   FASES.forEach(f=>{
     const d=cronoData.find(x=>x.fase===f)||{fase:f,rend:500,nCuadrillas:1,semIni:1,kgIni:0};
     progData[f]=getProgSem(d);
   });
 
-  // Filas de tabla
-  const tablaFilas=semVis.map(s=>{
-    const i=s.num-1;
-    const wE=weekEjec[i];
-    const totSemEjec=wE.tot;
-    const totSemProg=FASES.reduce((a,f)=>a+(progData[f][i]||0),0);
-    const tieneEjec=totSemEjec>0;
-    return`<tr style="${tieneEjec?'':'opacity:0.5'}">
-      <td style="padding:5px 8px;font-weight:500;white-space:nowrap;color:var(--color-text-primary)">${s.lbl}<br><span style="font-size:9px;color:var(--color-text-secondary)">${s.lblFecha}</span></td>
-      ${FASES.map(f=>{
-        const kg=wE.byFase[f]||0;
-        const color=COLORS[f];
-        return`<td style="padding:4px 6px;text-align:right;font-size:11px;font-weight:${kg>0?500:400};color:${kg>0?color:'var(--color-text-secondary)'}">${kg>0?kg.toFixed(0):'—'}</td>`;
-      }).join('')}
-      <td style="padding:4px 6px;text-align:right;font-weight:500;font-size:11px">${tieneEjec?totSemEjec.toFixed(0):'—'}</td>
-      <td style="padding:4px 6px;text-align:right;font-size:11px;color:var(--color-text-secondary)">${totSemProg>0?totSemProg.toFixed(0):'—'}</td>
-    </tr>`;
+  // Encabezados semanas
+  const semHdrs=semVis.map((s,i)=>{
+    const conDatos=weekEjec[s.num-1]?.tot>0;
+    if(i===0||i%4===0) return`<th style="padding:3px 2px;text-align:center;min-width:42px;white-space:nowrap;background:${conDatos?'#1e293b':'#0f172a'}"><span style="font-size:9px;font-weight:700;color:white">${s.lbl}</span><br><span style="font-size:8px;color:#94a3b8">${s.rngIni}</span><br><span style="font-size:8px;color:#64748b">${s.rngFin}</span></th>`;
+    return`<th style="padding:3px 2px;text-align:center;min-width:34px;background:${conDatos?'#1e293b':'#0f172a'}"><span style="font-size:9px;color:#94a3b8">${i+1}</span></th>`;
   }).join('');
 
-  // Fila total
-  const totPorFase=FASES.map(f=>weekEjec.reduce((s,w)=>s+(w.byFase[f]||0),0));
-  const totProgTotal=FASES.reduce((s,f,fi)=>s+progData[f].reduce((a,b)=>a+b,0),0);
-  const tablaTotal=`<tr style="background:var(--color-background-secondary);font-weight:500;border-top:2px solid var(--color-border-primary)">
-    <td style="padding:5px 8px">TOTAL</td>
-    ${totPorFase.map((v,fi)=>`<td style="padding:4px 6px;text-align:right;font-size:11px;color:${COLORS[FASES[fi]]}">${v>0?v.toFixed(0):'—'}</td>`).join('')}
-    <td style="padding:4px 6px;text-align:right;font-size:11px;font-weight:500">${totEjec.toFixed(0)}</td>
-    <td style="padding:4px 6px;text-align:right;font-size:11px;color:var(--color-text-secondary)">${totalPlanKg.toFixed(0)}</td>
-  </tr>`;
+  const filasProc=FASES.map(f=>{
+    const color=COLORS[f];
+    const totF=weekEjec.reduce((s,w)=>s+(w.byFase[f]||0),0);
+    const pctF=totalPlanKg>0?(totF/totalPlanKg*100):0;
+    const cells=semVis.map(s=>{
+      const kg=weekEjec[s.num-1]?.byFase[f]||0;
+      if(kg<=0) return`<td style="padding:3px 2px;text-align:center;border:1px solid #e2e8f0;color:#d1d5db;font-size:10px">·</td>`;
+      return`<td style="padding:3px 4px;text-align:center;border:1px solid #e2e8f0;font-weight:700;font-size:11px;color:${color};background:${color}15">${kg.toFixed(0)}</td>`;
+    }).join('');
+    return`<tr><td style="padding:5px 10px;font-weight:700;color:${color};white-space:nowrap;position:sticky;left:0;background:white;z-index:1">${f}</td>${cells}<td style="padding:4px 8px;text-align:center;font-weight:700;font-size:11px;color:${color};background:${color}10;border-left:2px solid ${color}">${totF>0?totF.toFixed(0):'—'}</td><td style="padding:4px 6px;text-align:center;font-size:10px"><div style="background:#e2e8f0;border-radius:3px;height:14px;position:relative;min-width:50px"><div style="background:${color};height:14px;border-radius:3px;width:${Math.min(100,pctF)}%"></div><span style="position:absolute;top:0;left:0;right:0;text-align:center;font-size:9px;font-weight:700;line-height:14px;color:${pctF>50?'white':'#0f172a'}">${pctF.toFixed(1)}%</span></div></td></tr>`;
+  }).join('');
+
+  let acumTot=0;
+  const totSems=semVis.map(s=>weekEjec[s.num-1]?.tot||0);
+  const filaTotal=`<tr style="background:#0f172a;color:white;font-weight:700;font-size:11px"><td style="padding:6px 10px;position:sticky;left:0;background:#0f172a;z-index:1">TOTAL kg</td>${totSems.map(t=>`<td style="padding:3px 4px;text-align:center;border:1px solid #1e293b;color:${t>0?'#93c5fd':'#374151'}">${t>0?t.toFixed(0):'—'}</td>`).join('')}<td style="padding:4px 8px;text-align:center;background:#166534;border-left:2px solid #22c55e">${totEjec.toFixed(0)}</td><td style="padding:4px 6px;text-align:center">${pctFinal.toFixed(1)}%</td></tr>`;
+  const filaAcum=`<tr style="background:#1e293b;color:#64748b;font-size:10px"><td style="padding:4px 10px;position:sticky;left:0;background:#1e293b;z-index:1;font-weight:700">Acum. kg</td>${totSems.map(t=>{acumTot+=t;return`<td style="padding:2px 4px;text-align:center;border:1px solid #0f172a;color:${acumTot>0?'#93c5fd':'#374151'};font-weight:${acumTot>0?700:400}">${acumTot>0?acumTot.toFixed(0):'—'}</td>`;}).join('')}<td style="padding:3px 8px;text-align:center;color:#22c55e;font-weight:700;border-left:2px solid #22c55e">${totEjec.toFixed(0)}</td><td></td></tr>`;
 
   document.getElementById('informe-area').innerHTML=`
   <div style="padding-bottom:.5rem">
-    <!-- Header -->
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1rem;flex-wrap:wrap;gap:.5rem">
-      <div>
-        <div style="font-size:16px;font-weight:500">Curvas S — Seguimiento por proceso</div>
-        <div style="font-size:11px;color:var(--color-text-secondary)">${TEKLA.proyecto} · Inicio: ${fechaIniCrono} · ${totalSemCrono} sem · ${jorData.label}</div>
-      </div>
-    </div>
-
-    <!-- KPIs -->
+    <div style="margin-bottom:1rem"><div style="font-size:16px;font-weight:500">Curvas S — Seguimiento por proceso</div>
+    <div style="font-size:11px;color:var(--color-text-secondary)">${TEKLA.proyecto} · Inicio: ${fechaIniCrono} · ${totalSemCrono} sem · ${jorData.label}</div></div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:1rem">
-      <div style="background:#0f172a;border-radius:8px;padding:12px">
-        <div style="font-size:11px;color:#64748b">Plan total</div>
-        <div style="font-size:20px;font-weight:500;color:white">${(totalPlanKg/1000).toFixed(1)} t</div>
-      </div>
-      <div style="background:#064e3b;border-radius:8px;padding:12px">
-        <div style="font-size:11px;color:#6ee7b7">Ejecutado acum.</div>
-        <div style="font-size:20px;font-weight:500;color:white">${(totEjec/1000).toFixed(1)} t</div>
-      </div>
-      <div style="background:#78350f;border-radius:8px;padding:12px">
-        <div style="font-size:11px;color:#fcd34d">Pendiente</div>
-        <div style="font-size:20px;font-weight:500;color:white">${((totalPlanKg-totEjec)/1000).toFixed(1)} t</div>
-      </div>
-      <div style="background:#14532d;border-radius:8px;padding:12px">
-        <div style="font-size:11px;color:#86efac">Avance real</div>
-        <div style="font-size:20px;font-weight:500;color:white">${pctFinal.toFixed(1)}%</div>
-      </div>
+      <div style="background:#0f172a;border-radius:8px;padding:12px"><div style="font-size:11px;color:#64748b">Plan total</div><div style="font-size:20px;font-weight:500;color:white">${(totalPlanKg/1000).toFixed(1)} t</div></div>
+      <div style="background:#064e3b;border-radius:8px;padding:12px"><div style="font-size:11px;color:#6ee7b7">Ejecutado acum.</div><div style="font-size:20px;font-weight:500;color:white">${(totEjec/1000).toFixed(1)} t</div></div>
+      <div style="background:#78350f;border-radius:8px;padding:12px"><div style="font-size:11px;color:#fcd34d">Pendiente</div><div style="font-size:20px;font-weight:500;color:white">${((totalPlanKg-totEjec)/1000).toFixed(1)} t</div></div>
+      <div style="background:#14532d;border-radius:8px;padding:12px"><div style="font-size:11px;color:#86efac">Avance real</div><div style="font-size:20px;font-weight:500;color:white">${pctFinal.toFixed(1)}%</div></div>
     </div>
-
-    <!-- Selector proceso -->
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:1rem;flex-wrap:wrap">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:.75rem;flex-wrap:wrap">
       <label style="font-size:13px;color:var(--color-text-secondary);font-weight:500">Proceso:</label>
       <select id="rpt-proceso-sel" onchange="renderInformeAvancePeso()" style="font-size:13px;padding:6px 12px;min-width:200px">
         ${FASES.map(f=>`<option value="${f}" ${f===procesoSel?'selected':''}>${f}</option>`).join('')}
       </select>
     </div>
-
-    <!-- Gráfico estilo Excel: barras rojas + línea naranja -->
-    <div id="curva-chart-wrap" style="background:#1e293b;border-radius:10px;padding:16px;margin-bottom:1rem">
-      <div id="curva-titulo" style="font-size:14px;font-weight:500;color:white;text-align:center;margin-bottom:12px">Curva seguimiento de ${procesoSel}</div>
-      <div style="display:flex;gap:16px;font-size:11px;color:#94a3b8;margin-bottom:10px;justify-content:center;flex-wrap:wrap">
+    <div style="background:#1e293b;border-radius:10px;padding:16px;margin-bottom:1rem">
+      <div style="font-size:14px;font-weight:500;color:white;text-align:center;margin-bottom:10px">Curva seguimiento de ${procesoSel}</div>
+      <div style="display:flex;gap:16px;justify-content:center;font-size:11px;color:#94a3b8;margin-bottom:8px;flex-wrap:wrap">
         <span><span style="display:inline-block;width:12px;height:12px;background:#ef4444;margin-right:4px;vertical-align:middle"></span>${procesoSel} PROGRAM.</span>
-        <span><span style="display:inline-block;width:20px;height:2px;background:#f97316;vertical-align:middle;margin-right:4px;border-top:2px solid #f97316"></span>${procesoSel} EJECUTADO</span>
+        <span><span style="display:inline-block;width:20px;height:2px;background:#f97316;vertical-align:middle;margin-right:4px"></span>${procesoSel} EJECUTADO</span>
+        <span><span style="display:inline-block;width:20px;height:1px;background:#64748b;border-top:1px dashed #64748b;vertical-align:middle;margin-right:4px"></span>Plan acum.</span>
       </div>
-      <div style="position:relative;width:100%;height:260px">
-        <canvas id="rpt-curva-main" role="img" aria-label="Curva S ${procesoSel} programado vs ejecutado"></canvas>
-      </div>
-      <!-- Mini tabla bajo gráfico -->
-      <div style="overflow-x:auto;margin-top:10px">
-        <table id="mini-tabla-chart" style="border-collapse:collapse;font-size:10px;width:100%;min-width:500px">
-          <tbody id="mini-tabla-body"></tbody>
-        </table>
-      </div>
+      <div style="position:relative;width:100%;height:260px"><canvas id="rpt-curva-main" role="img" aria-label="Curva S ${procesoSel}"></canvas></div>
+      <div style="overflow-x:auto;margin-top:8px"><table style="border-collapse:collapse;font-size:10px;min-width:500px;width:100%"><tbody id="mini-tabla-body"></tbody></table></div>
     </div>
-
-    <!-- TABLA EJECUTADO ESTILO CRONOGRAMA: filas=semanas, columnas=procesos -->
-    <div style="font-size:13px;font-weight:500;margin-bottom:.5rem">📊 kg Ejecutados por Semana — todos los procesos</div>
-    <div style="overflow-x:auto">
-      <table style="border-collapse:collapse;font-size:11px;min-width:100%">
-        <thead>
-          <tr style="background:#0f172a;color:white">
-            <th style="padding:6px 8px;text-align:left;min-width:70px;position:sticky;left:0;background:#0f172a;z-index:2">Semana</th>
-            ${FASES.map(f=>`<th style="padding:6px 8px;text-align:right;min-width:70px;color:${COLORS[f]};font-size:10px">${f}</th>`).join('')}
-            <th style="padding:6px 8px;text-align:right;min-width:70px;background:#166534">Ejec. total</th>
-            <th style="padding:6px 8px;text-align:right;min-width:70px;background:#1e293b;color:#64748b">Prog. total</th>
-          </tr>
-        </thead>
-        <tbody>${tablaFilas}${tablaTotal}</tbody>
-      </table>
-    </div>
-
-    <!-- Firmas -->
+    <div style="font-size:13px;font-weight:500;margin-bottom:.5rem">📊 kg Ejecutados por Semana</div>
+    <div style="overflow-x:auto"><table style="border-collapse:collapse;font-size:11px;min-width:100%">
+      <thead><tr style="background:#0f172a;color:white">
+        <th style="padding:6px 10px;text-align:left;min-width:140px;position:sticky;left:0;background:#0f172a;z-index:2">Proceso</th>
+        ${semHdrs}
+        <th style="padding:6px 8px;text-align:center;min-width:70px;background:#166534">Total kg</th>
+        <th style="padding:6px 8px;text-align:center;min-width:80px;background:#166534">% Plan</th>
+      </tr></thead>
+      <tbody>${filasProc}${filaTotal}${filaAcum}</tbody>
+    </table></div>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:2rem;margin-top:2rem;padding-top:1.5rem;border-top:1px solid var(--color-border-tertiary)">
       ${['Elaborado por','Revisado por','Aprobado por'].map(l=>`<div style="text-align:center"><div style="font-size:10px;color:var(--color-text-secondary);margin-bottom:2rem">${l}:</div><div style="border-top:1px solid var(--color-border-primary);padding-top:5px;font-size:10px;color:var(--color-text-secondary)">Firma y sello</div></div>`).join('')}
     </div>
   </div>`;
 
-  // Renderizar gráfico
   setTimeout(()=>{
     const d=cronoData.find(x=>x.fase===procesoSel)||{fase:procesoSel,rend:500,nCuadrillas:1,semIni:1,kgIni:200,diaIni:0};
     const progSem=getProgSem(d);
     const ejecSem=weekEjec.map(w=>w.byFase[procesoSel]||0);
-    let acumE=0, acumP=0;
+    let acumE=0,acumP=0;
     const ejecAcum=ejecSem.map(v=>{acumE+=v;return acumE>0?+acumE.toFixed(0):null;});
     const progAcum=progSem.map(v=>{acumP+=v;return+acumP.toFixed(0);});
-    const labels=semanas.map(s=>s.lbl);
-    const color=COLORS[procesoSel]||'#ef4444';
-
-    // Mini tabla bajo gráfico
-    const semsData=semanas.filter((_,i)=>progSem[i]>0||ejecSem[i]>0);
+    const semsConDatos=semanas.filter((_,i)=>progSem[i]>0||ejecSem[i]>0);
     document.getElementById('mini-tabla-body').innerHTML=`
-      <tr>
-        <td style="padding:2px 6px;color:#ef4444;font-weight:500;white-space:nowrap">${procesoSel} PROGRAM.</td>
-        ${semsData.map(s=>{const v=progSem[s.num-1];return`<td style="padding:2px 4px;text-align:right;color:${v>0?'#fca5a5':'#334155'};font-size:10px">${v>0?v.toFixed(0):'—'}</td>`;}).join('')}
-      </tr>
-      <tr>
-        <td style="padding:2px 6px;color:#f97316;font-weight:500;white-space:nowrap">${procesoSel} EJECUTADO</td>
-        ${semsData.map(s=>{const v=ejecSem[s.num-1];return`<td style="padding:2px 4px;text-align:right;color:${v>0?'#fdba74':'#334155'};font-size:10px">${v>0?v.toFixed(0):'—'}</td>`;}).join('')}
-      </tr>`;
-
+      <tr><td style="padding:2px 6px;color:#fca5a5;font-weight:500;white-space:nowrap;min-width:120px">${procesoSel} PROGRAM.</td>${semsConDatos.map(s=>{const v=progSem[s.num-1];return`<td style="padding:2px 4px;text-align:right;color:${v>0?'#fca5a5':'#334155'};font-size:10px;min-width:40px">${v>0?v.toFixed(0):'—'}</td>`;}).join('')}</tr>
+      <tr><td style="padding:2px 6px;color:#fdba74;font-weight:500;white-space:nowrap">${procesoSel} EJECUTADO</td>${semsConDatos.map(s=>{const v=ejecSem[s.num-1];return`<td style="padding:2px 4px;text-align:right;color:${v>0?'#fdba74':'#334155'};font-size:10px">${v>0?v.toFixed(0):'—'}</td>`;}).join('')}</tr>`;
     try{
-      const canvas=document.getElementById('rpt-curva-main');
       if(window._curvaChart) window._curvaChart.destroy();
-      window._curvaChart=new Chart(canvas,{
+      // Calcular máximo para stepSize 5000
+      const maxProg=Math.max(...progSem);
+      const maxAcum=Math.max(...progAcum);
+      const yMax=Math.ceil(maxProg/5000)*5000||50000;
+      const y2Max=Math.ceil(maxAcum/5000)*5000||350000;
+      window._curvaChart=new Chart(document.getElementById('rpt-curva-main'),{
         type:'bar',
-        data:{
-          labels,
-          datasets:[
-            {type:'bar',label:`${procesoSel} PROGRAM.`,data:progSem,
-             backgroundColor:'#ef444488',borderColor:'#ef4444',borderWidth:1,borderRadius:2,yAxisID:'y'},
-            {type:'line',label:`${procesoSel} EJECUTADO`,data:ejecAcum,
-             borderColor:'#f97316',backgroundColor:'transparent',borderWidth:2.5,
-             pointRadius:v=>v!==null?4:0,pointBackgroundColor:'#f97316',
-             tension:0.3,spanGaps:false,yAxisID:'y2'},
-            {type:'line',label:'Plan acum.',data:progAcum,
-             borderColor:'#64748b',borderDash:[4,3],backgroundColor:'transparent',
-             borderWidth:1.5,pointRadius:0,tension:0.3,yAxisID:'y2'}
-          ]
-        },
-        options:{
-          responsive:true,maintainAspectRatio:false,
-          plugins:{
-            legend:{display:false},
-            tooltip:{mode:'index',intersect:false,
-              callbacks:{label:ctx=>`${ctx.dataset.label}: ${ctx.raw!=null?(ctx.raw/1000).toFixed(1)+'t':'—'}`}}
-          },
+        data:{labels:semanas.map(s=>s.lbl),datasets:[
+          {type:'bar',label:`${procesoSel} PROGRAM.`,data:progSem,backgroundColor:'#ef444488',borderColor:'#ef4444',borderWidth:1,borderRadius:2,yAxisID:'y'},
+          {type:'line',label:`${procesoSel} EJECUTADO`,data:ejecAcum,borderColor:'#f97316',backgroundColor:'transparent',borderWidth:2.5,pointRadius:4,pointBackgroundColor:'#f97316',tension:0.3,spanGaps:false,yAxisID:'y2'},
+          {type:'line',label:'Plan acum.',data:progAcum,borderColor:'#475569',borderDash:[4,3],backgroundColor:'transparent',borderWidth:1.5,pointRadius:0,tension:0.3,yAxisID:'y2'}
+        ]},
+        options:{responsive:true,maintainAspectRatio:false,
+          plugins:{legend:{display:false},tooltip:{mode:'index',intersect:false,
+            callbacks:{label:ctx=>`${ctx.dataset.label}: ${ctx.raw!=null?Number(ctx.raw).toLocaleString('es-EC')+' kg':'—'}`}}},
           scales:{
-            x:{grid:{color:'rgba(255,255,255,0.05)'},
-               ticks:{color:'#94a3b8',font:{size:9},
-                 callback:(v,i)=>(i===0||i%4===0||i===semanas.length-1)?semanas[i]?.lbl:''}},
-            y:{position:'left',beginAtZero:true,
+            x:{grid:{color:'rgba(255,255,255,0.05)'},ticks:{color:'#94a3b8',font:{size:9},
+              callback:(v,i)=>(i===0||i%4===0||i===semanas.length-1)?semanas[i]?.lbl:''}},
+            y:{position:'left',beginAtZero:true,max:yMax,
                grid:{color:'rgba(255,255,255,0.08)'},
-               ticks:{color:'#94a3b8',font:{size:9},callback:v=>v>=1000?(v/1000).toFixed(0)+'t':v}},
-            y2:{position:'right',beginAtZero:true,grid:{display:false},
-                ticks:{color:'#f97316',font:{size:9},callback:v=>v>=1000?(v/1000).toFixed(0)+'t':v}}
+               ticks:{color:'#94a3b8',font:{size:9},stepSize:5000,
+                 callback:v=>Number(v).toLocaleString('es-EC')+' kg'}},
+            y2:{position:'right',beginAtZero:true,max:y2Max,grid:{display:false},
+                ticks:{color:'#f97316',font:{size:9},stepSize:5000,
+                  callback:v=>Number(v).toLocaleString('es-EC')+' kg'}}
           }
         }
       });
-      // Fondo oscuro en el canvas
-      const chart=window._curvaChart;
-      chart.canvas.parentNode.style.background='#1e293b';
     }catch(e){console.warn(e);}
   },150);
 }
