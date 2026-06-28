@@ -4652,7 +4652,6 @@ function renderCronograma(){
     return{...d,rendSem,semanas,ejec,pct,cuadNecesarias,ok};
   });
 
-  const totalSem=parseInt(document.getElementById('crono-total-sem')?.value||53);
   const maxSem=Math.max(totalSem,...rows.map(r=>r.semanas),1);
   const semHdrs=Array.from({length:maxSem},(_,i)=>{
     const f=new Date(fechaIni);f.setDate(f.getDate()+i*7);
