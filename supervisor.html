@@ -1464,8 +1464,6 @@ async function loadFromServer(){
     _loadFromLS();
     if(si){ si.textContent='⚫ Configura la URL de Google para sincronizar'; si.style.color='var(--gm)'; }
   }
-  // Actualizar dashboard con datos frescos
-  if(typeof renderDashboard === 'function') renderDashboard();
 }
 
 function _loadFromLS(){
@@ -1933,7 +1931,7 @@ function renderDashboard() {
   const partesTotal = allPartes().reduce((s,p)=>s+p.cantidad,0);
   const totalCortado = ST.cortes.reduce((s,c)=>s+c.qty,0);
   const totalProd = ST.prods.reduce((s,p)=>s+p.qty,0);
-  const totalStock = _calcStockSaldos().reduce((s,x)=>s+x.saldo,0);
+  const totalStock = ST.cortes.reduce((s,c)=>s+getSobrantesDeCorte(c).filter(x=>x.dest==='stock').reduce((a,x)=>a+x.peso,0),0);
   const totalDesp = ST.cortes.reduce((s,c)=>s+(c.desperdicio||0),0);
   const totalKgEjec = ST.cortes.reduce((s,c)=>s+Number(c.pesoParts||c.pesoPzas||0),0);
   const pendPartes = allPartes().reduce((s,p)=>s+Math.max(0,p.cantidad-getCortadoQty(p.conjunto,p.parte)),0);
@@ -4627,15 +4625,12 @@ function resetCrono(){_cronoData=JSON.parse(JSON.stringify(CRONO_DEFAULT));saveC
 
 function renderCronograma(){
   const data=getCronoData();
-  const pesoTotal=TEKLA.partes
-    ?TEKLA.partes.reduce((s,p)=>s+(p.cantidad||0)*(p.kg||0),0)
-    :TEKLA.conjuntos.reduce((s,c)=>s+(c.cantidad||0)*(c.kg||0),0);
+  const pesoTotal=TEKLA.conjuntos.reduce((s,c)=>s+(c.peso_total||0),0);
 
   const jorSel  =document.getElementById('crono-jorn')?.value||'5.5d';
   const jorData =JORNADAS[jorSel]||JORNADAS['5.5d'];
-  const fechaIni=document.getElementById('crono-fecha-ini')?.value||today();
+  const fechaIni=document.getElementById('crono-fecha-ini')?.value||'2026-06-22';
   const plazo   =parseInt(document.getElementById('crono-plazo')?.value||12);
-  const totalSem =parseInt(document.getElementById('crono-total-sem')?.value||53);
 
   // Avance real
   const kgReal={};
@@ -4654,14 +4649,18 @@ function renderCronograma(){
     return{...d,rendSem,semanas,ejec,pct,cuadNecesarias,ok};
   });
 
+  const totalSem=parseInt(document.getElementById('crono-total-sem')?.value||53);
   const maxSem=Math.max(totalSem,...rows.map(r=>r.semanas),1);
   const semHdrs=Array.from({length:maxSem},(_,i)=>{
-    const f=new Date(fechaIni);f.setDate(f.getDate()+i*7);
-    const lbl=f.toLocaleDateString('es',{day:'2-digit',month:'2-digit'});
-    // Mostrar fecha solo cada 4 semanas para ahorrar espacio
-    return (i%4===0)
-      ? `<span style="font-size:9px;font-weight:700">S${i+1}</span><br><span style="font-size:8px;color:#94a3b8">${lbl}</span>`
-      : `<span style="font-size:9px">${i+1}</span>`;
+    const ini=new Date(fechaIni); ini.setDate(ini.getDate()+i*7);
+    const fin=new Date(ini); fin.setDate(ini.getDate()+6);
+    const fmtIni=ini.toLocaleDateString('es',{day:'2-digit',month:'2-digit'});
+    const fmtFin=fin.toLocaleDateString('es',{day:'2-digit',month:'2-digit'});
+    // Mostrar rango solo en S1 y cada 4 semanas, resto solo número
+    if(i===0||i%4===0){
+      return `<span style="font-size:9px;font-weight:700">S${i+1}</span><br><span style="font-size:8px;color:#94a3b8">${fmtIni}</span><br><span style="font-size:8px;color:#94a3b8">${fmtFin}</span>`;
+    }
+    return `<span style="font-size:9px">${i+1}</span>`;
   });
 
   document.getElementById('informe-area').innerHTML=`
@@ -4684,18 +4683,13 @@ function renderCronograma(){
       </div>
       <div class="fg fix">
         <label style="font-size:11px;font-weight:700;color:#64748b;display:block;margin-bottom:3px">Fecha inicio</label>
-        <input type="date" id="crono-fecha-ini" value="${fechaIni}" onchange="renderCronograma()"
+        <input type="date" id="crono-fecha-ini" value="${fechaIni||'2026-06-22'}" onchange="renderCronograma()"
           style="border:1.5px solid #d1d5db;border-radius:6px;padding:5px 8px;font-size:13px">
       </div>
       <div class="fg fix">
         <label style="font-size:11px;font-weight:700;color:#e11d48;display:block;margin-bottom:3px">⏱ Plazo objetivo (semanas)</label>
         <input type="number" id="crono-plazo" value="${plazo}" min="1" max="200" onchange="renderCronograma()"
           style="width:80px;border:2px solid #e11d48;border-radius:6px;padding:5px 8px;font-size:16px;font-weight:700;color:#e11d48;text-align:center">
-      </div>
-      <div class="fg fix">
-        <label style="font-size:11px;font-weight:700;color:#64748b;display:block;margin-bottom:3px">📅 Total semanas a mostrar</label>
-        <input type="number" id="crono-total-sem" value="${totalSem||53}" min="4" max="200" onchange="renderCronograma()"
-          style="width:70px;border:2px solid #64748b;border-radius:6px;padding:5px 8px;font-size:16px;font-weight:700;color:#64748b;text-align:center">
       </div>
       <div class="fg" style="min-width:180px">
         <div style="background:#0f172a;color:white;border-radius:8px;padding:.5rem 1rem;font-size:13px">
@@ -4780,7 +4774,7 @@ function renderCronograma(){
         <thead>
           <tr style="background:#1e293b;color:white">
             <th style="padding:6px 10px;text-align:left;min-width:130px;position:sticky;left:0;background:#1e293b;z-index:1">Proceso</th>
-            ${semHdrs.map((h,i)=>`<th style="padding:3px 1px;text-align:center;min-width:26px;${i===plazo-1?'border-right:3px solid #e11d48':''}">${h}</th>`).join('')}
+            ${semHdrs.map((h,i)=>`<th style="padding:4px 2px;text-align:center;min-width:38px;${i===plazo-1?'border-right:3px solid #e11d48':''}">${h}</th>`).join('')}
           </tr>
         </thead>
         <tbody>
@@ -4791,7 +4785,7 @@ function renderCronograma(){
               const activo=si<r.semanas;
               const dentroP=si<plazo;
               const kg=activo?(si===r.semanas-1?pesoTotal-r.rendSem*si:r.rendSem):0;
-              return `<td style="padding:2px 1px;text-align:center;border:1px solid #f1f5f9;${si===plazo-1?'border-right:3px solid #e11d48':''}">
+              return `<td style="padding:3px 2px;text-align:center;border:1px solid #f1f5f9;${si===plazo-1?'border-right:3px solid #e11d48':''}">
                 ${activo?`<div title="${kg.toFixed(0)} kg" style="height:20px;background:${dentroP?r.color:'#94a3b8'};border-radius:3px;opacity:${0.4+0.6*(si+1)/r.semanas}"></div>`:''}
               </td>`;
             }).join('')}
@@ -4812,7 +4806,7 @@ function renderCronograma(){
         <thead>
           <tr style="background:#1e293b;color:white">
             <th style="padding:6px 10px;text-align:left;min-width:130px;position:sticky;left:0;background:#1e293b;z-index:1">Proceso</th>
-            ${semHdrs.map((h,i)=>`<th style="padding:3px 2px;text-align:center;min-width:40px;${i===plazo-1?'border-right:3px solid #e11d48':''}">${h}</th>`).join('')}
+            ${semHdrs.map((h,i)=>`<th style="padding:4px 5px;text-align:center;min-width:55px;${i===plazo-1?'border-right:3px solid #e11d48':''}">${h}</th>`).join('')}
             <th style="padding:4px 8px;text-align:center;background:#166534;min-width:70px">TOTAL</th>
           </tr>
         </thead>
