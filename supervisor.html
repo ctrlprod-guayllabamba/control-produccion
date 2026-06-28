@@ -4640,11 +4640,6 @@ function renderCronograma(){
   const jorData =JORNADAS[jorSel]||JORNADAS['5.5d'];
   const fechaIni=document.getElementById('crono-fecha-ini')?.value||today();
   const plazo   =parseInt(document.getElementById('crono-plazo')?.value||12);
-  const totalSem =parseInt(document.getElementById('crono-total-sem')?.value||53);
-  // Guardar en localStorage para el informe de Curva S
-  if(document.getElementById('crono-fecha-ini')?.value) localStorage.setItem('crono_fecha_ini', document.getElementById('crono-fecha-ini').value);
-  if(document.getElementById('crono-jorn')?.value) localStorage.setItem('crono_jorn', document.getElementById('crono-jorn').value);
-  localStorage.setItem('crono_total_sem', totalSem);
 
   // Avance real
   const kgReal={};
@@ -4674,6 +4669,7 @@ function renderCronograma(){
     return{...d,rendSem,semIni,diaIni,kgIni,fIniStr,semanasWork,semanas,ejec,pct,cuadNecesarias,ok};
   });
 
+  const totalSem=parseInt(document.getElementById('crono-total-sem')?.value||53);
   const maxSem=Math.max(totalSem,...rows.map(r=>r.semanas),1);
   const semHdrs=Array.from({length:maxSem},(_,i)=>{
     const ini=new Date(fechaBase);ini.setDate(fechaBase.getDate()+i*7);
@@ -5614,11 +5610,10 @@ function renderInformeAvanceProceso(refFecha){
 // ======================= INFORME AVANCE SEMANAL POR PESO / CURVA S =======================
 function renderInformeAvancePeso(refFecha){
   const allRecs=[...ST.cortes,...ST.prods];
-  if(!allRecs.length){ document.getElementById('informe-area').innerHTML='<div class="card" style="padding:2rem;text-align:center;color:#9ca3af;">Sin registros de producción.</div>'; return; }
-  const FASE_COLORS={'Corte':'#f97316','Armado':'#3b82f6','Soldadura':'#eab308','Perforaciones':'#8b5cf6','Limpieza Mecánica':'#06b6d4','Pintura':'#ec4899'};
   const totalPlanKg=TEKLA.conjuntos.reduce((s,c)=>s+(c.peso_total||0),0);
+  const FASE_COLORS={'Corte':'#ef4444','Armado':'#3b82f6','Soldadura':'#eab308','Perforaciones':'#8b5cf6','Limpieza Mecánica':'#06b6d4','Pintura':'#ec4899'};
 
-  // Usar fecha inicio y total semanas del cronograma
+  // Config cronograma
   const cronoData=getCronoData();
   const fechaIniCrono=localStorage.getItem('crono_fecha_ini')||'2026-06-22';
   const totalSemCrono=parseInt(localStorage.getItem('crono_total_sem')||53);
@@ -5626,203 +5621,212 @@ function renderInformeAvancePeso(refFecha){
   const jorData=JORNADAS[jorSel]||JORNADAS['5.5d'];
   const fechaBase=new Date(fechaIniCrono);
 
-  // Generar semanas del cronograma (S1 a totalSemCrono)
+  // Generar semanas S1..totalSemCrono
   const semanas=Array.from({length:totalSemCrono},(_,i)=>{
     const ini=new Date(fechaBase); ini.setDate(fechaBase.getDate()+i*7);
     const fin=new Date(ini); fin.setDate(ini.getDate()+6);
-    const fIni=ini.toISOString().split('T')[0];
-    const fFin=fin.toISOString().split('T')[0];
-    const lbl=`S${i+1} ${ini.toLocaleDateString('es',{day:'2-digit',month:'2-digit'})}`;
-    return{num:i+1,fIni,fFin,lbl,ini,fin};
+    return{num:i+1,fIni:ini.toISOString().split('T')[0],fFin:fin.toISOString().split('T')[0],
+      lbl:`S${i+1}`,rngIni:`${ini.getDate()}/${ini.getMonth()+1}`,rngFin:`${fin.getDate()}/${fin.getMonth()+1}`};
+  });
+
+  // kg ejecutados reales por semana por proceso
+  const weekEjec=semanas.map(s=>{
+    const recsW=allRecs.filter(r=>{const f=fxD(r.fecha);return f>=s.fIni&&f<=s.fFin;});
+    const byFase={};
+    FASES.forEach(f=>{
+      if(f==='Corte') byFase[f]=recsW.filter(r=>r.fase==='Corte').reduce((a,r)=>a+Number(r.pesoParts||r.pesoPzas||0),0);
+      else byFase[f]=recsW.filter(r=>r.fase===f).reduce((a,r)=>a+Number(r.kg||r.peso||0),0);
+    });
+    return{...s,byFase,tot:Object.values(byFase).reduce((a,b)=>a+b,0)};
   });
 
   // kg programados por semana por proceso (del cronograma)
-  const kgProgSem=semanas.map(s=>{
-    const byFase={};
-    cronoData.forEach(d=>{
-      const semIni=d.semIni||1;
-      const kgIni=d.kgIni||0;
-      const rendSem=d.rend*d.nCuadrillas*jorData.dias;
-      const pesoResto=Math.max(0,totalPlanKg-kgIni);
-      const semanasWork=totalPlanKg>0?(kgIni>0?1+Math.ceil(pesoResto/rendSem):Math.ceil(totalPlanKg/rendSem)):0;
-      const siBase=s.num-semIni;
-      let kg=0;
-      if(siBase===0) kg=kgIni;
-      else if(siBase>0&&siBase<semanasWork){
+  function getKgProgSem(d){
+    const semIni=d.semIni||1, kgIni=d.kgIni||0;
+    const rendSem=d.rend*d.nCuadrillas*jorData.dias;
+    const pesoResto=Math.max(0,totalPlanKg-kgIni);
+    const semanasWork=totalPlanKg>0?(kgIni>0?1+Math.ceil(pesoResto/rendSem):Math.ceil(totalPlanKg/rendSem)):0;
+    return semanas.map((_,i)=>{
+      const siBase=i-(semIni-1);
+      if(siBase===0) return kgIni;
+      if(siBase>0&&siBase<semanasWork){
         const esUlt=siBase===semanasWork-1;
-        kg=esUlt?Math.max(0,totalPlanKg-kgIni-rendSem*(siBase-1)):rendSem;
+        return esUlt?Math.max(0,totalPlanKg-kgIni-rendSem*(siBase-1)):rendSem;
       }
-      byFase[d.fase]=kg;
+      return 0;
     });
-    const totProg=Object.values(byFase).reduce((a,b)=>a+b,0);
-    return{...s,byFaseProg:byFase,totProg};
-  });
+  }
 
-  // kg ejecutados por semana por proceso (registros reales)
-  const weekData=semanas.map(s=>{
-    const recsW=allRecs.filter(r=>{const f=fxD(r.fecha);return f>=s.fIni&&f<=s.fFin;});
-    const byFaseKg={};
-    FASES.forEach(f=>{
-      if(f==='Corte') byFaseKg[f]=recsW.filter(r=>r.fase==='Corte').reduce((s,r)=>s+Number(r.pesoParts||r.pesoPzas||0),0);
-      else byFaseKg[f]=recsW.filter(r=>r.fase===f).reduce((s,r)=>s+Number(r.kg||r.peso||0),0);
-    });
-    const totKgW=Object.values(byFaseKg).reduce((a,b)=>a+b,0);
-    return{...s,byFaseKg,totKg:totKgW};
-  });
+  const totEjec=weekEjec.reduce((s,w)=>s+w.tot,0);
+  const pctFinal=totalPlanKg>0?Math.min(100,totEjec/totalPlanKg*100):0;
 
-  // Acumulados reales y programados
-  let acumReal=0, acumProg=0;
-  const acumByFase={};
-  FASES.forEach(f=>acumByFase[f]=0);
-  const weekAcum=weekData.map((w,i)=>{
-    const acum={};
-    FASES.forEach(f=>{acumByFase[f]+=(w.byFaseKg[f]||0);acum[f]=acumByFase[f];});
-    acumReal+=w.totKg;
-    acumProg+=kgProgSem[i].totProg;
-    const pctReal=totalPlanKg>0?Math.min(100,acumReal/totalPlanKg*100):0;
-    const pctProg=totalPlanKg>0?Math.min(100,acumProg/totalPlanKg*100):0;
-    const tieneReal=acumReal>0||w.totKg>0;
-    return{...w,acum,totAcum:acumReal,pctAcum:pctReal,acumProg,pctProg,tieneReal};
-  });
+  // Proceso seleccionado (default Corte)
+  const procesoSel=document.getElementById('rpt-proceso-sel')?.value||'Corte';
 
-  // Tabla — solo mostrar semanas con datos reales + hasta semana actual
-  const hoy=new Date().toISOString().split('T')[0];
-  const weekVis=weekAcum.filter((w,i)=>w.fIni<=hoy||w.totKg>0||i<4);
+  // Función para generar HTML de una curva
+  function curvaSectionHTML(proceso, chartId){
+    const d=cronoData.find(x=>x.fase===proceso)||{fase:proceso,rend:500,nCuadrillas:1,semIni:1,kgIni:200,diaIni:0};
+    const color=FASE_COLORS[proceso]||'#ef4444';
+    const progSem=getKgProgSem(d);
+    const ejec=weekEjec.map(w=>w.byFase[proceso]||0);
+    const totP=progSem.reduce((a,b)=>a+b,0);
+    const totE=ejec.reduce((a,b)=>a+b,0);
+    const pct=totalPlanKg>0?(totE/totalPlanKg*100):0;
 
-  const rows=weekVis.map(w=>`<tr style="${w.totKg>0?'':'opacity:0.5'}">
-    <td style="font-weight:700;white-space:nowrap;color:${w.totKg>0?'#0f172a':'#94a3b8'}">${w.lbl}</td>
-    ${FASES.map(f=>`<td class="r" style="color:${(w.byFaseKg[f]||0)>0?FASE_COLORS[f]:'#d1d5db'};font-weight:${(w.byFaseKg[f]||0)>0?700:400}">${(w.byFaseKg[f]||0)>0?w.byFaseKg[f].toFixed(0):'—'}</td>`).join('')}
-    <td class="r" style="font-weight:800">${w.totKg>0?w.totKg.toFixed(0):'—'}</td>
-    <td class="r" style="color:#94a3b8">${kgProgSem[w.num-1]?.totProg.toFixed(0)||'—'}</td>
-    <td class="r" style="font-weight:800;color:#1e40af">${w.totKg>0?w.totAcum.toFixed(0):'—'}</td>
-    <td class="r" style="color:#94a3b8">${w.acumProg.toFixed(0)}</td>
-    <td class="r">
-      <div style="display:flex;align-items:center;gap:4px;min-width:110px">
-        <div style="flex:1;height:8px;background:#e5e7eb;border-radius:4px;overflow:hidden;position:relative">
-          <div style="position:absolute;height:100%;width:${w.pctProg.toFixed(1)}%;background:#94a3b8;border-radius:4px"></div>
-          <div style="position:absolute;height:100%;width:${w.pctAcum.toFixed(1)}%;background:${w.pctAcum>=w.pctProg?'#22c55e':'#ef4444'};border-radius:4px"></div>
+    // Tabla de datos (solo semanas con datos o programadas)
+    const semsConDatos=semanas.filter((_,i)=>progSem[i]>0||ejec[i]>0);
+
+    return`
+    <div style="background:#1a1a2e;border-radius:8px;padding:16px;margin-bottom:1rem">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:.5rem">
+        <div style="font-size:14px;font-weight:500;color:white">Curva seguimiento — ${proceso}</div>
+        <div style="display:flex;gap:12px;font-size:11px;color:#94a3b8;flex-wrap:wrap">
+          <span><span style="display:inline-block;width:12px;height:12px;background:#ef4444;border-radius:2px;margin-right:4px;vertical-align:middle"></span>Programado</span>
+          <span><span style="display:inline-block;width:20px;height:2px;background:#f97316;vertical-align:middle;margin-right:4px"></span>Ejecutado</span>
         </div>
-        <span style="font-size:10px;font-weight:800;color:${w.pctAcum>=w.pctProg?'#166534':'#991b1b'};white-space:nowrap">${w.pctAcum.toFixed(1)}%</span>
       </div>
-    </td>
-  </tr>`).join('');
-
-  const totFaseKg=FASES.map(f=>weekData.reduce((s,w)=>s+(w.byFaseKg[f]||0),0));
-  const totAll=totFaseKg.reduce((a,b)=>a+b,0);
-  const pctFinal=totalPlanKg>0?Math.min(100,totAll/totalPlanKg*100):0;
-  const totProgFinal=kgProgSem.reduce((s,w)=>s+w.totProg,0);
-  const totRow=`<tr style="background:#0f172a;color:#fff;font-weight:800">
-    <td>TOTAL ACUM.</td>
-    ${totFaseKg.map(v=>`<td class="r">${v.toFixed(0)}</td>`).join('')}
-    <td class="r">${totAll.toFixed(0)}</td>
-    <td class="r" style="color:#94a3b8">${totProgFinal.toFixed(0)}</td>
-    <td class="r">${totAll.toFixed(0)}</td>
-    <td class="r" style="color:#94a3b8">${totProgFinal.toFixed(0)}</td>
-    <td class="r">${pctFinal.toFixed(1)}%</td>
-  </tr>`;
-
-  // Guardar fecha inicio para que el cronograma la use también
-  localStorage.setItem('crono_fecha_ini', fechaIniCrono);
-  localStorage.setItem('crono_total_sem', totalSemCrono);
+      <div style="display:flex;gap:16px;margin-bottom:8px;flex-wrap:wrap">
+        <div style="font-size:11px;color:#94a3b8">Plan total: <strong style="color:white">${(totalPlanKg/1000).toFixed(1)}t</strong></div>
+        <div style="font-size:11px;color:#94a3b8">Prog. proceso: <strong style="color:#ef4444">${(totP/1000).toFixed(1)}t</strong></div>
+        <div style="font-size:11px;color:#94a3b8">Ejecutado: <strong style="color:#f97316">${(totE/1000).toFixed(1)}t</strong></div>
+        <div style="font-size:11px;color:#94a3b8">Avance: <strong style="color:${pct>0?'#22c55e':'#94a3b8'}">${pct.toFixed(1)}%</strong></div>
+      </div>
+      <div style="position:relative;width:100%;height:220px">
+        <canvas id="${chartId}" role="img" aria-label="Curva S ${proceso}: programado vs ejecutado"></canvas>
+      </div>
+      <!-- Tabla compacta -->
+      <div style="overflow-x:auto;margin-top:8px">
+        <table style="border-collapse:collapse;font-size:10px;width:100%;min-width:600px">
+          <thead>
+            <tr style="border-bottom:1px solid #334155">
+              <td style="padding:3px 6px;color:#64748b;font-weight:500;min-width:80px"></td>
+              ${semsConDatos.map(s=>`<td style="padding:3px 4px;text-align:center;color:#64748b;white-space:nowrap">${s.lbl}<br>${s.rngIni}</td>`).join('')}
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="padding:3px 6px;color:#ef4444;font-weight:500">Programado</td>
+              ${semsConDatos.map(s=>{
+                const i=s.num-1;
+                return`<td style="padding:3px 4px;text-align:center;color:${progSem[i]>0?'#fca5a5':'#334155'}">${progSem[i]>0?progSem[i].toFixed(0):'—'}</td>`;
+              }).join('')}
+            </tr>
+            <tr>
+              <td style="padding:3px 6px;color:#f97316;font-weight:500">Ejecutado</td>
+              ${semsConDatos.map(s=>{
+                const i=s.num-1;
+                return`<td style="padding:3px 4px;text-align:center;color:${ejec[i]>0?'#fdba74':'#334155'}">${ejec[i]>0?ejec[i].toFixed(0):'—'}</td>`;
+              }).join('')}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+  }
 
   document.getElementById('informe-area').innerHTML=`
-  <div class="card">
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:1rem;margin-bottom:1rem;border-bottom:2px solid var(--sd);">
+  <div style="padding-bottom:.5rem">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1rem;flex-wrap:wrap;gap:.5rem">
       <div>
-        <div style="font-size:17px;font-weight:800;color:var(--sd);text-transform:uppercase;">⚖️ Avance Semanal por Peso — Curva S</div>
-        <div style="font-size:12px;color:var(--gm);margin-top:3px;">${TEKLA.proyecto} · ${TEKLA.codigo}</div>
-        <div style="font-size:11px;color:var(--gm);">Plan total: ${totalPlanKg.toLocaleString('es-EC',{maximumFractionDigits:0})} kg | Inicio: ${fechaIniCrono} | ${totalSemCrono} semanas cronograma</div>
+        <div style="font-size:16px;font-weight:500;color:var(--color-text-primary)">Curvas S — Programado vs Ejecutado por proceso</div>
+        <div style="font-size:11px;color:var(--color-text-secondary);margin-top:2px">${TEKLA.proyecto} · Inicio: ${fechaIniCrono} · ${totalSemCrono} semanas</div>
       </div>
-      <div style="text-align:right;font-size:10px;color:var(--gm);">Generado: ${new Date().toLocaleString('es-EC')}</div>
     </div>
     <!-- KPIs -->
-    <div class="kpi-row" style="margin-bottom:1rem">
-      <div class="kpi k-blue"><div class="kpi-lbl">Plan total</div><div class="kpi-val">${(totalPlanKg/1000).toFixed(1)}</div><div class="kpi-sub">toneladas</div></div>
-      <div class="kpi k-green"><div class="kpi-lbl">Ejecutado acum.</div><div class="kpi-val">${(totAll/1000).toFixed(1)}</div><div class="kpi-sub">toneladas</div></div>
-      <div class="kpi k-warn"><div class="kpi-lbl">Pendiente</div><div class="kpi-val">${((totalPlanKg-totAll)/1000).toFixed(1)}</div><div class="kpi-sub">toneladas</div></div>
-      <div class="kpi" style="background:#f0fdf4;border:1px solid #86efac"><div class="kpi-lbl">Avance real</div><div class="kpi-val" style="color:${pctFinal>=100?'#166534':pctFinal>=50?'#1e40af':'#92400e'}">${pctFinal.toFixed(1)}%</div><div class="kpi-sub">del plan kg</div></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:1rem">
+      <div style="background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:12px">
+        <div style="font-size:12px;color:var(--color-text-secondary)">Plan total</div>
+        <div style="font-size:20px;font-weight:500">${(totalPlanKg/1000).toFixed(1)} t</div>
+      </div>
+      <div style="background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:12px">
+        <div style="font-size:12px;color:var(--color-text-secondary)">Ejecutado</div>
+        <div style="font-size:20px;font-weight:500">${(totEjec/1000).toFixed(1)} t</div>
+      </div>
+      <div style="background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:12px">
+        <div style="font-size:12px;color:var(--color-text-secondary)">Avance global</div>
+        <div style="font-size:20px;font-weight:500;color:${pctFinal>=50?'#166534':'#92400e'}">${pctFinal.toFixed(1)}%</div>
+      </div>
     </div>
-    <!-- Leyenda -->
-    <div style="display:flex;gap:1rem;font-size:11px;color:#64748b;margin-bottom:.75rem;flex-wrap:wrap">
-      <span><span style="display:inline-block;width:24px;height:3px;background:#0f172a;vertical-align:middle;margin-right:4px"></span>Ejecutado acum.</span>
-      <span><span style="display:inline-block;width:24px;height:3px;background:#94a3b8;border-top:2px dashed #94a3b8;vertical-align:middle;margin-right:4px"></span>Programado acum.</span>
-      <span style="color:#166534">🟢 Adelantado</span>
-      <span style="color:#991b1b">🔴 Atrasado</span>
+    <!-- Filtro proceso -->
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:1rem;flex-wrap:wrap">
+      <label style="font-size:13px;color:var(--color-text-secondary);font-weight:500">Ver proceso:</label>
+      <select id="rpt-proceso-sel" onchange="renderInformeAvancePeso()" style="font-size:13px;padding:6px 10px;border-radius:6px;font-weight:500;min-width:180px">
+        ${FASES.map(f=>`<option value="${f}" ${f===procesoSel?'selected':''}>${f}</option>`).join('')}
+      </select>
+      <label style="font-size:12px;color:var(--color-text-secondary)">o ver todos:</label>
+      <button onclick="document.getElementById('rpt-proceso-sel').value='';renderInformeAvancePeso()" style="font-size:12px;padding:5px 12px">Todos los procesos</button>
     </div>
-    <!-- Curva S -->
-    <div style="background:var(--su);border-radius:9px;padding:12px;margin-bottom:1rem;">
-      <div style="font-size:11px;font-weight:800;color:var(--sd);margin-bottom:8px;">Curva S — Ejecutado vs Programado (kg acumulados)</div>
-      <canvas id="rpt-curvaS-chart" height="140"></canvas>
+    <!-- Curvas -->
+    <div id="curvas-container">
+      ${procesoSel
+        ? curvaSectionHTML(procesoSel,'chart-'+procesoSel.replace(/\s/g,'-'))
+        : FASES.map(f=>curvaSectionHTML(f,'chart-'+f.replace(/\s/g,'-'))).join('')
+      }
     </div>
-    <!-- Barras semanales por fase kg -->
-    <div style="background:var(--su);border-radius:9px;padding:12px;margin-bottom:1rem;">
-      <div style="font-size:11px;font-weight:800;color:var(--sd);margin-bottom:8px;">Producción semanal por fase (kg ejecutados)</div>
-      <canvas id="rpt-avpeso-bar" height="110"></canvas>
-    </div>
-    <!-- Tabla -->
-    <div style="font-size:12px;font-weight:800;color:var(--sd);margin:.75rem 0 .5rem;">Detalle semanal (kg)</div>
-    <div class="tw"><table>
-      <thead><tr>
-        <th>Semana</th>
-        ${FASES.map(f=>`<th class="r" style="color:${FASE_COLORS[f]};font-size:10px">${f.length>8?f.slice(0,8)+'…':f}</th>`).join('')}
-        <th class="r">Ejec.<br>sem</th>
-        <th class="r" style="color:#94a3b8">Prog.<br>sem</th>
-        <th class="r">Ejec.<br>acum</th>
-        <th class="r" style="color:#94a3b8">Prog.<br>acum</th>
-        <th class="r" style="min-width:120px">Avance</th>
-      </tr></thead>
-      <tbody>${rows}${totRow}</tbody>
-    </table></div>
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:2rem;margin-top:2rem;padding-top:1.5rem;border-top:1px solid var(--gl);">
-      ${['Elaborado por','Revisado por','Aprobado por'].map(l=>`<div style="text-align:center;"><div style="font-size:10px;color:var(--gm);margin-bottom:2rem;">${l}:</div><div style="border-top:1px solid var(--tx);padding-top:5px;font-size:10px;color:var(--gm);">Firma y sello</div></div>`).join('')}
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:2rem;margin-top:2rem;padding-top:1.5rem;border-top:1px solid var(--color-border-tertiary)">
+      ${['Elaborado por','Revisado por','Aprobado por'].map(l=>`<div style="text-align:center"><div style="font-size:10px;color:var(--color-text-secondary);margin-bottom:2rem">${l}:</div><div style="border-top:1px solid var(--color-border-primary);padding-top:5px;font-size:10px;color:var(--color-text-secondary)">Firma y sello</div></div>`).join('')}
     </div>
   </div>`;
 
+  // Renderizar gráficos
   setTimeout(()=>{
-    try{
-      // Solo semanas con datos o hasta hoy
-      const visIdx=weekVis.map(w=>w.num-1);
-      const labels=weekVis.map(w=>w.lbl);
-      const acumReal=weekVis.map(w=>w.totAcum>0?+w.totAcum.toFixed(1):null);
-      const acumProg=weekVis.map(w=>+w.acumProg.toFixed(1));
-
-      // Curva S: ejecutado vs programado
-      mkChart('rpt-curvaS-chart','line',{
-        labels,
-        datasets:[
-          {label:'Programado acum. (kg)',data:acumProg,borderColor:'#94a3b8',borderDash:[6,3],borderWidth:2,pointRadius:2,fill:false,tension:0.4},
-          {label:'Ejecutado acum. (kg)',data:acumReal,borderColor:'#0f172a',backgroundColor:'#0f172a18',borderWidth:2.5,pointRadius:4,fill:true,tension:0.4,spanGaps:false},
-        ]
-      },{
-        plugins:{legend:{position:'bottom',labels:{font:{size:9},boxWidth:10}}},
-        scales:{
-          x:{grid:{display:false},ticks:{font:{size:8},maxRotation:45}},
-          y:{beginAtZero:true,grid:{color:'#eee'},ticks:{font:{size:9},callback:v=>v>=1000?(v/1000).toFixed(1)+'t':v}}
-        },
-        responsive:true
-      });
-
-      // Barras por fase kg (solo semanas con datos)
-      const weekConDatos=weekVis.filter(w=>w.totKg>0);
-      mkChart('rpt-avpeso-bar','bar',{
-        labels:weekConDatos.map(w=>w.lbl),
-        datasets:FASES.map(f=>({
-          label:f,
-          data:weekConDatos.map(w=>(w.byFaseKg[f]||0).toFixed(1)),
-          backgroundColor:FASE_COLORS[f]+'cc',
-          borderRadius:3
-        }))
-      },{
-        plugins:{legend:{position:'bottom',labels:{font:{size:9},boxWidth:10}}},
-        scales:{
-          x:{stacked:true,grid:{display:false},ticks:{font:{size:8}}},
-          y:{stacked:true,beginAtZero:true,grid:{color:'#eee'},ticks:{font:{size:9},callback:v=>v>=1000?(v/1000).toFixed(1)+'t':v}}
-        },
-        responsive:true
-      });
-    }catch(e){console.warn(e);}
-  },100);
+    const fasesRender=procesoSel?[procesoSel]:FASES;
+    fasesRender.forEach(proceso=>{
+      const chartId='chart-'+proceso.replace(/\s/g,'-');
+      const canvas=document.getElementById(chartId);
+      if(!canvas) return;
+      try{
+        const d=cronoData.find(x=>x.fase===proceso)||{fase:proceso,rend:500,nCuadrillas:1,semIni:1,kgIni:200,diaIni:0};
+        const progSem=getKgProgSem(d);
+        const ejec=weekEjec.map(w=>w.byFase[proceso]||0);
+        // Acumulado ejecutado para línea
+        let acum=0;
+        const ejecAcum=ejec.map(v=>{acum+=v;return acum>0?acum:null;});
+        // Acumulado programado para línea referencia
+        let acumP=0;
+        const progAcum=progSem.map(v=>{acumP+=v;return acumP;});
+        const labels=semanas.map(s=>s.lbl);
+        new Chart(canvas,{
+          type:'bar',
+          data:{
+            labels,
+            datasets:[
+              {type:'bar',label:'Programado (kg sem)',data:progSem,
+               backgroundColor:'#ef444499',borderColor:'#ef4444',borderWidth:1,borderRadius:2,
+               yAxisID:'y'},
+              {type:'line',label:'Ejecutado acum. (kg)',data:ejecAcum,
+               borderColor:'#f97316',backgroundColor:'transparent',borderWidth:2.5,
+               pointRadius:4,pointBackgroundColor:'#f97316',tension:0.3,spanGaps:false,
+               yAxisID:'y2'},
+              {type:'line',label:'Programado acum. (kg)',data:progAcum,
+               borderColor:'#94a3b8',borderDash:[5,3],backgroundColor:'transparent',borderWidth:1.5,
+               pointRadius:0,tension:0.3,yAxisID:'y2'}
+            ]
+          },
+          options:{
+            responsive:true,maintainAspectRatio:false,
+            plugins:{
+              legend:{display:false},
+              tooltip:{mode:'index',intersect:false,
+                callbacks:{label:ctx=>`${ctx.dataset.label}: ${ctx.raw!=null?(ctx.raw/1000).toFixed(1)+'t':'—'}`}}
+            },
+            scales:{
+              x:{grid:{display:false},ticks:{font:{size:9},maxRotation:0,
+                callback:(v,i)=>(i%4===0)?semanas[i]?.lbl:''}},
+              y:{position:'left',beginAtZero:true,grid:{color:'rgba(255,255,255,0.05)'},
+                 ticks:{font:{size:9},color:'#94a3b8',callback:v=>v>=1000?(v/1000).toFixed(0)+'t':v},
+                 title:{display:true,text:'kg/semana',color:'#64748b',font:{size:9}}},
+              y2:{position:'right',beginAtZero:true,grid:{display:false},
+                  ticks:{font:{size:9},color:'#f97316',callback:v=>v>=1000?(v/1000).toFixed(0)+'t':v},
+                  title:{display:true,text:'kg acumulado',color:'#f97316',font:{size:9}}}
+            }
+          }
+        });
+      }catch(e){console.warn('chart error',proceso,e);}
+    });
+  },150);
 }
+
 
 // ======================= MODAL =======================
 function renderInformeCharts(cortes, prods, byFase) {
