@@ -5611,7 +5611,6 @@ function renderInformeAvanceProceso(refFecha){
 function renderInformeAvancePeso(refFecha){
   const allRecs=[...ST.cortes,...ST.prods];
   const totalPlanKg=TEKLA.conjuntos.reduce((s,c)=>s+(c.peso_total||0),0);
-  const FASE_COLORS={'Corte':'#ef4444','Armado':'#3b82f6','Soldadura':'#eab308','Perforaciones':'#8b5cf6','Limpieza Mecánica':'#06b6d4','Pintura':'#ec4899'};
 
   // Config cronograma
   const cronoData=getCronoData();
@@ -5621,29 +5620,23 @@ function renderInformeAvancePeso(refFecha){
   const jorData=JORNADAS[jorSel]||JORNADAS['5.5d'];
   const fechaBase=new Date(fechaIniCrono);
 
-  // Generar semanas S1..totalSemCrono
+  // Semanas del proyecto
   const semanas=Array.from({length:totalSemCrono},(_,i)=>{
     const ini=new Date(fechaBase); ini.setDate(fechaBase.getDate()+i*7);
     const fin=new Date(ini); fin.setDate(ini.getDate()+6);
-    return{num:i+1,fIni:ini.toISOString().split('T')[0],fFin:fin.toISOString().split('T')[0],
-      lbl:`S${i+1}`,rngIni:`${ini.getDate()}/${ini.getMonth()+1}`,rngFin:`${fin.getDate()}/${fin.getMonth()+1}`};
+    return{
+      num:i+1,
+      fIni:ini.toISOString().split('T')[0],
+      fFin:fin.toISOString().split('T')[0],
+      lbl:`S${i+1}`,
+      lblFecha:`${ini.getDate()}/${ini.getMonth()+1}`
+    };
   });
 
-  // kg ejecutados reales por semana por proceso
-  const weekEjec=semanas.map(s=>{
-    const recsW=allRecs.filter(r=>{const f=fxD(r.fecha);return f>=s.fIni&&f<=s.fFin;});
-    const byFase={};
-    FASES.forEach(f=>{
-      if(f==='Corte') byFase[f]=recsW.filter(r=>r.fase==='Corte').reduce((a,r)=>a+Number(r.pesoParts||r.pesoPzas||0),0);
-      else byFase[f]=recsW.filter(r=>r.fase===f).reduce((a,r)=>a+Number(r.kg||r.peso||0),0);
-    });
-    return{...s,byFase,tot:Object.values(byFase).reduce((a,b)=>a+b,0)};
-  });
-
-  // kg programados por semana por proceso (del cronograma)
-  function getKgProgSem(d){
+  // kg programados por semana por proceso
+  function getProgSem(d){
     const semIni=d.semIni||1, kgIni=d.kgIni||0;
-    const rendSem=d.rend*d.nCuadrillas*jorData.dias;
+    const rendSem=d.rend*(d.nCuadrillas||1)*jorData.dias;
     const pesoResto=Math.max(0,totalPlanKg-kgIni);
     const semanasWork=totalPlanKg>0?(kgIni>0?1+Math.ceil(pesoResto/rendSem):Math.ceil(totalPlanKg/rendSem)):0;
     return semanas.map((_,i)=>{
@@ -5657,173 +5650,208 @@ function renderInformeAvancePeso(refFecha){
     });
   }
 
+  // kg ejecutados reales por semana por proceso
+  const weekEjec=semanas.map(s=>{
+    const recsW=allRecs.filter(r=>{const f=fxD(r.fecha);return f>=s.fIni&&f<=s.fFin;});
+    const byFase={};
+    FASES.forEach(f=>{
+      if(f==='Corte') byFase[f]=recsW.filter(r=>r.fase==='Corte').reduce((a,r)=>a+Number(r.pesoParts||r.pesoPzas||0),0);
+      else byFase[f]=recsW.filter(r=>r.fase===f).reduce((a,r)=>a+Number(r.kg||r.peso||0),0);
+    });
+    const tot=Object.values(byFase).reduce((a,b)=>a+b,0);
+    return{...s,byFase,tot};
+  });
+
   const totEjec=weekEjec.reduce((s,w)=>s+w.tot,0);
   const pctFinal=totalPlanKg>0?Math.min(100,totEjec/totalPlanKg*100):0;
 
-  // Proceso seleccionado (default Corte)
+  // Proceso seleccionado
   const procesoSel=document.getElementById('rpt-proceso-sel')?.value||'Corte';
+  const COLORS={'Corte':'#ef4444','Armado':'#3b82f6','Soldadura':'#eab308','Perforaciones':'#8b5cf6','Limpieza Mecánica':'#06b6d4','Pintura':'#ec4899'};
 
-  // Función para generar HTML de una curva
-  function curvaSectionHTML(proceso, chartId){
-    const d=cronoData.find(x=>x.fase===proceso)||{fase:proceso,rend:500,nCuadrillas:1,semIni:1,kgIni:200,diaIni:0};
-    const color=FASE_COLORS[proceso]||'#ef4444';
-    const progSem=getKgProgSem(d);
-    const ejec=weekEjec.map(w=>w.byFase[proceso]||0);
-    const totP=progSem.reduce((a,b)=>a+b,0);
-    const totE=ejec.reduce((a,b)=>a+b,0);
-    const pct=totalPlanKg>0?(totE/totalPlanKg*100):0;
+  // Semanas con datos o programadas (para tabla)
+  const hoy=new Date().toISOString().split('T')[0];
+  const semVis=semanas.filter(s=>s.fIni<=hoy||weekEjec[s.num-1]?.tot>0);
 
-    // Tabla de datos (solo semanas con datos o programadas)
-    const semsConDatos=semanas.filter((_,i)=>progSem[i]>0||ejec[i]>0);
+  // Tabla estilo cronograma: filas=semanas, columnas=procesos
+  const progData={};
+  FASES.forEach(f=>{
+    const d=cronoData.find(x=>x.fase===f)||{fase:f,rend:500,nCuadrillas:1,semIni:1,kgIni:0};
+    progData[f]=getProgSem(d);
+  });
 
-    return`
-    <div style="background:#1a1a2e;border-radius:8px;padding:16px;margin-bottom:1rem">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:.5rem">
-        <div style="font-size:14px;font-weight:500;color:white">Curva seguimiento — ${proceso}</div>
-        <div style="display:flex;gap:12px;font-size:11px;color:#94a3b8;flex-wrap:wrap">
-          <span><span style="display:inline-block;width:12px;height:12px;background:#ef4444;border-radius:2px;margin-right:4px;vertical-align:middle"></span>Programado</span>
-          <span><span style="display:inline-block;width:20px;height:2px;background:#f97316;vertical-align:middle;margin-right:4px"></span>Ejecutado</span>
-        </div>
-      </div>
-      <div style="display:flex;gap:16px;margin-bottom:8px;flex-wrap:wrap">
-        <div style="font-size:11px;color:#94a3b8">Plan total: <strong style="color:white">${(totalPlanKg/1000).toFixed(1)}t</strong></div>
-        <div style="font-size:11px;color:#94a3b8">Prog. proceso: <strong style="color:#ef4444">${(totP/1000).toFixed(1)}t</strong></div>
-        <div style="font-size:11px;color:#94a3b8">Ejecutado: <strong style="color:#f97316">${(totE/1000).toFixed(1)}t</strong></div>
-        <div style="font-size:11px;color:#94a3b8">Avance: <strong style="color:${pct>0?'#22c55e':'#94a3b8'}">${pct.toFixed(1)}%</strong></div>
-      </div>
-      <div style="position:relative;width:100%;height:220px">
-        <canvas id="${chartId}" role="img" aria-label="Curva S ${proceso}: programado vs ejecutado"></canvas>
-      </div>
-      <!-- Tabla compacta -->
-      <div style="overflow-x:auto;margin-top:8px">
-        <table style="border-collapse:collapse;font-size:10px;width:100%;min-width:600px">
-          <thead>
-            <tr style="border-bottom:1px solid #334155">
-              <td style="padding:3px 6px;color:#64748b;font-weight:500;min-width:80px"></td>
-              ${semsConDatos.map(s=>`<td style="padding:3px 4px;text-align:center;color:#64748b;white-space:nowrap">${s.lbl}<br>${s.rngIni}</td>`).join('')}
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td style="padding:3px 6px;color:#ef4444;font-weight:500">Programado</td>
-              ${semsConDatos.map(s=>{
-                const i=s.num-1;
-                return`<td style="padding:3px 4px;text-align:center;color:${progSem[i]>0?'#fca5a5':'#334155'}">${progSem[i]>0?progSem[i].toFixed(0):'—'}</td>`;
-              }).join('')}
-            </tr>
-            <tr>
-              <td style="padding:3px 6px;color:#f97316;font-weight:500">Ejecutado</td>
-              ${semsConDatos.map(s=>{
-                const i=s.num-1;
-                return`<td style="padding:3px 4px;text-align:center;color:${ejec[i]>0?'#fdba74':'#334155'}">${ejec[i]>0?ejec[i].toFixed(0):'—'}</td>`;
-              }).join('')}
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>`;
-  }
+  // Filas de tabla
+  const tablaFilas=semVis.map(s=>{
+    const i=s.num-1;
+    const wE=weekEjec[i];
+    const totSemEjec=wE.tot;
+    const totSemProg=FASES.reduce((a,f)=>a+(progData[f][i]||0),0);
+    const tieneEjec=totSemEjec>0;
+    return`<tr style="${tieneEjec?'':'opacity:0.5'}">
+      <td style="padding:5px 8px;font-weight:500;white-space:nowrap;color:var(--color-text-primary)">${s.lbl}<br><span style="font-size:9px;color:var(--color-text-secondary)">${s.lblFecha}</span></td>
+      ${FASES.map(f=>{
+        const kg=wE.byFase[f]||0;
+        const color=COLORS[f];
+        return`<td style="padding:4px 6px;text-align:right;font-size:11px;font-weight:${kg>0?500:400};color:${kg>0?color:'var(--color-text-secondary)'}">${kg>0?kg.toFixed(0):'—'}</td>`;
+      }).join('')}
+      <td style="padding:4px 6px;text-align:right;font-weight:500;font-size:11px">${tieneEjec?totSemEjec.toFixed(0):'—'}</td>
+      <td style="padding:4px 6px;text-align:right;font-size:11px;color:var(--color-text-secondary)">${totSemProg>0?totSemProg.toFixed(0):'—'}</td>
+    </tr>`;
+  }).join('');
+
+  // Fila total
+  const totPorFase=FASES.map(f=>weekEjec.reduce((s,w)=>s+(w.byFase[f]||0),0));
+  const totProgTotal=FASES.reduce((s,f,fi)=>s+progData[f].reduce((a,b)=>a+b,0),0);
+  const tablaTotal=`<tr style="background:var(--color-background-secondary);font-weight:500;border-top:2px solid var(--color-border-primary)">
+    <td style="padding:5px 8px">TOTAL</td>
+    ${totPorFase.map((v,fi)=>`<td style="padding:4px 6px;text-align:right;font-size:11px;color:${COLORS[FASES[fi]]}">${v>0?v.toFixed(0):'—'}</td>`).join('')}
+    <td style="padding:4px 6px;text-align:right;font-size:11px;font-weight:500">${totEjec.toFixed(0)}</td>
+    <td style="padding:4px 6px;text-align:right;font-size:11px;color:var(--color-text-secondary)">${totalPlanKg.toFixed(0)}</td>
+  </tr>`;
 
   document.getElementById('informe-area').innerHTML=`
   <div style="padding-bottom:.5rem">
+    <!-- Header -->
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1rem;flex-wrap:wrap;gap:.5rem">
       <div>
-        <div style="font-size:16px;font-weight:500;color:var(--color-text-primary)">Curvas S — Programado vs Ejecutado por proceso</div>
-        <div style="font-size:11px;color:var(--color-text-secondary);margin-top:2px">${TEKLA.proyecto} · Inicio: ${fechaIniCrono} · ${totalSemCrono} semanas</div>
+        <div style="font-size:16px;font-weight:500">Curvas S — Seguimiento por proceso</div>
+        <div style="font-size:11px;color:var(--color-text-secondary)">${TEKLA.proyecto} · Inicio: ${fechaIniCrono} · ${totalSemCrono} sem · ${jorData.label}</div>
       </div>
     </div>
+
     <!-- KPIs -->
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:1rem">
-      <div style="background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:12px">
-        <div style="font-size:12px;color:var(--color-text-secondary)">Plan total</div>
-        <div style="font-size:20px;font-weight:500">${(totalPlanKg/1000).toFixed(1)} t</div>
+      <div style="background:#0f172a;border-radius:8px;padding:12px">
+        <div style="font-size:11px;color:#64748b">Plan total</div>
+        <div style="font-size:20px;font-weight:500;color:white">${(totalPlanKg/1000).toFixed(1)} t</div>
       </div>
-      <div style="background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:12px">
-        <div style="font-size:12px;color:var(--color-text-secondary)">Ejecutado</div>
-        <div style="font-size:20px;font-weight:500">${(totEjec/1000).toFixed(1)} t</div>
+      <div style="background:#064e3b;border-radius:8px;padding:12px">
+        <div style="font-size:11px;color:#6ee7b7">Ejecutado acum.</div>
+        <div style="font-size:20px;font-weight:500;color:white">${(totEjec/1000).toFixed(1)} t</div>
       </div>
-      <div style="background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:12px">
-        <div style="font-size:12px;color:var(--color-text-secondary)">Avance global</div>
-        <div style="font-size:20px;font-weight:500;color:${pctFinal>=50?'#166534':'#92400e'}">${pctFinal.toFixed(1)}%</div>
+      <div style="background:#78350f;border-radius:8px;padding:12px">
+        <div style="font-size:11px;color:#fcd34d">Pendiente</div>
+        <div style="font-size:20px;font-weight:500;color:white">${((totalPlanKg-totEjec)/1000).toFixed(1)} t</div>
+      </div>
+      <div style="background:#14532d;border-radius:8px;padding:12px">
+        <div style="font-size:11px;color:#86efac">Avance real</div>
+        <div style="font-size:20px;font-weight:500;color:white">${pctFinal.toFixed(1)}%</div>
       </div>
     </div>
-    <!-- Filtro proceso -->
+
+    <!-- Selector proceso -->
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:1rem;flex-wrap:wrap">
-      <label style="font-size:13px;color:var(--color-text-secondary);font-weight:500">Ver proceso:</label>
-      <select id="rpt-proceso-sel" onchange="renderInformeAvancePeso()" style="font-size:13px;padding:6px 10px;border-radius:6px;font-weight:500;min-width:180px">
+      <label style="font-size:13px;color:var(--color-text-secondary);font-weight:500">Proceso:</label>
+      <select id="rpt-proceso-sel" onchange="renderInformeAvancePeso()" style="font-size:13px;padding:6px 12px;min-width:200px">
         ${FASES.map(f=>`<option value="${f}" ${f===procesoSel?'selected':''}>${f}</option>`).join('')}
       </select>
-      <label style="font-size:12px;color:var(--color-text-secondary)">o ver todos:</label>
-      <button onclick="document.getElementById('rpt-proceso-sel').value='';renderInformeAvancePeso()" style="font-size:12px;padding:5px 12px">Todos los procesos</button>
     </div>
-    <!-- Curvas -->
-    <div id="curvas-container">
-      ${procesoSel
-        ? curvaSectionHTML(procesoSel,'chart-'+procesoSel.replace(/\s/g,'-'))
-        : FASES.map(f=>curvaSectionHTML(f,'chart-'+f.replace(/\s/g,'-'))).join('')
-      }
+
+    <!-- Gráfico estilo Excel: barras rojas + línea naranja -->
+    <div id="curva-chart-wrap" style="background:#1e293b;border-radius:10px;padding:16px;margin-bottom:1rem">
+      <div id="curva-titulo" style="font-size:14px;font-weight:500;color:white;text-align:center;margin-bottom:12px">Curva seguimiento de ${procesoSel}</div>
+      <div style="display:flex;gap:16px;font-size:11px;color:#94a3b8;margin-bottom:10px;justify-content:center;flex-wrap:wrap">
+        <span><span style="display:inline-block;width:12px;height:12px;background:#ef4444;margin-right:4px;vertical-align:middle"></span>${procesoSel} PROGRAM.</span>
+        <span><span style="display:inline-block;width:20px;height:2px;background:#f97316;vertical-align:middle;margin-right:4px;border-top:2px solid #f97316"></span>${procesoSel} EJECUTADO</span>
+      </div>
+      <div style="position:relative;width:100%;height:260px">
+        <canvas id="rpt-curva-main" role="img" aria-label="Curva S ${procesoSel} programado vs ejecutado"></canvas>
+      </div>
+      <!-- Mini tabla bajo gráfico -->
+      <div style="overflow-x:auto;margin-top:10px">
+        <table id="mini-tabla-chart" style="border-collapse:collapse;font-size:10px;width:100%;min-width:500px">
+          <tbody id="mini-tabla-body"></tbody>
+        </table>
+      </div>
     </div>
+
+    <!-- TABLA EJECUTADO ESTILO CRONOGRAMA: filas=semanas, columnas=procesos -->
+    <div style="font-size:13px;font-weight:500;margin-bottom:.5rem">📊 kg Ejecutados por Semana — todos los procesos</div>
+    <div style="overflow-x:auto">
+      <table style="border-collapse:collapse;font-size:11px;min-width:100%">
+        <thead>
+          <tr style="background:#0f172a;color:white">
+            <th style="padding:6px 8px;text-align:left;min-width:70px;position:sticky;left:0;background:#0f172a;z-index:2">Semana</th>
+            ${FASES.map(f=>`<th style="padding:6px 8px;text-align:right;min-width:70px;color:${COLORS[f]};font-size:10px">${f}</th>`).join('')}
+            <th style="padding:6px 8px;text-align:right;min-width:70px;background:#166534">Ejec. total</th>
+            <th style="padding:6px 8px;text-align:right;min-width:70px;background:#1e293b;color:#64748b">Prog. total</th>
+          </tr>
+        </thead>
+        <tbody>${tablaFilas}${tablaTotal}</tbody>
+      </table>
+    </div>
+
+    <!-- Firmas -->
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:2rem;margin-top:2rem;padding-top:1.5rem;border-top:1px solid var(--color-border-tertiary)">
       ${['Elaborado por','Revisado por','Aprobado por'].map(l=>`<div style="text-align:center"><div style="font-size:10px;color:var(--color-text-secondary);margin-bottom:2rem">${l}:</div><div style="border-top:1px solid var(--color-border-primary);padding-top:5px;font-size:10px;color:var(--color-text-secondary)">Firma y sello</div></div>`).join('')}
     </div>
   </div>`;
 
-  // Renderizar gráficos
+  // Renderizar gráfico
   setTimeout(()=>{
-    const fasesRender=procesoSel?[procesoSel]:FASES;
-    fasesRender.forEach(proceso=>{
-      const chartId='chart-'+proceso.replace(/\s/g,'-');
-      const canvas=document.getElementById(chartId);
-      if(!canvas) return;
-      try{
-        const d=cronoData.find(x=>x.fase===proceso)||{fase:proceso,rend:500,nCuadrillas:1,semIni:1,kgIni:200,diaIni:0};
-        const progSem=getKgProgSem(d);
-        const ejec=weekEjec.map(w=>w.byFase[proceso]||0);
-        // Acumulado ejecutado para línea
-        let acum=0;
-        const ejecAcum=ejec.map(v=>{acum+=v;return acum>0?acum:null;});
-        // Acumulado programado para línea referencia
-        let acumP=0;
-        const progAcum=progSem.map(v=>{acumP+=v;return acumP;});
-        const labels=semanas.map(s=>s.lbl);
-        new Chart(canvas,{
-          type:'bar',
-          data:{
-            labels,
-            datasets:[
-              {type:'bar',label:'Programado (kg sem)',data:progSem,
-               backgroundColor:'#ef444499',borderColor:'#ef4444',borderWidth:1,borderRadius:2,
-               yAxisID:'y'},
-              {type:'line',label:'Ejecutado acum. (kg)',data:ejecAcum,
-               borderColor:'#f97316',backgroundColor:'transparent',borderWidth:2.5,
-               pointRadius:4,pointBackgroundColor:'#f97316',tension:0.3,spanGaps:false,
-               yAxisID:'y2'},
-              {type:'line',label:'Programado acum. (kg)',data:progAcum,
-               borderColor:'#94a3b8',borderDash:[5,3],backgroundColor:'transparent',borderWidth:1.5,
-               pointRadius:0,tension:0.3,yAxisID:'y2'}
-            ]
+    const d=cronoData.find(x=>x.fase===procesoSel)||{fase:procesoSel,rend:500,nCuadrillas:1,semIni:1,kgIni:200,diaIni:0};
+    const progSem=getProgSem(d);
+    const ejecSem=weekEjec.map(w=>w.byFase[procesoSel]||0);
+    let acumE=0, acumP=0;
+    const ejecAcum=ejecSem.map(v=>{acumE+=v;return acumE>0?+acumE.toFixed(0):null;});
+    const progAcum=progSem.map(v=>{acumP+=v;return+acumP.toFixed(0);});
+    const labels=semanas.map(s=>s.lbl);
+    const color=COLORS[procesoSel]||'#ef4444';
+
+    // Mini tabla bajo gráfico
+    const semsData=semanas.filter((_,i)=>progSem[i]>0||ejecSem[i]>0);
+    document.getElementById('mini-tabla-body').innerHTML=`
+      <tr>
+        <td style="padding:2px 6px;color:#ef4444;font-weight:500;white-space:nowrap">${procesoSel} PROGRAM.</td>
+        ${semsData.map(s=>{const v=progSem[s.num-1];return`<td style="padding:2px 4px;text-align:right;color:${v>0?'#fca5a5':'#334155'};font-size:10px">${v>0?v.toFixed(0):'—'}</td>`;}).join('')}
+      </tr>
+      <tr>
+        <td style="padding:2px 6px;color:#f97316;font-weight:500;white-space:nowrap">${procesoSel} EJECUTADO</td>
+        ${semsData.map(s=>{const v=ejecSem[s.num-1];return`<td style="padding:2px 4px;text-align:right;color:${v>0?'#fdba74':'#334155'};font-size:10px">${v>0?v.toFixed(0):'—'}</td>`;}).join('')}
+      </tr>`;
+
+    try{
+      const canvas=document.getElementById('rpt-curva-main');
+      if(window._curvaChart) window._curvaChart.destroy();
+      window._curvaChart=new Chart(canvas,{
+        type:'bar',
+        data:{
+          labels,
+          datasets:[
+            {type:'bar',label:`${procesoSel} PROGRAM.`,data:progSem,
+             backgroundColor:'#ef444488',borderColor:'#ef4444',borderWidth:1,borderRadius:2,yAxisID:'y'},
+            {type:'line',label:`${procesoSel} EJECUTADO`,data:ejecAcum,
+             borderColor:'#f97316',backgroundColor:'transparent',borderWidth:2.5,
+             pointRadius:v=>v!==null?4:0,pointBackgroundColor:'#f97316',
+             tension:0.3,spanGaps:false,yAxisID:'y2'},
+            {type:'line',label:'Plan acum.',data:progAcum,
+             borderColor:'#64748b',borderDash:[4,3],backgroundColor:'transparent',
+             borderWidth:1.5,pointRadius:0,tension:0.3,yAxisID:'y2'}
+          ]
+        },
+        options:{
+          responsive:true,maintainAspectRatio:false,
+          plugins:{
+            legend:{display:false},
+            tooltip:{mode:'index',intersect:false,
+              callbacks:{label:ctx=>`${ctx.dataset.label}: ${ctx.raw!=null?(ctx.raw/1000).toFixed(1)+'t':'—'}`}}
           },
-          options:{
-            responsive:true,maintainAspectRatio:false,
-            plugins:{
-              legend:{display:false},
-              tooltip:{mode:'index',intersect:false,
-                callbacks:{label:ctx=>`${ctx.dataset.label}: ${ctx.raw!=null?(ctx.raw/1000).toFixed(1)+'t':'—'}`}}
-            },
-            scales:{
-              x:{grid:{display:false},ticks:{font:{size:9},maxRotation:0,
-                callback:(v,i)=>(i%4===0)?semanas[i]?.lbl:''}},
-              y:{position:'left',beginAtZero:true,grid:{color:'rgba(255,255,255,0.05)'},
-                 ticks:{font:{size:9},color:'#94a3b8',callback:v=>v>=1000?(v/1000).toFixed(0)+'t':v},
-                 title:{display:true,text:'kg/semana',color:'#64748b',font:{size:9}}},
-              y2:{position:'right',beginAtZero:true,grid:{display:false},
-                  ticks:{font:{size:9},color:'#f97316',callback:v=>v>=1000?(v/1000).toFixed(0)+'t':v},
-                  title:{display:true,text:'kg acumulado',color:'#f97316',font:{size:9}}}
-            }
+          scales:{
+            x:{grid:{color:'rgba(255,255,255,0.05)'},
+               ticks:{color:'#94a3b8',font:{size:9},
+                 callback:(v,i)=>(i===0||i%4===0||i===semanas.length-1)?semanas[i]?.lbl:''}},
+            y:{position:'left',beginAtZero:true,
+               grid:{color:'rgba(255,255,255,0.08)'},
+               ticks:{color:'#94a3b8',font:{size:9},callback:v=>v>=1000?(v/1000).toFixed(0)+'t':v}},
+            y2:{position:'right',beginAtZero:true,grid:{display:false},
+                ticks:{color:'#f97316',font:{size:9},callback:v=>v>=1000?(v/1000).toFixed(0)+'t':v}}
           }
-        });
-      }catch(e){console.warn('chart error',proceso,e);}
-    });
+        }
+      });
+      // Fondo oscuro en el canvas
+      const chart=window._curvaChart;
+      chart.canvas.parentNode.style.background='#1e293b';
+    }catch(e){console.warn(e);}
   },150);
 }
 
