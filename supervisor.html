@@ -1201,6 +1201,7 @@ global.Chart = class {
           <option value="conjunto">🔧 Por conjunto</option>
           <option value="avance_proceso">📈 Avance semanal por proceso</option>
           <option value="avance_peso">⚖️ Avance semanal por peso / Curva S</option>
+          <option value="cronograma">📋 Cronograma por cuadrilla</option>
         </select>
       </div>
       <!-- Fecha simple (diario/semanal/mensual) -->
@@ -4598,6 +4599,238 @@ function openModalFase(cj, parte, fase) {
   document.getElementById('modal-bg').classList.add('open');
 }
 
+
+// ======================= CRONOGRAMA =======================
+const JORNADAS = {
+  '5d':  {label:'Lun–Vie (5 días)',          dias:5.0},
+  '5.5d':{label:'Lun–Vie + Sáb ½ (5.5 días)',dias:5.5},
+  '6d':  {label:'Lun–Sáb (6 días)',          dias:6.0},
+};
+const CRONO_DEFAULT = [
+  {fase:'Corte',            icon:'✂️', color:'#f97316', cuadrilla:'1 Cortador + 1 Ayudante',       rend:500, nCuadrillas:1, nota:'Plasma/oxicorte, placas medianas'},
+  {fase:'Armado',           icon:'🔩', color:'#3b82f6', cuadrilla:'1 Armador + 1 Ayudante',         rend:300, nCuadrillas:1, nota:'Ensamble vigas HI y perfiles'},
+  {fase:'Soldadura',        icon:'🔥', color:'#eab308', cuadrilla:'1 Soldador + 1 Ayudante (SMAW)', rend:200, nCuadrillas:1, nota:'SMAW posición 1G/1F en taller'},
+  {fase:'Perforaciones',    icon:'🔨', color:'#8b5cf6', cuadrilla:'1 Perforador',                   rend:800, nCuadrillas:1, nota:'Taladro magnético'},
+  {fase:'Limpieza Mecánica',icon:'⚙️', color:'#06b6d4', cuadrilla:'1 Operario + 1 Ayudante',        rend:600, nCuadrillas:1, nota:'Esmeril angular / granallado'},
+  {fase:'Pintura',          icon:'🎨', color:'#ec4899', cuadrilla:'1 Pintor + 1 Ayudante',          rend:700, nCuadrillas:1, nota:'Brocha/rodillo, 1 mano primario'},
+];
+let _cronoData=null;
+function getCronoData(){
+  if(!_cronoData){try{_cronoData=JSON.parse(localStorage.getItem('crono_config')||'null');}catch(e){}
+  if(!_cronoData)_cronoData=JSON.parse(JSON.stringify(CRONO_DEFAULT));}
+  return _cronoData;
+}
+function saveCronoData(){localStorage.setItem('crono_config',JSON.stringify(_cronoData));}
+function resetCrono(){_cronoData=JSON.parse(JSON.stringify(CRONO_DEFAULT));saveCronoData();renderCronograma();}
+
+function renderCronograma(){
+  const data=getCronoData();
+  const pesoTotal=TEKLA.partes
+    ?TEKLA.partes.reduce((s,p)=>s+(p.cantidad||0)*(p.kg||0),0)
+    :TEKLA.conjuntos.reduce((s,c)=>s+(c.cantidad||0)*(c.kg||0),0);
+
+  const jorSel  =document.getElementById('crono-jorn')?.value||'5.5d';
+  const jorData =JORNADAS[jorSel]||JORNADAS['5.5d'];
+  const fechaIni=document.getElementById('crono-fecha-ini')?.value||today();
+  const plazo   =parseInt(document.getElementById('crono-plazo')?.value||12);
+
+  // Avance real
+  const kgReal={};
+  ['Corte','Armado','Soldadura','Perforaciones','Limpieza Mecánica','Pintura'].forEach(f=>kgReal[f]=0);
+  ST.cortes.forEach(c=>{kgReal['Corte']+=Number(c.pesoPzas||c.pesoParts||0);});
+  ST.prods.forEach(p=>{if(kgReal[p.fase]!==undefined)kgReal[p.fase]+=Number(p.kg||p.peso||0);});
+
+  const rows=data.map(d=>{
+    const rendSem=d.rend*d.nCuadrillas*jorData.dias;
+    const semanas=pesoTotal>0?Math.ceil(pesoTotal/rendSem):0;
+    const ejec=kgReal[d.fase]||0;
+    const pct=pesoTotal>0?Math.min(100,ejec/pesoTotal*100):0;
+    // Cuadrillas necesarias para cumplir el plazo
+    const cuadNecesarias=pesoTotal>0?Math.ceil(pesoTotal/(d.rend*jorData.dias*plazo)):0;
+    const ok=d.nCuadrillas>=cuadNecesarias;
+    return{...d,rendSem,semanas,ejec,pct,cuadNecesarias,ok};
+  });
+
+  const maxSem=Math.min(Math.max(...rows.map(r=>r.semanas),1),60);
+  const semHdrs=Array.from({length:maxSem},(_,i)=>{
+    const f=new Date(fechaIni);f.setDate(f.getDate()+i*7);
+    return `S${i+1}<br><span style="font-size:9px;font-weight:400">${f.toLocaleDateString('es',{day:'2-digit',month:'2-digit'})}</span>`;
+  });
+
+  document.getElementById('informe-area').innerHTML=`
+  <div class="card" style="margin-top:1rem">
+    <div class="card-hdr" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5rem">
+      <span>📋 Cronograma de Producción por Cuadrilla</span>
+      <div style="display:flex;gap:.5rem">
+        <button class="btn btn-g" onclick="resetCrono()" style="font-size:11px">↺ Restablecer</button>
+        <button class="btn btn-s" onclick="window.print()" style="font-size:11px">🖨 Imprimir</button>
+      </div>
+    </div>
+
+    <!-- Controles -->
+    <div class="frow" style="gap:1rem;padding:.75rem;background:#f8fafc;border-radius:8px;margin-bottom:1.25rem;flex-wrap:wrap;align-items:flex-end">
+      <div class="fg fix">
+        <label style="font-size:11px;font-weight:700;color:#64748b;display:block;margin-bottom:3px">Jornada semanal</label>
+        <select id="crono-jorn" onchange="renderCronograma()" style="border:1.5px solid #d1d5db;border-radius:6px;padding:5px 10px;font-size:13px;font-weight:600">
+          ${Object.entries(JORNADAS).map(([k,v])=>`<option value="${k}" ${jorSel===k?'selected':''}>${v.label}</option>`).join('')}
+        </select>
+      </div>
+      <div class="fg fix">
+        <label style="font-size:11px;font-weight:700;color:#64748b;display:block;margin-bottom:3px">Fecha inicio</label>
+        <input type="date" id="crono-fecha-ini" value="${fechaIni}" onchange="renderCronograma()"
+          style="border:1.5px solid #d1d5db;border-radius:6px;padding:5px 8px;font-size:13px">
+      </div>
+      <div class="fg fix">
+        <label style="font-size:11px;font-weight:700;color:#e11d48;display:block;margin-bottom:3px">⏱ Plazo objetivo (semanas)</label>
+        <input type="number" id="crono-plazo" value="${plazo}" min="1" max="200" onchange="renderCronograma()"
+          style="width:80px;border:2px solid #e11d48;border-radius:6px;padding:5px 8px;font-size:16px;font-weight:700;color:#e11d48;text-align:center">
+      </div>
+      <div class="fg" style="min-width:180px">
+        <div style="background:#0f172a;color:white;border-radius:8px;padding:.5rem 1rem;font-size:13px">
+          ⚖️ Peso total: <strong>${pesoTotal.toFixed(1)} kg</strong>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tabla cuadrillas -->
+    <div style="font-size:13px;font-weight:700;color:#0f172a;margin-bottom:.5rem">
+      👷 Cuadrillas y Rendimientos
+      <span style="font-size:11px;font-weight:400;color:#64748b"> — editables, se guardan automáticamente</span>
+    </div>
+    <div style="overflow-x:auto;margin-bottom:1.5rem">
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead>
+          <tr style="background:#0f172a;color:white;font-size:11px">
+            <th style="padding:8px 10px;text-align:left;min-width:130px">Proceso</th>
+            <th style="padding:8px 10px;text-align:left;min-width:190px">Cuadrilla tipo</th>
+            <th style="padding:8px 10px;text-align:left;min-width:150px">Nota técnica</th>
+            <th style="padding:8px;text-align:center;min-width:90px">Rend.<br><small>kg/día/cuad.</small></th>
+            <th style="padding:8px;text-align:center;min-width:80px">N° Cuad.<br><small>actuales</small></th>
+            <th style="padding:8px;text-align:center;min-width:80px;background:#7f1d1d">N° Cuad.<br><small>para plazo</small></th>
+            <th style="padding:8px;text-align:center;min-width:60px">Estado</th>
+            <th style="padding:8px;text-align:center;min-width:90px">Rend. total<br><small>kg/semana</small></th>
+            <th style="padding:8px;text-align:center;min-width:70px">Semanas<br><small>con actual</small></th>
+            <th style="padding:8px;text-align:center;min-width:80px">Ejecutado<br><small>kg reales</small></th>
+            <th style="padding:8px;text-align:center;min-width:60px">Avance</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map((r,i)=>`
+          <tr style="border-bottom:1px solid #e2e8f0;${i%2?'background:#fafafa':''}">
+            <td style="padding:7px 10px;font-weight:700;color:${r.color};white-space:nowrap">${r.icon} ${r.fase}</td>
+            <td style="padding:5px 8px">
+              <input type="text" value="${r.cuadrilla}"
+                onchange="_cronoData[${i}].cuadrilla=this.value;saveCronoData()"
+                style="width:100%;border:1px solid #d1d5db;border-radius:4px;padding:3px 5px;font-size:11px">
+            </td>
+            <td style="padding:5px 8px">
+              <input type="text" value="${r.nota||''}"
+                onchange="_cronoData[${i}].nota=this.value;saveCronoData()"
+                style="width:100%;border:1px solid #d1d5db;border-radius:4px;padding:3px 5px;font-size:11px;color:#64748b">
+            </td>
+            <td style="padding:5px 8px;text-align:center">
+              <input type="number" value="${r.rend}" min="1" max="9999"
+                onchange="_cronoData[${i}].rend=+this.value;saveCronoData();renderCronograma()"
+                style="width:68px;border:2px solid ${r.color};border-radius:4px;padding:4px;font-size:13px;font-weight:700;text-align:center">
+            </td>
+            <td style="padding:5px 8px;text-align:center">
+              <input type="number" value="${r.nCuadrillas}" min="1" max="20"
+                onchange="_cronoData[${i}].nCuadrillas=+this.value;saveCronoData();renderCronograma()"
+                style="width:52px;border:2px solid ${r.color};border-radius:4px;padding:4px;font-size:13px;font-weight:700;text-align:center">
+            </td>
+            <td style="padding:5px 8px;text-align:center">
+              <span style="background:${r.ok?'#166534':'#991b1b'};color:white;padding:3px 10px;border-radius:10px;font-weight:700;font-size:14px">${r.cuadNecesarias}</span>
+            </td>
+            <td style="padding:5px 8px;text-align:center;font-size:18px">${r.ok?'✅':'⚠️'}</td>
+            <td style="padding:7px 8px;text-align:center;font-weight:700;color:#166534">${r.rendSem.toFixed(0)}</td>
+            <td style="padding:5px 8px;text-align:center">
+              <span style="background:${r.semanas<=plazo?'#166534':'#b45309'};color:white;padding:3px 12px;border-radius:12px;font-weight:700;font-size:13px">${r.semanas}</span>
+            </td>
+            <td style="padding:7px 8px;text-align:center;font-weight:700">${r.ejec.toFixed(1)}</td>
+            <td style="padding:5px 8px;text-align:center;min-width:60px">
+              <div style="background:#e2e8f0;border-radius:4px;height:18px;position:relative">
+                <div style="background:${r.color};height:18px;border-radius:4px;width:${Math.min(100,r.pct)}%"></div>
+                <span style="position:absolute;top:0;left:0;right:0;text-align:center;font-size:10px;font-weight:700;line-height:18px;color:${r.pct>50?'white':'#0f172a'}">${r.pct.toFixed(1)}%</span>
+              </div>
+            </td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Gantt -->
+    <div style="font-size:13px;font-weight:700;color:#0f172a;margin-bottom:.5rem">
+      📅 Diagrama Gantt — ${maxSem} semanas · ${jorData.label}
+      <span style="background:#e11d48;color:white;padding:2px 10px;border-radius:10px;font-size:11px;margin-left:.5rem">Plazo: ${plazo} sem</span>
+    </div>
+    <div style="overflow-x:auto;margin-bottom:1.5rem">
+      <table style="border-collapse:collapse;font-size:10px">
+        <thead>
+          <tr style="background:#1e293b;color:white">
+            <th style="padding:6px 10px;text-align:left;min-width:130px;position:sticky;left:0;background:#1e293b;z-index:1">Proceso</th>
+            ${semHdrs.map((h,i)=>`<th style="padding:4px 2px;text-align:center;min-width:38px;${i===plazo-1?'border-right:3px solid #e11d48':''}">${h}</th>`).join('')}
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map(r=>`
+          <tr style="border-bottom:1px solid #e2e8f0">
+            <td style="padding:5px 10px;font-weight:700;color:${r.color};position:sticky;left:0;background:white;z-index:1;white-space:nowrap">${r.icon} ${r.fase}</td>
+            ${Array.from({length:maxSem},(_,si)=>{
+              const activo=si<r.semanas;
+              const dentroP=si<plazo;
+              const kg=activo?(si===r.semanas-1?pesoTotal-r.rendSem*si:r.rendSem):0;
+              return `<td style="padding:3px 2px;text-align:center;border:1px solid #f1f5f9;${si===plazo-1?'border-right:3px solid #e11d48':''}">
+                ${activo?`<div title="${kg.toFixed(0)} kg" style="height:20px;background:${dentroP?r.color:'#94a3b8'};border-radius:3px;opacity:${0.4+0.6*(si+1)/r.semanas}"></div>`:''}
+              </td>`;
+            }).join('')}
+          </tr>`).join('')}
+        </tbody>
+      </table>
+      <div style="font-size:10px;color:#94a3b8;margin-top:4px">
+        <span style="color:${rows[0]?.color||'#f97316'}">■</span> Dentro del plazo &nbsp;
+        <span style="color:#94a3b8">■</span> Fuera del plazo &nbsp;
+        <span style="border-right:3px solid #e11d48;display:inline-block;height:12px;margin:0 4px;vertical-align:middle"></span> Límite plazo
+      </div>
+    </div>
+
+    <!-- Tabla kg/semana -->
+    <div style="font-size:13px;font-weight:700;color:#0f172a;margin-bottom:.5rem">📊 kg Programados por Semana</div>
+    <div style="overflow-x:auto">
+      <table style="border-collapse:collapse;font-size:11px">
+        <thead>
+          <tr style="background:#1e293b;color:white">
+            <th style="padding:6px 10px;text-align:left;min-width:130px;position:sticky;left:0;background:#1e293b;z-index:1">Proceso</th>
+            ${semHdrs.map((h,i)=>`<th style="padding:4px 5px;text-align:center;min-width:55px;${i===plazo-1?'border-right:3px solid #e11d48':''}">${h}</th>`).join('')}
+            <th style="padding:4px 8px;text-align:center;background:#166534;min-width:70px">TOTAL</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map(r=>{
+            let acum=0;
+            const cells=Array.from({length:maxSem},(_,si)=>{
+              const brd=si===plazo-1?'border-right:3px solid #e11d48':'';
+              if(si>=r.semanas)return`<td style="padding:4px 5px;text-align:center;border:1px solid #e2e8f0;color:#d1d5db;${brd}">—</td>`;
+              const esUlt=si===r.semanas-1;
+              const kg=esUlt?pesoTotal-acum:r.rendSem;
+              acum+=kg;
+              return`<td style="padding:4px 5px;text-align:center;border:1px solid #e2e8f0;font-weight:${esUlt?700:400};background:${esUlt?r.color+'33':''};${brd}">${kg.toFixed(0)}</td>`;
+            }).join('');
+            return`<tr style="border-bottom:1px solid #e2e8f0">
+              <td style="padding:6px 10px;font-weight:700;color:${r.color};position:sticky;left:0;background:white;z-index:1">${r.icon} ${r.fase}</td>
+              ${cells}
+              <td style="padding:4px 8px;text-align:center;font-weight:700;background:#f0fdf4;border:1px solid #86efac">${pesoTotal.toFixed(0)}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+    <div style="font-size:10px;color:#94a3b8;margin-top:1rem;padding-top:.5rem;border-top:1px solid #e2e8f0">
+      📚 Rendimientos de referencia: CAMICON Ecuador · Literatura metalmecánica latinoamericana · AWS D1.1 · Jornada 8h/día.
+      ✅ = cuadrillas actuales suficientes para el plazo · ⚠️ = necesitas más cuadrillas
+    </div>
+  </div>`;
+}
+
 // ======================= STOCK =======================
 // ═══════════════════════════════════════════════════════════════
 // SISTEMA DE FORMAS COMPLEJAS — Soporta múltiples cortes
@@ -5120,6 +5353,9 @@ function renderInforme(){
     return;
   } else if(tipo==='avance_peso'){
     renderInformeAvancePeso(fecha);
+    return;
+  } else if(tipo==='cronograma'){
+    renderCronograma();
     return;
   } else {
     filtro=r=>true; lbl='Informe General';
