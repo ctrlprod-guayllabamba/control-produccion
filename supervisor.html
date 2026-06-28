@@ -1464,6 +1464,8 @@ async function loadFromServer(){
     _loadFromLS();
     if(si){ si.textContent='⚫ Configura la URL de Google para sincronizar'; si.style.color='var(--gm)'; }
   }
+  // Actualizar dashboard con datos frescos
+  if(typeof renderDashboard === 'function') renderDashboard();
 }
 
 function _loadFromLS(){
@@ -1931,7 +1933,7 @@ function renderDashboard() {
   const partesTotal = allPartes().reduce((s,p)=>s+p.cantidad,0);
   const totalCortado = ST.cortes.reduce((s,c)=>s+c.qty,0);
   const totalProd = ST.prods.reduce((s,p)=>s+p.qty,0);
-  const totalStock = ST.cortes.reduce((s,c)=>s+getSobrantesDeCorte(c).filter(x=>x.dest==='stock').reduce((a,x)=>a+x.peso,0),0);
+  const totalStock = _calcStockSaldos().reduce((s,x)=>s+x.saldo,0);
   const totalDesp = ST.cortes.reduce((s,c)=>s+(c.desperdicio||0),0);
   const totalKgEjec = ST.cortes.reduce((s,c)=>s+Number(c.pesoParts||c.pesoPzas||0),0);
   const pendPartes = allPartes().reduce((s,p)=>s+Math.max(0,p.cantidad-getCortadoQty(p.conjunto,p.parte)),0);
