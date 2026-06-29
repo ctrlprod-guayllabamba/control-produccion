@@ -2497,42 +2497,7 @@ function wkSobHTML(s,i){
         <div><label style="font-size:10px;color:#6b7280">Cant.</label><input type="number" id="ws-qty-${i}" value="${s.qty||1}" inputmode="numeric" min="1" style="width:100%;padding:7px;border:1.5px solid #86efac;border-radius:8px;font-size:15px" oninput="wkUpdSob(${i})"></div>
       </div>`
     : (s.tipo==='forma_l'||s.tipo==='forma_compleja')
-    ? (()=>{
-        const heredados = s._cortesHeredados||[];
-        const tieneHeredados = heredados.length>0;
-        const ESQ_LABELS={'tl':'↖ Sup-Izq','tr':'↗ Sup-Der','bl':'↙ Inf-Izq','br':'↘ Inf-Der'};
-        const heredadosHTML = tieneHeredados
-          ? `<div style="background:#1e3a5f;border-radius:8px;padding:8px 10px;margin-bottom:8px">
-              <div style="font-size:11px;color:#93c5fd;font-weight:700;margin-bottom:4px">🔒 Cortes previos (heredados)</div>
-              ${heredados.map((c,ci)=>`<div style="font-size:11px;color:#bfdbfe;margin-bottom:2px">Corte ${ci+1}: ${ESQ_LABELS[c.esq||'tl']} · ${c.ac}×${c.lc} mm</div>`).join('')}
-            </div>`
-          : '';
-        const esqActual = s.esq_nuevo||'tl';
-        const svgPreviewId = \`ws-svg-preview-\${i}\`;
-        return \`<div style="margin-top:.375rem">
-          <div style="font-size:11px;color:#065f46;font-weight:700;margin-bottom:6px">📐 Rectángulo envolvente</div>
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:8px">
-            <div><label style="font-size:10px;color:#6b7280">Esp (mm)</label><input type="number" id="ws-esp-${i}" value="\${s.esp||''}" inputmode="numeric" placeholder="12" style="width:100%;padding:7px;border:1.5px solid #86efac;border-radius:8px;font-size:15px;font-weight:700" \${tieneHeredados?'readonly style="background:#f0f4f8;border-color:#86efac"':''} oninput="wkUpdSob(${i})"></div>
-            <div><label style="font-size:10px;color:#6b7280">Ancho total (mm)</label><input type="number" id="ws-ancho-${i}" value="\${s.ancho||''}" inputmode="numeric" placeholder="2500" style="width:100%;padding:7px;border:1.5px solid #86efac;border-radius:8px;font-size:15px;font-weight:700" \${tieneHeredados?'readonly style="background:#f0f4f8;border-color:#86efac"':''} oninput="wkUpdSob(${i})"></div>
-            <div><label style="font-size:10px;color:#6b7280">Largo total (mm)</label><input type="number" id="ws-largo-${i}" value="\${s.largo||''}" inputmode="numeric" placeholder="12000" style="width:100%;padding:7px;border:1.5px solid #86efac;border-radius:8px;font-size:15px;font-weight:700" \${tieneHeredados?'readonly style="background:#f0f4f8;border-color:#86efac"':''} oninput="wkUpdSob(${i})"></div>
-          </div>
-          \${heredadosHTML}
-          <div style="font-size:11px;color:#92400e;font-weight:700;margin-bottom:6px">✂ Nuevo corte resultante</div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
-            <div style="grid-column:1/-1"><label style="font-size:10px;color:#6b7280">Esquina del nuevo corte</label>
-              <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:4px;margin-top:4px">
-                \${['tl','tr','bl','br'].map(esq=>\`<button type="button" onclick="wkSobSetEsq(\${i},'\${esq}')" style="padding:6px 2px;border-radius:6px;font-size:11px;font-weight:700;border:2px solid \${esqActual===esq?'#f97316':'#d1d5db'};background:\${esqActual===esq?'#fff7ed':'white'};color:\${esqActual===esq?'#c2410c':'#374151'};cursor:pointer">\${ESQ_LABELS[esq]}</button>\`).join('')}
-              </div>
-            </div>
-            <div><label style="font-size:10px;color:#6b7280">Ancho corte (mm)</label><input type="number" id="ws-ancho-corte-${i}" value="\${s.ancho_corte||''}" inputmode="numeric" placeholder="300" style="width:100%;padding:7px;border:1.5px solid #fcd34d;border-radius:8px;font-size:15px;font-weight:700" oninput="wkUpdSob(${i})"></div>
-            <div><label style="font-size:10px;color:#6b7280">Largo corte (mm)</label><input type="number" id="ws-largo-corte-${i}" value="\${s.largo_corte||''}" inputmode="numeric" placeholder="300" style="width:100%;padding:7px;border:1.5px solid #fcd34d;border-radius:8px;font-size:15px;font-weight:700" oninput="wkUpdSob(${i})"></div>
-          </div>
-          <div id="\${svgPreviewId}"></div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px">
-            <div><label style="font-size:10px;color:#6b7280">Cant.</label><input type="number" id="ws-qty-${i}" value="\${s.qty||1}" inputmode="numeric" min="1" style="width:100%;padding:7px;border:1.5px solid #86efac;border-radius:8px;font-size:15px" oninput="wkUpdSob(${i})"></div>
-          </div>
-        </div>\`;
-      })()
+    ? wkSobFormaHTML(s, i)
     : s.tipo==='perfil'
     ? `<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:.375rem">
         <div><label style="font-size:10px;color:#6b7280">Largo (mm)</label><input type="number" id="ws-largo-${i}" value="${s.largo||''}" inputmode="numeric" placeholder="mm" style="width:100%;padding:7px;border:1.5px solid #86efac;border-radius:8px;font-size:14px" oninput="wkUpdSob(${i})"></div>
@@ -2565,6 +2530,60 @@ function wkSobHTML(s,i){
       → ${peso.toFixed(2)} kg
     </div>
   </div>`;
+}
+
+function wkSobFormaHTML(s, i){
+  const heredados = s._cortesHeredados||[];
+  const tieneHeredados = heredados.length>0;
+  const ESQ_LABELS = {'tl':'↖ Sup-Izq','tr':'↗ Sup-Der','bl':'↙ Inf-Izq','br':'↘ Inf-Der'};
+  const esqActual = s.esq_nuevo||'tl';
+
+  let heredadosHTML = '';
+  if(tieneHeredados){
+    let filas = heredados.map(function(c,ci){
+      return '<div style="font-size:11px;color:#bfdbfe;margin-bottom:2px">Corte '+(ci+1)+': '+(ESQ_LABELS[c.esq||'tl']||c.esq)+' · '+c.ac+'×'+c.lc+' mm</div>';
+    }).join('');
+    heredadosHTML = '<div style="background:#1e3a5f;border-radius:8px;padding:8px 10px;margin-bottom:8px">'
+      +'<div style="font-size:11px;color:#93c5fd;font-weight:700;margin-bottom:4px">🔒 Cortes previos (heredados)</div>'
+      +filas+'</div>';
+  }
+
+  const rdonly = tieneHeredados ? 'readonly' : '';
+  const rdstyle = tieneHeredados ? 'background:#e8f0e8;' : '';
+
+  let esqBtns = ['tl','tr','bl','br'].map(function(esq){
+    const sel = esqActual===esq;
+    const bord = sel ? '#f97316' : '#d1d5db';
+    const bg   = sel ? '#fff7ed' : 'white';
+    const col  = sel ? '#c2410c' : '#374151';
+    return '<button type="button" onclick="wkSobSetEsq(' + i + ',&quot;' + esq + '&quot;)" style="padding:6px 2px;border-radius:6px;font-size:11px;font-weight:700;border:2px solid '+bord+';background:'+bg+';color:'+col+';cursor:pointer">' + ESQ_LABELS[esq] + '</button>';
+  }).join('');
+
+  return '<div style="margin-top:.375rem">'
+    +'<div style="font-size:11px;color:#065f46;font-weight:700;margin-bottom:6px">📐 Rectángulo envolvente</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:8px">'
+      +'<div><label style="font-size:10px;color:#6b7280">Esp (mm)</label>'
+        +'<input type="number" id="ws-esp-'+i+'" value="'+(s.esp||'')+'" inputmode="numeric" '+rdonly+' style="width:100%;padding:7px;border:1.5px solid #86efac;border-radius:8px;font-size:15px;font-weight:700;'+rdstyle+'" oninput="wkUpdSob('+i+')"></div>'
+      +'<div><label style="font-size:10px;color:#6b7280">Ancho total (mm)</label>'
+        +'<input type="number" id="ws-ancho-'+i+'" value="'+(s.ancho||'')+'" inputmode="numeric" '+rdonly+' style="width:100%;padding:7px;border:1.5px solid #86efac;border-radius:8px;font-size:15px;font-weight:700;'+rdstyle+'" oninput="wkUpdSob('+i+')"></div>'
+      +'<div><label style="font-size:10px;color:#6b7280">Largo total (mm)</label>'
+        +'<input type="number" id="ws-largo-'+i+'" value="'+(s.largo||'')+'" inputmode="numeric" '+rdonly+' style="width:100%;padding:7px;border:1.5px solid #86efac;border-radius:8px;font-size:15px;font-weight:700;'+rdstyle+'" oninput="wkUpdSob('+i+')"></div>'
+    +'</div>'
+    +heredadosHTML
+    +'<div style="font-size:11px;color:#92400e;font-weight:700;margin-bottom:6px">✂ Nuevo corte resultante</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">'
+      +'<div style="grid-column:1/-1"><label style="font-size:10px;color:#6b7280">Esquina del nuevo corte</label>'
+        +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:4px;margin-top:4px">'+esqBtns+'</div>'
+      +'</div>'
+      +'<div><label style="font-size:10px;color:#6b7280">Ancho corte (mm)</label>'
+        +'<input type="number" id="ws-ancho-corte-'+i+'" value="'+(s.ancho_corte||'')+'" inputmode="numeric" placeholder="300" style="width:100%;padding:7px;border:1.5px solid #fcd34d;border-radius:8px;font-size:15px;font-weight:700" oninput="wkUpdSob('+i+')"></div>'
+      +'<div><label style="font-size:10px;color:#6b7280">Largo corte (mm)</label>'
+        +'<input type="number" id="ws-largo-corte-'+i+'" value="'+(s.largo_corte||'')+'" inputmode="numeric" placeholder="300" style="width:100%;padding:7px;border:1.5px solid #fcd34d;border-radius:8px;font-size:15px;font-weight:700" oninput="wkUpdSob('+i+')"></div>'
+    +'</div>'
+    +'<div id="ws-svg-preview-'+i+'"></div>'
+    +'<div style="margin-top:6px"><label style="font-size:10px;color:#6b7280">Cant.</label>'
+      +'<input type="number" id="ws-qty-'+i+'" value="'+(s.qty||1)+'" inputmode="numeric" min="1" style="width:100%;padding:7px;border:1.5px solid #86efac;border-radius:8px;font-size:15px" oninput="wkUpdSob('+i+')"></div>'
+    +'</div>';
 }
 
 function wkSobSetEsq(i, esq){
