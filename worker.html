@@ -2015,7 +2015,7 @@ function wkMatHTML(m,i){
           ${m.stockRef ? `<div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:8px;font-size:12px;color:#065f46">
             ✅ <strong>${m.colada||'—'}</strong> · ${m.esp}×${m.ancho}×${m.largo}mm · <strong>${(m.peso||0).toFixed(1)} kg</strong>
             ${(m.tipo==='forma_l'||m.tipoOrig==='forma_l'||m.tipoOrig==='forma_compleja')?'<br><span style="color:#3b6d11">⌐ Forma en L — corte: '+m.ancho_corte+'×'+m.largo_corte+'mm</span>':''}
-          <div id="wm-stock-svg-${i}" style="display:none;margin-top:8px;background:#0d1117;border-radius:12px;padding:10px;border:1.5px solid #374151"></div>
+          <div id="wm-stock-svg-${i}" style="${m._svgStock?'block':'none'};margin-top:8px;background:#0d1117;border-radius:12px;padding:10px;border:1.5px solid #374151">${m._svgStock||''}</div>
           </div>` : '<div style="font-size:11px;color:#6b7280">Selecciona un sobrante para usar como materia prima</div>'}
         </div>`
       : `<div style="margin-top:.375rem;background:#fef3c7;border-radius:8px;padding:.75rem;font-size:12px;color:#92400e">
@@ -2109,23 +2109,20 @@ function wkSelStock(i){
   if(isNaN(idx)||idx<0) return;
   const stocks=wkStockDisponible();
   const s=stocks[idx]; if(!s) return;
-  // Mostrar SVG prominente del sobrante seleccionado
-  const prevEl = document.getElementById(`wm-stock-svg-${i}`);
-  if(prevEl){
-    const D=7.85e-9;
-    const pesoSob = (s.tipo==='forma_l'||s.tipo==='forma_compleja')
-      ? (()=>{ const c2=s.cortes_extra&&s.cortes_extra.length>0?s.cortes_extra:[{ac:s.ancho_corte||0,lc:s.largo_corte||0}]; return s.esp*(s.ancho*s.largo-c2.reduce((sm,c)=>sm+(c.ac||0)*(c.lc||0),0))*D; })()
-      : (s.esp*s.ancho*s.largo*D);
-    if(s.tipo==='forma_l'||s.tipo==='forma_compleja'){
-      const cortesE = s.cortes_extra&&s.cortes_extra.length>0 ? s.cortes_extra : [{ac:s.ancho_corte||0,lc:s.largo_corte||0,esq:s.esq||'tl'}];
-      prevEl.innerHTML = '<div style="margin:8px 0 4px;font-size:11px;font-weight:700;color:#fbbf24">📐 Forma del sobrante disponible</div>'
-        + formaLSVG_wk(s.esp,s.ancho,s.largo,s.ancho_corte,s.largo_corte,cortesE)
-        + '<div style="font-size:11px;color:#4ade80;font-weight:700;text-align:center;margin-top:4px">~'+pesoSob.toFixed(1)+' kg útil · esp '+s.esp+'mm</div>';
-    } else {
-      prevEl.innerHTML = '<div style="margin:8px 0 4px;font-size:11px;font-weight:700;color:#fbbf24">📐 Plancha disponible en stock</div>'
-        + wkSVGPlancha(s.esp, s.ancho, s.largo, pesoSob);
-    }
-    prevEl.style.display='';
+  // Construir SVG del sobrante y guardarlo en el material para que sobreviva wkRenderMateriales
+  const _D=7.85e-9;
+  const _pesoSob = (s.tipo==='forma_l'||s.tipo==='forma_compleja')
+    ? (()=>{ const c2=s.cortes_extra&&s.cortes_extra.length>0?s.cortes_extra:[{ac:s.ancho_corte||0,lc:s.largo_corte||0}]; return s.esp*(s.ancho*s.largo-c2.reduce((sm,c)=>sm+(c.ac||0)*(c.lc||0),0))*_D; })()
+    : (s.esp||0)*(s.ancho||0)*(s.largo||0)*_D;
+  let _svgHTML = '';
+  if(s.tipo==='forma_l'||s.tipo==='forma_compleja'){
+    const cortesE = s.cortes_extra&&s.cortes_extra.length>0 ? s.cortes_extra : [{ac:s.ancho_corte||0,lc:s.largo_corte||0,esq:s.esq||'tl'}];
+    _svgHTML = '<div style="margin:8px 0 4px;font-size:11px;font-weight:700;color:#fbbf24">📐 Forma del sobrante disponible</div>'
+      + formaLSVG_wk(s.esp,s.ancho,s.largo,s.ancho_corte,s.largo_corte,cortesE)
+      + '<div style="font-size:11px;color:#4ade80;font-weight:700;text-align:center;margin-top:4px">~'+_pesoSob.toFixed(1)+' kg útil · esp '+s.esp+'mm</div>';
+  } else if(s.ancho>0&&s.largo>0){
+    _svgHTML = '<div style="margin:8px 0 4px;font-size:11px;font-weight:700;color:#fbbf24">📐 Plancha disponible en stock</div>'
+      + wkSVGPlancha(s.esp, s.ancho, s.largo, _pesoSob);
   }
   // Cortes heredados del sobrante seleccionado para traspasarlos al nuevo sobrante resultante
   const _cortesHeredados = (s.tipo==='forma_l'||s.tipo==='forma_compleja')
@@ -2157,8 +2154,14 @@ function wkSelStock(i){
       ? (()=>{ const c2=s.cortes_extra&&s.cortes_extra.length>0?s.cortes_extra:[{ac:s.ancho_corte||0,lc:s.largo_corte||0}]; return s.esp*(s.ancho*s.largo-c2.reduce((sm,c)=>sm+(c.ac||0)*(c.lc||0),0))*D; })()
       : s.esp*s.ancho*s.largo*D,
     tipoOrig: s.tipo,
+    _svgStock: _svgHTML,  // SVG del sobrante para mostrar al operario
   };
   wkRenderMateriales();
+  // Reinyectar SVG después del render (el render destruye el div)
+  if(_svgHTML){
+    const el = document.getElementById(`wm-stock-svg-${i}`);
+    if(el){ el.innerHTML=_svgHTML; el.style.display=''; }
+  }
 }
 
 function wkAddMaterial(){ wkMateriales.push({tipo:'plancha',qty:1,grado:'A588-50'}); wkRenderMateriales(); }
