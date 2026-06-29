@@ -2015,7 +2015,7 @@ function wkMatHTML(m,i){
           ${m.stockRef ? `<div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:8px;font-size:12px;color:#065f46">
             ✅ <strong>${m.colada||'—'}</strong> · ${m.esp}×${m.ancho}×${m.largo}mm · <strong>${(m.peso||0).toFixed(1)} kg</strong>
             ${(m.tipo==='forma_l'||m.tipoOrig==='forma_l'||m.tipoOrig==='forma_compleja')?'<br><span style="color:#3b6d11">⌐ Forma en L — corte: '+m.ancho_corte+'×'+m.largo_corte+'mm</span>':''}
-          <div id="wm-stock-svg-${i}" style="display:none;margin-top:6px"></div>
+          <div id="wm-stock-svg-${i}" style="display:none;margin-top:8px;background:#0d1117;border-radius:12px;padding:10px;border:1.5px solid #374151"></div>
           </div>` : '<div style="font-size:11px;color:#6b7280">Selecciona un sobrante para usar como materia prima</div>'}
         </div>`
       : `<div style="margin-top:.375rem;background:#fef3c7;border-radius:8px;padding:.75rem;font-size:12px;color:#92400e">
@@ -2109,13 +2109,24 @@ function wkSelStock(i){
   if(isNaN(idx)||idx<0) return;
   const stocks=wkStockDisponible();
   const s=stocks[idx]; if(!s) return;
-  // Mostrar SVG del sobrante seleccionado
+  // Mostrar SVG prominente del sobrante seleccionado
   const prevEl = document.getElementById(`wm-stock-svg-${i}`);
-  if(prevEl && (s.tipo==='forma_l'||s.tipo==='forma_compleja') && s.ancho_corte>0 && s.largo_corte>0){
-    const cortesE = s.cortes_extra && s.cortes_extra.length>0 ? s.cortes_extra : [{ac:s.ancho_corte,lc:s.largo_corte,esq:s.esq||'tl'}];
-    prevEl.innerHTML = formaLSVG_wk(s.esp,s.ancho,s.largo,s.ancho_corte,s.largo_corte,cortesE);
+  if(prevEl){
+    const D=7.85e-9;
+    const pesoSob = (s.tipo==='forma_l'||s.tipo==='forma_compleja')
+      ? (()=>{ const c2=s.cortes_extra&&s.cortes_extra.length>0?s.cortes_extra:[{ac:s.ancho_corte||0,lc:s.largo_corte||0}]; return s.esp*(s.ancho*s.largo-c2.reduce((sm,c)=>sm+(c.ac||0)*(c.lc||0),0))*D; })()
+      : (s.esp*s.ancho*s.largo*D);
+    if(s.tipo==='forma_l'||s.tipo==='forma_compleja'){
+      const cortesE = s.cortes_extra&&s.cortes_extra.length>0 ? s.cortes_extra : [{ac:s.ancho_corte||0,lc:s.largo_corte||0,esq:s.esq||'tl'}];
+      prevEl.innerHTML = '<div style="margin:8px 0 4px;font-size:11px;font-weight:700;color:#fbbf24">📐 Forma del sobrante disponible</div>'
+        + formaLSVG_wk(s.esp,s.ancho,s.largo,s.ancho_corte,s.largo_corte,cortesE)
+        + '<div style="font-size:11px;color:#4ade80;font-weight:700;text-align:center;margin-top:4px">~'+pesoSob.toFixed(1)+' kg útil · esp '+s.esp+'mm</div>';
+    } else {
+      prevEl.innerHTML = '<div style="margin:8px 0 4px;font-size:11px;font-weight:700;color:#fbbf24">📐 Plancha disponible en stock</div>'
+        + wkSVGPlancha(s.esp, s.ancho, s.largo, pesoSob);
+    }
     prevEl.style.display='';
-  } else if(prevEl){ prevEl.innerHTML=''; prevEl.style.display='none'; }
+  }
   // Cortes heredados del sobrante seleccionado para traspasarlos al nuevo sobrante resultante
   const _cortesHeredados = (s.tipo==='forma_l'||s.tipo==='forma_compleja')
     ? (s.cortes_extra && s.cortes_extra.length>0 ? s.cortes_extra : [{ac:s.ancho_corte||0,lc:s.largo_corte||0,esq:s.esq||'tl'}])
@@ -2570,6 +2581,9 @@ function wkSobFormaHTML(s, i){
         +'<input type="number" id="ws-largo-'+i+'" value="'+(s.largo||'')+'" inputmode="numeric" '+rdonly+' style="width:100%;padding:7px;border:1.5px solid #86efac;border-radius:8px;font-size:15px;font-weight:700;'+rdstyle+'" oninput="wkUpdSob('+i+')"></div>'
     +'</div>'
     +heredadosHTML
+    +(((s.ancho_corte>=s.ancho&&s.ancho>0)||(s.largo_corte>=s.largo&&s.largo>0))&&s.ancho_corte>0&&s.largo_corte>0
+      ?'<div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;padding:6px 10px;margin-bottom:6px;font-size:11px;color:#92400e;font-weight:700">⚡ El corte abarca todo el ancho/largo → el sobrante quedará como <strong>plancha rectangular simple</strong></div>'
+      :'')
     +'<div style="font-size:11px;color:#92400e;font-weight:700;margin-bottom:6px">✂ Nuevo corte resultante</div>'
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">'
       +'<div style="grid-column:1/-1"><label style="font-size:10px;color:#6b7280">Esquina del nuevo corte</label>'
@@ -2630,8 +2644,29 @@ function wkUpdSob(i){
   // Construir cortes_extra acumulados para forma_l / forma_compleja
   if(s.tipo==='forma_l'||s.tipo==='forma_compleja'){
     const heredados=s._cortesHeredados||[];
-    const nuevoCorte=(s.ancho_corte>0&&s.largo_corte>0)
-      ?[{ac:s.ancho_corte,lc:s.largo_corte,esq:s.esq_nuevo||'tl'}]:[];
+    // Detectar si el nuevo corte atraviesa todo el ancho o largo → sobrante pasa a ser rectángulo simple
+    const acN=s.ancho_corte||0, lcN=s.largo_corte||0;
+    const anchoEnv=s.ancho||0, largoEnv=s.largo||0;
+    const cortaCompleto = (acN>=anchoEnv||lcN>=largoEnv) && acN>0 && lcN>0;
+    if(cortaCompleto){
+      // Calcular dimensiones del rectángulo resultante
+      // El corte elimina una franja completa: el sobrante queda como plancha simple
+      const largoSob = acN>=anchoEnv ? largoEnv-lcN : largoEnv;
+      const anchoSob = lcN>=largoEnv ? anchoEnv-acN : anchoEnv;
+      s.tipo='plancha';
+      s.ancho=Math.round(anchoSob);
+      s.largo=Math.round(largoSob);
+      s.ancho_corte=0; s.largo_corte=0;
+      s.cortes_extra=[];
+      delete s._cortesHeredados;
+      // Notificar y re-renderizar como plancha
+      const prevEl=document.getElementById('ws-svg-preview-'+i);
+      if(prevEl) prevEl.innerHTML='';
+      wkRenderSobrantes();
+      return;
+    }
+    const nuevoCorte=(acN>0&&lcN>0)
+      ?[{ac:acN,lc:lcN,esq:s.esq_nuevo||'tl'}]:[];
     s.cortes_extra=[...heredados,...nuevoCorte];
     if(s.cortes_extra.length>1) s.tipo='forma_compleja';
     // SVG preview en tiempo real
@@ -3871,6 +3906,31 @@ function calcPoligonoSobrante_wk(W, H, cortes, sc){
     }
   });
   return pts;
+}
+
+function wkSVGPlancha(esp, ancho, largo, peso){
+  const maxW=300, maxH=280;
+  const sc=Math.min(maxW/ancho, maxH/largo)*0.70;
+  const W=Math.round(ancho*sc), H=Math.round(largo*sc);
+  const ox=42, oy=28;
+  const vw=W+ox+50, vh=H+oy+35;
+  const pesoStr = peso ? '~'+peso.toFixed(1)+' kg útil' : '';
+  return '<svg viewBox="-'+ox+' -'+oy+' '+vw+' '+vh+'" style="width:100%;max-height:300px;background:#0d1117;border-radius:10px;display:block" xmlns="http://www.w3.org/2000/svg">'
+    +'<rect x="0" y="0" width="'+W+'" height="'+H+'" fill="#166534" stroke="#22c55e" stroke-width="2"/>'
+    // Cota ancho
+    +'<line x1="0" y1="'+(H+14)+'" x2="'+W+'" y2="'+(H+14)+'" stroke="#ff0000" stroke-width="0.8"/>'
+    +'<line x1="0" y1="'+(H+11)+'" x2="0" y2="'+(H+17)+'" stroke="#ff0000" stroke-width="0.8"/>'
+    +'<line x1="'+W+'" y1="'+(H+11)+'" x2="'+W+'" y2="'+(H+17)+'" stroke="#ff0000" stroke-width="0.8"/>'
+    +'<text x="'+(W/2)+'" y="'+(H+26)+'" text-anchor="middle" font-size="10" fill="#ff0000">'+ancho+'</text>'
+    // Cota largo
+    +'<line x1="-16" y1="0" x2="-16" y2="'+H+'" stroke="#ff0000" stroke-width="0.8"/>'
+    +'<line x1="-19" y1="0" x2="-13" y2="0" stroke="#ff0000" stroke-width="0.8"/>'
+    +'<line x1="-19" y1="'+H+'" x2="-13" y2="'+H+'" stroke="#ff0000" stroke-width="0.8"/>'
+    +'<text x="-24" y="'+(H/2)+'" text-anchor="middle" font-size="10" fill="#ff0000" transform="rotate(-90,-24,'+(H/2)+')">'+largo+'</text>'
+    // Esp + peso
+    +'<text x="'+(W/2)+'" y="'+(H/2-8)+'" text-anchor="middle" font-size="13" fill="#86efac" font-weight="700">'+esp+'mm</text>'
+    +(pesoStr?'<text x="'+(W/2)+'" y="'+(H/2+12)+'" text-anchor="middle" font-size="11" fill="#4ade80">'+pesoStr+'</text>':'')
+    +'</svg>';
 }
 
 function formaLSVG_wk(esp, ancho, largo, ancho_corte, largo_corte, cortes_extra){
