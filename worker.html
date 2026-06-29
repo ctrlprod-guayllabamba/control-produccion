@@ -2116,6 +2116,20 @@ function wkSelStock(i){
     prevEl.innerHTML = formaLSVG_wk(s.esp,s.ancho,s.largo,s.ancho_corte,s.largo_corte,cortesE);
     prevEl.style.display='';
   } else if(prevEl){ prevEl.innerHTML=''; prevEl.style.display='none'; }
+  // Cortes heredados del sobrante seleccionado para traspasarlos al nuevo sobrante resultante
+  const _cortesHeredados = (s.tipo==='forma_l'||s.tipo==='forma_compleja')
+    ? (s.cortes_extra && s.cortes_extra.length>0 ? s.cortes_extra : [{ac:s.ancho_corte||0,lc:s.largo_corte||0,esq:s.esq||'tl'}])
+    : [];
+  // Actualizar sobrante[0] con los cortes heredados si es forma
+  if(_cortesHeredados.length>0 && wkSobrantes[0]){
+    wkSobrantes[0]._cortesHeredados = _cortesHeredados;
+    wkSobrantes[0].esp = s.esp;
+    wkSobrantes[0].ancho = s.ancho;
+    wkSobrantes[0].largo = s.largo;
+    wkSobrantes[0].colada = s.colada;
+    wkSobrantes[0].tipo = 'forma_compleja';
+    wkRenderSobrantes();
+  }
   wkMateriales[i]={
     ...wkMateriales[i],
     tipo:'desde_stock',
@@ -2482,21 +2496,43 @@ function wkSobHTML(s,i){
         <div><label style="font-size:10px;color:#6b7280">Largo (mm)</label><input type="number" id="ws-largo-${i}" value="${s.largo||''}" inputmode="numeric" placeholder="mm" style="width:100%;padding:7px;border:1.5px solid #86efac;border-radius:8px;font-size:15px;font-weight:700" oninput="wkUpdSob(${i})"></div>
         <div><label style="font-size:10px;color:#6b7280">Cant.</label><input type="number" id="ws-qty-${i}" value="${s.qty||1}" inputmode="numeric" min="1" style="width:100%;padding:7px;border:1.5px solid #86efac;border-radius:8px;font-size:15px" oninput="wkUpdSob(${i})"></div>
       </div>`
-    : s.tipo==='forma_l'
-    ? `<div style="margin-top:.375rem">
-        <div style="font-size:11px;color:#065f46;font-weight:700;margin-bottom:6px">📐 Rectángulo envolvente (dimensiones reales)</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:8px">
-          <div><label style="font-size:10px;color:#6b7280">Esp (mm)</label><input type="number" id="ws-esp-${i}" value="${s.esp||''}" inputmode="numeric" placeholder="12" style="width:100%;padding:7px;border:1.5px solid #86efac;border-radius:8px;font-size:15px;font-weight:700" oninput="wkUpdSob(${i})"></div>
-          <div><label style="font-size:10px;color:#6b7280">Ancho total (mm)</label><input type="number" id="ws-ancho-${i}" value="${s.ancho||''}" inputmode="numeric" placeholder="2500" style="width:100%;padding:7px;border:1.5px solid #86efac;border-radius:8px;font-size:15px;font-weight:700" oninput="wkUpdSob(${i})"></div>
-          <div><label style="font-size:10px;color:#6b7280">Largo total (mm)</label><input type="number" id="ws-largo-${i}" value="${s.largo||''}" inputmode="numeric" placeholder="12000" style="width:100%;padding:7px;border:1.5px solid #86efac;border-radius:8px;font-size:15px;font-weight:700" oninput="wkUpdSob(${i})"></div>
-        </div>
-        <div style="font-size:11px;color:#92400e;font-weight:700;margin-bottom:6px">✂ Corte que se le hizo (zona que falta)</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
-          <div><label style="font-size:10px;color:#6b7280">Ancho corte (mm)</label><input type="number" id="ws-ancho-corte-${i}" value="${s.ancho_corte||''}" inputmode="numeric" placeholder="1380" style="width:100%;padding:7px;border:1.5px solid #fcd34d;border-radius:8px;font-size:15px;font-weight:700" oninput="wkUpdSob(${i})"></div>
-          <div><label style="font-size:10px;color:#6b7280">Largo corte (mm)</label><input type="number" id="ws-largo-corte-${i}" value="${s.largo_corte||''}" inputmode="numeric" placeholder="9000" style="width:100%;padding:7px;border:1.5px solid #fcd34d;border-radius:8px;font-size:15px;font-weight:700" oninput="wkUpdSob(${i})"></div>
-          <div><label style="font-size:10px;color:#6b7280">Cant.</label><input type="number" id="ws-qty-${i}" value="${s.qty||1}" inputmode="numeric" min="1" style="width:100%;padding:7px;border:1.5px solid #86efac;border-radius:8px;font-size:15px" oninput="wkUpdSob(${i})"></div>
-        </div>
-      </div>`
+    : (s.tipo==='forma_l'||s.tipo==='forma_compleja')
+    ? (()=>{
+        const heredados = s._cortesHeredados||[];
+        const tieneHeredados = heredados.length>0;
+        const ESQ_LABELS={'tl':'↖ Sup-Izq','tr':'↗ Sup-Der','bl':'↙ Inf-Izq','br':'↘ Inf-Der'};
+        const heredadosHTML = tieneHeredados
+          ? `<div style="background:#1e3a5f;border-radius:8px;padding:8px 10px;margin-bottom:8px">
+              <div style="font-size:11px;color:#93c5fd;font-weight:700;margin-bottom:4px">🔒 Cortes previos (heredados)</div>
+              ${heredados.map((c,ci)=>`<div style="font-size:11px;color:#bfdbfe;margin-bottom:2px">Corte ${ci+1}: ${ESQ_LABELS[c.esq||'tl']} · ${c.ac}×${c.lc} mm</div>`).join('')}
+            </div>`
+          : '';
+        const esqActual = s.esq_nuevo||'tl';
+        const svgPreviewId = \`ws-svg-preview-\${i}\`;
+        return \`<div style="margin-top:.375rem">
+          <div style="font-size:11px;color:#065f46;font-weight:700;margin-bottom:6px">📐 Rectángulo envolvente</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:8px">
+            <div><label style="font-size:10px;color:#6b7280">Esp (mm)</label><input type="number" id="ws-esp-${i}" value="\${s.esp||''}" inputmode="numeric" placeholder="12" style="width:100%;padding:7px;border:1.5px solid #86efac;border-radius:8px;font-size:15px;font-weight:700" \${tieneHeredados?'readonly style="background:#f0f4f8;border-color:#86efac"':''} oninput="wkUpdSob(${i})"></div>
+            <div><label style="font-size:10px;color:#6b7280">Ancho total (mm)</label><input type="number" id="ws-ancho-${i}" value="\${s.ancho||''}" inputmode="numeric" placeholder="2500" style="width:100%;padding:7px;border:1.5px solid #86efac;border-radius:8px;font-size:15px;font-weight:700" \${tieneHeredados?'readonly style="background:#f0f4f8;border-color:#86efac"':''} oninput="wkUpdSob(${i})"></div>
+            <div><label style="font-size:10px;color:#6b7280">Largo total (mm)</label><input type="number" id="ws-largo-${i}" value="\${s.largo||''}" inputmode="numeric" placeholder="12000" style="width:100%;padding:7px;border:1.5px solid #86efac;border-radius:8px;font-size:15px;font-weight:700" \${tieneHeredados?'readonly style="background:#f0f4f8;border-color:#86efac"':''} oninput="wkUpdSob(${i})"></div>
+          </div>
+          \${heredadosHTML}
+          <div style="font-size:11px;color:#92400e;font-weight:700;margin-bottom:6px">✂ Nuevo corte resultante</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
+            <div style="grid-column:1/-1"><label style="font-size:10px;color:#6b7280">Esquina del nuevo corte</label>
+              <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:4px;margin-top:4px">
+                \${['tl','tr','bl','br'].map(esq=>\`<button type="button" onclick="wkSobSetEsq(\${i},'\${esq}')" style="padding:6px 2px;border-radius:6px;font-size:11px;font-weight:700;border:2px solid \${esqActual===esq?'#f97316':'#d1d5db'};background:\${esqActual===esq?'#fff7ed':'white'};color:\${esqActual===esq?'#c2410c':'#374151'};cursor:pointer">\${ESQ_LABELS[esq]}</button>\`).join('')}
+              </div>
+            </div>
+            <div><label style="font-size:10px;color:#6b7280">Ancho corte (mm)</label><input type="number" id="ws-ancho-corte-${i}" value="\${s.ancho_corte||''}" inputmode="numeric" placeholder="300" style="width:100%;padding:7px;border:1.5px solid #fcd34d;border-radius:8px;font-size:15px;font-weight:700" oninput="wkUpdSob(${i})"></div>
+            <div><label style="font-size:10px;color:#6b7280">Largo corte (mm)</label><input type="number" id="ws-largo-corte-${i}" value="\${s.largo_corte||''}" inputmode="numeric" placeholder="300" style="width:100%;padding:7px;border:1.5px solid #fcd34d;border-radius:8px;font-size:15px;font-weight:700" oninput="wkUpdSob(${i})"></div>
+          </div>
+          <div id="\${svgPreviewId}"></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px">
+            <div><label style="font-size:10px;color:#6b7280">Cant.</label><input type="number" id="ws-qty-${i}" value="\${s.qty||1}" inputmode="numeric" min="1" style="width:100%;padding:7px;border:1.5px solid #86efac;border-radius:8px;font-size:15px" oninput="wkUpdSob(${i})"></div>
+          </div>
+        </div>\`;
+      })()
     : s.tipo==='perfil'
     ? `<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:.375rem">
         <div><label style="font-size:10px;color:#6b7280">Largo (mm)</label><input type="number" id="ws-largo-${i}" value="${s.largo||''}" inputmode="numeric" placeholder="mm" style="width:100%;padding:7px;border:1.5px solid #86efac;border-radius:8px;font-size:14px" oninput="wkUpdSob(${i})"></div>
@@ -2513,6 +2549,7 @@ function wkSobHTML(s,i){
         <select id="ws-tipo-${i}" style="font-size:12px;border:1px solid #86efac;border-radius:6px;padding:3px 6px;background:#f0fdf4" onchange="wkChgSobTipo(${i})">
           <option value="plancha" ${s.tipo==='plancha'?'selected':''}>Plancha rect.</option>
           <option value="forma_l" ${s.tipo==='forma_l'?'selected':''}>Forma en L</option>
+          <option value="forma_compleja" ${s.tipo==='forma_compleja'?'selected':''}>Forma compleja</option>
           <option value="perfil" ${s.tipo==='perfil'?'selected':''}>Perfil</option>
           <option value="manual" ${s.tipo==='manual'?'selected':''}>Peso manual</option>
         </select>
@@ -2530,9 +2567,33 @@ function wkSobHTML(s,i){
   </div>`;
 }
 
+function wkSobSetEsq(i, esq){
+  wkSobrantes[i].esq_nuevo = esq;
+  wkRenderSobrantes();
+  // Actualizar SVG preview
+  setTimeout(()=>wkSobUpdPreview(i), 50);
+}
+
+function wkSobUpdPreview(i){
+  const s = wkSobrantes[i];
+  if(!s || (s.tipo!=='forma_l' && s.tipo!=='forma_compleja')) return;
+  const prevEl = document.getElementById(`ws-svg-preview-${i}`);
+  if(!prevEl) return;
+  const heredados = s._cortesHeredados||[];
+  const nuevoCorte = (s.ancho_corte>0 && s.largo_corte>0)
+    ? [{ac:s.ancho_corte, lc:s.largo_corte, esq:s.esq_nuevo||'tl'}]
+    : [];
+  const todosCortes = [...heredados, ...nuevoCorte];
+  if(todosCortes.length>0 && s.ancho>0 && s.largo>0){
+    prevEl.innerHTML = formaLSVG_wk(s.esp||12, s.ancho, s.largo, 0, 0, todosCortes);
+  } else {
+    prevEl.innerHTML = '';
+  }
+}
+
 function wkAddSobrante(){ wkSobrantes.push({tipo:'plancha',qty:1,dest:'stock',esp:wkMateriales[0]?.esp||0}); wkRenderSobrantes(); }
 function wkRmSob(i){ wkSobrantes.splice(i,1); wkRenderSobrantes(); }
-function wkChgSobTipo(i){ wkSobrantes[i]={...wkSobrantes[i],tipo:document.getElementById(`ws-tipo-${i}`)?.value||'plancha'}; wkRenderSobrantes(); }
+function wkChgSobTipo(i){ const t=document.getElementById(`ws-tipo-${i}`)?.value||'plancha'; wkSobrantes[i]={...wkSobrantes[i],tipo:t}; wkRenderSobrantes(); setTimeout(()=>wkSobUpdPreview(i),50); }
 
 function wkUpdSob(i){
   const s=wkSobrantes[i]; if(!s) return;
@@ -2540,9 +2601,23 @@ function wkUpdSob(i){
   s.tipo=document.getElementById(`ws-tipo-${i}`)?.value||'plancha';
   s.dest=document.getElementById(`ws-dest-${i}`)?.value||'stock';
   s.colada=document.getElementById(`ws-colada-${i}`)?.value||'';
-  s.esp=g(`ws-esp-${i}`); s.ancho=g(`ws-ancho-${i}`); s.largo=g(`ws-largo-${i}`);
-  s.ancho_corte=g(`ws-ancho-corte-${i}`); s.largo_corte=g(`ws-largo-corte-${i}`);
+  // Para formas heredadas, esp/ancho/largo pueden venir readonly — respetar valor en s si el input da 0
+  const espI=g(`ws-esp-${i}`); if(espI) s.esp=espI;
+  const anchoI=g(`ws-ancho-${i}`); if(anchoI) s.ancho=anchoI;
+  const largoI=g(`ws-largo-${i}`); if(largoI) s.largo=largoI;
+  s.ancho_corte=g(`ws-ancho-corte-${i}`);
+  s.largo_corte=g(`ws-largo-corte-${i}`);
   s.qty=g(`ws-qty-${i}`)||1; s.kgm=g(`ws-kgm-${i}`); s.pesoManual=g(`ws-pm-${i}`);
+  // Construir cortes_extra acumulados para forma_l / forma_compleja
+  if(s.tipo==='forma_l'||s.tipo==='forma_compleja'){
+    const heredados=s._cortesHeredados||[];
+    const nuevoCorte=(s.ancho_corte>0&&s.largo_corte>0)
+      ?[{ac:s.ancho_corte,lc:s.largo_corte,esq:s.esq_nuevo||'tl'}]:[];
+    s.cortes_extra=[...heredados,...nuevoCorte];
+    if(s.cortes_extra.length>1) s.tipo='forma_compleja';
+    // SVG preview en tiempo real
+    wkSobUpdPreview(i);
+  }
   const peso=wkCalcPesoSob(s); s.peso=peso;
   const lbl=document.getElementById(`ws-peso-lbl-${i}`);
   if(lbl){ lbl.style.display=peso>0?'block':'none'; lbl.textContent=`→ ${peso.toFixed(2)} kg`; }
@@ -2610,7 +2685,7 @@ function wkGuardarCorte(){
     let _alertas = [];
     for(const sp of wkSubPiezas){
       if(!sp.qty || sp.qty <= 0) continue;
-      const _planSp = _planVigas * (_piezasHI.find(p=>p.nombre===sp.nombre)?.qty || 1);
+      const _planSp = _planVigas * (_piezasHI.find(p=>p.tipo===sp.nombre||p.nombre===sp.nombre)?.qty || 1);
       // Sumar ya cortado de esta sub-pieza en registros anteriores
       let _yaCortadoSp = 0;
       for(const r of _yaEjecutado){
