@@ -5792,29 +5792,37 @@ function renderInformeAvancePeso(refFecha){
       });
     };
 
-    // Gráfico 1: semanal
-    // Ejecutado va con order:0 (más bajo = dibuja ENCIMA), programado order:1
+    // Gráfico 1: semanal — ejecutado order:0 (dibuja encima)
+    // Mostrar desde S1 hasta la última semana con dato; el resto null (no dibuja)
+    const ultimaEjIdx = eS.reduce((last,v,i)=>v>0?i:last,-1);
+    const eSplot = eS.map((v,i)=>i<=ultimaEjIdx?v:null);
     mkC('cs1',[
       {label:'Programado',data:pS,
        borderColor:PROG,backgroundColor:'transparent',
        borderWidth:2,borderDash:[5,3],pointRadius:2,pointBackgroundColor:PROG,
        fill:false,tension:0.3,order:1},
-      {label:'Ejecutado',data:eS.map(v=>v>0?v:null),
+      {label:'Ejecutado',data:eSplot,
        borderColor:cE,backgroundColor:cE+'55',
-       borderWidth:3,pointRadius:5,pointBackgroundColor:cE,
-       fill:true,tension:0.3,spanGaps:false,order:0}
+       borderWidth:3,
+       pointRadius:(ctx)=>(eSplot[ctx.dataIndex]!=null&&eSplot[ctx.dataIndex]>0)?4:0,
+       pointBackgroundColor:cE,
+       fill:true,tension:0.3,spanGaps:true,order:0}
     ],mS);
 
-    // Gráfico 2: acumulado
+    // Gráfico 2: acumulado — extender hasta la última semana con dato
+    const ultimaAcIdx = eA.reduce((last,v,i)=>v!=null?i:last,-1);
+    const eAplot = eA.map((v,i)=>i<=ultimaAcIdx?(v??0):null);
     mkC('cs2',[
       {label:'Programado acum.',data:pA,
        borderColor:PROG,backgroundColor:'transparent',
        borderWidth:2,borderDash:[5,3],pointRadius:2,pointBackgroundColor:PROG,
        fill:false,tension:0.4,order:1},
-      {label:'Ejecutado acum.',data:eA,
+      {label:'Ejecutado acum.',data:eAplot,
        borderColor:cE,backgroundColor:cE+'55',
-       borderWidth:3,pointRadius:5,pointBackgroundColor:cE,
-       fill:true,tension:0.4,spanGaps:false,order:0}
+       borderWidth:3,
+       pointRadius:(ctx)=>(eAplot[ctx.dataIndex]!=null&&eAplot[ctx.dataIndex]>0)?4:0,
+       pointBackgroundColor:cE,
+       fill:true,tension:0.4,spanGaps:true,order:0}
     ],mA);
 
   },200);
