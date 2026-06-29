@@ -4636,10 +4636,11 @@ function renderCronograma(){
   const data=getCronoData();
   const pesoTotal=TEKLA.conjuntos.reduce((s,c)=>s+(c.peso_total||0),0);
 
-  const jorSel  =document.getElementById('crono-jorn')?.value||'5.5d';
+  // Leer desde localStorage (persistente) o del DOM si ya está renderizado
+  const jorSel  =document.getElementById('crono-jorn')?.value||localStorage.getItem('crono_jorn')||'5.5d';
   const jorData =JORNADAS[jorSel]||JORNADAS['5.5d'];
-  const fechaIni=document.getElementById('crono-fecha-ini')?.value||today();
-  const plazo   =parseInt(document.getElementById('crono-plazo')?.value||12);
+  const fechaIni=document.getElementById('crono-fecha-ini')?.value||localStorage.getItem('crono_fecha_ini')||'2026-06-22';
+  const plazo   =parseInt(document.getElementById('crono-plazo')?.value||localStorage.getItem('crono_plazo')||12);
 
   // Avance real
   const kgReal={};
@@ -4669,7 +4670,7 @@ function renderCronograma(){
     return{...d,rendSem,semIni,diaIni,kgIni,fIniStr,semanasWork,semanas,ejec,pct,cuadNecesarias,ok};
   });
 
-  const totalSem=parseInt(document.getElementById('crono-total-sem')?.value||53);
+  const totalSem=parseInt(document.getElementById('crono-total-sem')?.value||localStorage.getItem('crono_total_sem')||53);
   const maxSem=Math.max(totalSem,...rows.map(r=>r.semanas),1);
   const semHdrs=Array.from({length:maxSem},(_,i)=>{
     const ini=new Date(fechaBase);ini.setDate(fechaBase.getDate()+i*7);
@@ -4694,23 +4695,23 @@ function renderCronograma(){
     <div class="frow" style="gap:1rem;padding:.75rem;background:#f8fafc;border-radius:8px;margin-bottom:1.25rem;flex-wrap:wrap;align-items:flex-end">
       <div class="fg fix">
         <label style="font-size:11px;font-weight:700;color:#64748b;display:block;margin-bottom:3px">Jornada semanal</label>
-        <select id="crono-jorn" onchange="renderCronograma()" style="border:1.5px solid #d1d5db;border-radius:6px;padding:5px 10px;font-size:13px;font-weight:600">
+        <select id="crono-jorn" onchange="localStorage.setItem('crono_jorn',this.value);renderCronograma()" style="border:1.5px solid #d1d5db;border-radius:6px;padding:5px 10px;font-size:13px;font-weight:600">
           ${Object.entries(JORNADAS).map(([k,v])=>`<option value="${k}" ${jorSel===k?'selected':''}>${v.label}</option>`).join('')}
         </select>
       </div>
       <div class="fg fix">
         <label style="font-size:11px;font-weight:700;color:#64748b;display:block;margin-bottom:3px">Fecha inicio</label>
-        <input type="date" id="crono-fecha-ini" value="${fechaIni}" onchange="renderCronograma()"
+        <input type="date" id="crono-fecha-ini" value="${fechaIni}" onchange="localStorage.setItem('crono_fecha_ini',this.value);renderCronograma()"
           style="border:1.5px solid #d1d5db;border-radius:6px;padding:5px 8px;font-size:13px">
       </div>
       <div class="fg fix">
         <label style="font-size:11px;font-weight:700;color:#e11d48;display:block;margin-bottom:3px">⏱ Plazo objetivo (semanas)</label>
-        <input type="number" id="crono-plazo" value="${plazo}" min="1" max="200" onchange="renderCronograma()"
+        <input type="number" id="crono-plazo" value="${plazo}" min="1" max="200" onchange="localStorage.setItem('crono_plazo',this.value);renderCronograma()"
           style="width:80px;border:2px solid #e11d48;border-radius:6px;padding:5px 8px;font-size:16px;font-weight:700;color:#e11d48;text-align:center">
       </div>
       <div class="fg fix">
         <label style="font-size:11px;font-weight:700;color:#64748b;display:block;margin-bottom:3px">📅 Total semanas</label>
-        <input type="number" id="crono-total-sem" value="${totalSem||53}" min="4" max="200" onchange="renderCronograma()"
+        <input type="number" id="crono-total-sem" value="${totalSem||53}" min="4" max="200" onchange="localStorage.setItem('crono_total_sem',this.value);renderCronograma()"
           style="width:70px;border:2px solid #64748b;border-radius:6px;padding:5px 8px;font-size:16px;font-weight:700;color:#64748b;text-align:center">
       </div>
       <div class="fg" style="min-width:180px">
@@ -5610,210 +5611,146 @@ function renderInformeAvanceProceso(refFecha){
 // ======================= INFORME AVANCE SEMANAL POR PESO / CURVA S =======================
 function renderInformeAvancePeso(refFecha){
   const allRecs=[...ST.cortes,...ST.prods];
-  const totalPlanKg=TEKLA.conjuntos.reduce((s,c)=>s+(c.peso_total||0),0);
-  const cronoData=getCronoData();
-  const fechaIniCrono=localStorage.getItem('crono_fecha_ini')||'2026-06-22';
-  const totalSemCrono=parseInt(localStorage.getItem('crono_total_sem')||53);
-  const jorSel=localStorage.getItem('crono_jorn')||'5.5d';
-  const jorData=JORNADAS[jorSel]||JORNADAS['5.5d'];
-  const fechaBase=new Date(fechaIniCrono);
-  // Colores ejecutado — contrastantes sobre fondo oscuro
-  const EJEC_COLORS={'Corte':'#22d3ee','Armado':'#4ade80','Soldadura':'#facc15',
-    'Perforaciones':'#e879f9','Limpieza Mecánica':'#fb923c','Pintura':'#f472b6'};
-  const PROG_COLOR='#ef4444'; // rojo siempre para programado
+  if(!allRecs.length){ document.getElementById('informe-area').innerHTML='<div class="card" style="padding:2rem;text-align:center;color:#9ca3af;">Sin registros de producción.</div>'; return; }
+  const weeks=getAllWeeks(allRecs);
+  if(!weeks.length) return;
+  const FASE_COLORS={'Corte':'#1e40af','Armado':'#065f46','Soldadura':'#92400e','Perforaciones':'#9d174d','Limpieza Mecánica':'#5b21b6','Pintura':'#991b1b'};
 
-  const semanas=Array.from({length:totalSemCrono},(_,i)=>{
-    const ini=new Date(fechaBase); ini.setDate(fechaBase.getDate()+i*7);
-    const fin=new Date(ini); fin.setDate(ini.getDate()+6);
-    return{num:i+1,fIni:ini.toISOString().split('T')[0],fFin:fin.toISOString().split('T')[0],
-      lbl:`S${i+1}`,rngIni:`${ini.getDate()}/${ini.getMonth()+1}`,rngFin:`${fin.getDate()}/${fin.getMonth()+1}`};
-  });
+  // Total plan kg
+  const totalPlanKg=TEKLA.conjuntos.reduce((s,c)=>s+c.peso_total,0);
 
-  function getProgSem(d){
-    const semIni=d.semIni||1,kgIni=d.kgIni||0;
-    const rendSem=d.rend*(d.nCuadrillas||1)*jorData.dias;
-    const pesoResto=Math.max(0,totalPlanKg-kgIni);
-    const semanasWork=totalPlanKg>0?(kgIni>0?1+Math.ceil(pesoResto/rendSem):Math.ceil(totalPlanKg/rendSem)):0;
-    return semanas.map((_,i)=>{
-      const siBase=i-(semIni-1);
-      if(siBase===0) return kgIni;
-      if(siBase>0&&siBase<semanasWork){const esUlt=siBase===semanasWork-1;
-        return esUlt?Math.max(0,totalPlanKg-kgIni-rendSem*(siBase-1)):rendSem;}
-      return 0;
-    });
-  }
-
-  const weekEjec=semanas.map(s=>{
-    const recsW=allRecs.filter(r=>{const f=fxD(r.fecha);return f>=s.fIni&&f<=s.fFin;});
-    const byFase={};
+  // Build kg per week per fase
+  const weekData=weeks.map(wk=>{
+    const[yr,wn]=wk.split('-').map(Number);
+    const wr=getWeekRange(yr,wn);
+    const recsW=allRecs.filter(r=>r.fecha>=wr.start&&r.fecha<=wr.end);
+    const byFaseKg={};
     FASES.forEach(f=>{
-      if(f==='Corte') byFase[f]=recsW.filter(r=>r.fase==='Corte').reduce((a,r)=>a+Number(r.pesoParts||r.pesoPzas||0),0);
-      else byFase[f]=recsW.filter(r=>r.fase===f).reduce((a,r)=>a+Number(r.kg||r.peso||0),0);
+      if(f==='Corte') byFaseKg[f]=recsW.filter(r=>r.fase==='Corte').reduce((s,r)=>s+Number(r.pesoParts||r.pesoPzas||0),0);
+      else byFaseKg[f]=recsW.filter(r=>r.fase===f).reduce((s,r)=>s+Number(r.kg||r.peso||0),0);
     });
-    return{...s,byFase,tot:Object.values(byFase).reduce((a,b)=>a+b,0)};
+    const totKgW=Object.values(byFaseKg).reduce((a,b)=>a+b,0);
+    return{wk,label:wr.label,start:wr.start,end:wr.end,byFaseKg,totKg:totKgW};
   });
 
-  const totEjec=weekEjec.reduce((s,w)=>s+w.tot,0);
-  const pctFinal=totalPlanKg>0?Math.min(100,totEjec/totalPlanKg*100):0;
-  const procesoSel=document.getElementById('rpt-proceso-sel')?.value||'Corte';
-  const hoy=new Date().toISOString().split('T')[0];
-  const semVis=semanas.filter(s=>s.fIni<=hoy||weekEjec[s.num-1]?.tot>0);
-  const colorE=EJEC_COLORS[procesoSel]||'#22d3ee';
+  // Acumulados por fase para curva S
+  const acumByFase={};
+  FASES.forEach(f=>{ acumByFase[f]=0; });
+  const weekAcum=weekData.map(w=>{
+    const acum={};
+    FASES.forEach(f=>{ acumByFase[f]+=(w.byFaseKg[f]||0); acum[f]=acumByFase[f]; });
+    const totAcum=Object.values(acumByFase).reduce((a,b)=>a+b,0);
+    const pctAcum=totalPlanKg>0?Math.min(100,totAcum/totalPlanKg*100):0;
+    return{...w,acum,totAcum,pctAcum};
+  });
 
-  // Tabla todos procesos
-  const TCOLORS={'Corte':'#f97316','Armado':'#3b82f6','Soldadura':'#eab308','Perforaciones':'#8b5cf6','Limpieza Mecánica':'#06b6d4','Pintura':'#ec4899'};
-  const semHdrs=semVis.map((s,i)=>{
-    const cd=weekEjec[s.num-1]?.tot>0;
-    if(i===0||i%4===0) return`<th style="padding:3px 2px;text-align:center;min-width:42px;white-space:nowrap;background:${cd?'#1e293b':'#0f172a'}"><span style="font-size:9px;font-weight:700;color:white">${s.lbl}</span><br><span style="font-size:8px;color:#94a3b8">${s.rngIni}</span><br><span style="font-size:8px;color:#64748b">${s.rngFin}</span></th>`;
-    return`<th style="padding:3px 2px;text-align:center;min-width:34px;background:${cd?'#1e293b':'#0f172a'}"><span style="font-size:9px;color:#94a3b8">${i+1}</span></th>`;
+  // Table rows
+  const rows=weekAcum.map(w=>{
+    const cortKg=w.byFaseKg['Corte']||0;
+    const cortAcum=w.acum['Corte']||0;
+    return`<tr>
+      <td style="font-weight:700;white-space:nowrap">${w.label}</td>
+      ${FASES.map(f=>`<td class="r" style="color:${(w.byFaseKg[f]||0)>0?FASE_COLORS[f]:'#d1d5db'};font-weight:${(w.byFaseKg[f]||0)>0?'700':'400'}">${(w.byFaseKg[f]||0)>0?(w.byFaseKg[f]).toFixed(0):'—'}</td>`).join('')}
+      <td class="r" style="font-weight:800;color:#1a2b4a">${w.totKg.toFixed(0)}</td>
+      <td class="r" style="font-weight:800;color:#1e40af">${w.totAcum.toFixed(0)}</td>
+      <td class="r">
+        <div style="display:flex;align-items:center;gap:6px;min-width:100px">
+          <div style="flex:1;height:8px;background:#e5e7eb;border-radius:4px;overflow:hidden">
+            <div style="height:100%;width:${w.pctAcum.toFixed(1)}%;background:${w.pctAcum>=100?'#22c55e':w.pctAcum>=50?'#3b82f6':'#f59e0b'};border-radius:4px"></div>
+          </div>
+          <span style="font-size:10px;font-weight:800;color:${w.pctAcum>=100?'#166534':w.pctAcum>=50?'#1e40af':'#92400e'};white-space:nowrap">${w.pctAcum.toFixed(1)}%</span>
+        </div>
+      </td>
+    </tr>`;
   }).join('');
-  const filasProc=FASES.map(f=>{
-    const color=TCOLORS[f];
-    const totF=weekEjec.reduce((s,w)=>s+(w.byFase[f]||0),0);
-    const pctF=totalPlanKg>0?(totF/totalPlanKg*100):0;
-    const cells=semVis.map(s=>{const kg=weekEjec[s.num-1]?.byFase[f]||0;
-      if(kg<=0) return`<td style="padding:3px 2px;text-align:center;border:1px solid #e2e8f0;color:#d1d5db;font-size:10px">·</td>`;
-      return`<td style="padding:3px 4px;text-align:center;border:1px solid #e2e8f0;font-weight:700;font-size:11px;color:${color};background:${color}15">${kg.toFixed(0)}</td>`;
-    }).join('');
-    return`<tr><td style="padding:5px 10px;font-weight:700;color:${color};white-space:nowrap;position:sticky;left:0;background:white;z-index:1">${f}</td>${cells}<td style="padding:4px 8px;text-align:center;font-weight:700;font-size:11px;color:${color};background:${color}10;border-left:2px solid ${color}">${totF>0?totF.toFixed(0):'—'}</td><td style="padding:4px 6px;text-align:center;font-size:10px"><div style="background:#e2e8f0;border-radius:3px;height:14px;position:relative;min-width:50px"><div style="background:${color};height:14px;border-radius:3px;width:${Math.min(100,pctF)}%"></div><span style="position:absolute;top:0;left:0;right:0;text-align:center;font-size:9px;font-weight:700;line-height:14px;color:${pctF>50?'white':'#0f172a'}">${pctF.toFixed(1)}%</span></div></td></tr>`;
-  }).join('');
-  let acT=0;
-  const totSems=semVis.map(s=>weekEjec[s.num-1]?.tot||0);
-  const filaTotal=`<tr style="background:#0f172a;color:white;font-weight:700;font-size:11px"><td style="padding:6px 10px;position:sticky;left:0;background:#0f172a;z-index:1">TOTAL kg</td>${totSems.map(t=>`<td style="padding:3px 4px;text-align:center;border:1px solid #1e293b;color:${t>0?'#93c5fd':'#374151'}">${t>0?t.toFixed(0):'—'}</td>`).join('')}<td style="padding:4px 8px;text-align:center;background:#166534;border-left:2px solid #22c55e">${totEjec.toFixed(0)}</td><td style="padding:4px 6px;text-align:center">${pctFinal.toFixed(1)}%</td></tr>`;
-  const filaAcum=`<tr style="background:#1e293b;color:#64748b;font-size:10px"><td style="padding:4px 10px;position:sticky;left:0;background:#1e293b;z-index:1;font-weight:700">Acum. kg</td>${totSems.map(t=>{acT+=t;return`<td style="padding:2px 4px;text-align:center;border:1px solid #0f172a;color:${acT>0?'#93c5fd':'#374151'};font-weight:${acT>0?700:400}">${acT>0?acT.toFixed(0):'—'}</td>`;}).join('')}<td style="padding:3px 8px;text-align:center;color:#22c55e;font-weight:700;border-left:2px solid #22c55e">${totEjec.toFixed(0)}</td><td></td></tr>`;
+
+  const totFaseKg=FASES.map(f=>weekData.reduce((s,w)=>s+(w.byFaseKg[f]||0),0));
+  const totAll=totFaseKg.reduce((a,b)=>a+b,0);
+  const pctFinal=totalPlanKg>0?Math.min(100,totAll/totalPlanKg*100):0;
+  const totRow=`<tr style="background:#1a2b4a;color:#fff;font-weight:800"><td>TOTAL ACUM.</td>${totFaseKg.map(v=>`<td class="r">${v.toFixed(0)}</td>`).join('')}<td class="r">${totAll.toFixed(0)}</td><td class="r">${totAll.toFixed(0)}</td><td class="r">${pctFinal.toFixed(1)}%</td></tr>`;
 
   document.getElementById('informe-area').innerHTML=`
-  <div style="padding-bottom:.5rem">
-    <div style="margin-bottom:1rem">
-      <div style="font-size:16px;font-weight:500">Curvas S — Seguimiento por proceso</div>
-      <div style="font-size:11px;color:var(--color-text-secondary)">${TEKLA.proyecto} · Inicio: ${fechaIniCrono} · ${totalSemCrono} sem · ${jorData.label}</div>
-    </div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:1rem">
-      <div style="background:#0f172a;border-radius:8px;padding:12px"><div style="font-size:11px;color:#64748b">Plan total</div><div style="font-size:20px;font-weight:500;color:white">${(totalPlanKg/1000).toFixed(1)} t</div></div>
-      <div style="background:#064e3b;border-radius:8px;padding:12px"><div style="font-size:11px;color:#6ee7b7">Ejecutado acum.</div><div style="font-size:20px;font-weight:500;color:white">${(totEjec/1000).toFixed(1)} t</div></div>
-      <div style="background:#78350f;border-radius:8px;padding:12px"><div style="font-size:11px;color:#fcd34d">Pendiente</div><div style="font-size:20px;font-weight:500;color:white">${((totalPlanKg-totEjec)/1000).toFixed(1)} t</div></div>
-      <div style="background:#14532d;border-radius:8px;padding:12px"><div style="font-size:11px;color:#86efac">Avance real</div><div style="font-size:20px;font-weight:500;color:white">${pctFinal.toFixed(1)}%</div></div>
-    </div>
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:.75rem;flex-wrap:wrap">
-      <label style="font-size:13px;color:var(--color-text-secondary);font-weight:500">Proceso:</label>
-      <select id="rpt-proceso-sel" onchange="renderInformeAvancePeso()" style="font-size:13px;padding:6px 12px;min-width:200px">
-        ${FASES.map(f=>`<option value="${f}" ${f===procesoSel?'selected':''}>${f}</option>`).join('')}
-      </select>
-    </div>
-
-    <!-- GRÁFICO 1: kg POR SEMANA -->
-    <div style="background:#1e293b;border-radius:10px;padding:16px;margin-bottom:1rem">
-      <div style="font-size:13px;font-weight:500;color:white;margin-bottom:8px">📊 kg por Semana — ${procesoSel}</div>
-      <div style="display:flex;gap:20px;font-size:11px;color:#94a3b8;margin-bottom:8px;flex-wrap:wrap">
-        <span><span style="display:inline-block;width:24px;height:3px;background:${PROG_COLOR};vertical-align:middle;margin-right:6px"></span>Programado</span>
-        <span><span style="display:inline-block;width:24px;height:3px;background:${colorE};vertical-align:middle;margin-right:6px"></span>Ejecutado</span>
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:1rem;margin-bottom:1rem;border-bottom:2px solid var(--sd);">
+      <div>
+        <div style="font-size:17px;font-weight:800;color:var(--sd);text-transform:uppercase;">⚖️ Avance Semanal por Peso — Curva S</div>
+        <div style="font-size:12px;color:var(--gm);margin-top:3px;">${TEKLA.proyecto} · ${TEKLA.codigo}</div>
+        <div style="font-size:11px;color:var(--gm);">Plan total: ${totalPlanKg.toLocaleString('es-EC',{maximumFractionDigits:0})} kg | ${weeks.length} semanas</div>
       </div>
-      <div style="position:relative;width:100%;height:220px">
-        <canvas id="chart-sem" role="img" aria-label="kg por semana ${procesoSel}"></canvas>
-      </div>
-      <div style="overflow-x:auto;margin-top:8px">
-        <table style="border-collapse:collapse;font-size:10px;min-width:500px;width:100%"><tbody id="tabla-sem"></tbody></table>
-      </div>
+      <div style="text-align:right;font-size:10px;color:var(--gm);">Generado: ${new Date().toLocaleString('es-EC')}</div>
     </div>
-
-    <!-- GRÁFICO 2: CURVA S ACUMULADA -->
-    <div style="background:#1e293b;border-radius:10px;padding:16px;margin-bottom:1rem">
-      <div style="font-size:13px;font-weight:500;color:white;margin-bottom:8px">📈 Curva S Acumulada — ${procesoSel}</div>
-      <div style="display:flex;gap:20px;font-size:11px;color:#94a3b8;margin-bottom:8px;flex-wrap:wrap">
-        <span><span style="display:inline-block;width:24px;height:3px;background:${PROG_COLOR};vertical-align:middle;margin-right:6px"></span>Programado acum.</span>
-        <span><span style="display:inline-block;width:24px;height:3px;background:${colorE};vertical-align:middle;margin-right:6px"></span>Ejecutado acum.</span>
-      </div>
-      <div style="position:relative;width:100%;height:220px">
-        <canvas id="chart-acum" role="img" aria-label="Curva S acumulada ${procesoSel}"></canvas>
-      </div>
-      <div style="overflow-x:auto;margin-top:8px">
-        <table style="border-collapse:collapse;font-size:10px;min-width:500px;width:100%"><tbody id="tabla-acum"></tbody></table>
-      </div>
+    <!-- KPIs -->
+    <div class="kpi-row" style="margin-bottom:1rem">
+      <div class="kpi k-blue"><div class="kpi-lbl">Plan total</div><div class="kpi-val">${(totalPlanKg/1000).toFixed(1)}</div><div class="kpi-sub">toneladas</div></div>
+      <div class="kpi k-green"><div class="kpi-lbl">Ejecutado acum.</div><div class="kpi-val">${(totAll/1000).toFixed(1)}</div><div class="kpi-sub">toneladas</div></div>
+      <div class="kpi k-warn"><div class="kpi-lbl">Pendiente</div><div class="kpi-val">${((totalPlanKg-totAll)/1000).toFixed(1)}</div><div class="kpi-sub">toneladas</div></div>
+      <div class="kpi" style="background:#f0fdf4;border:1px solid #86efac"><div class="kpi-lbl">Avance</div><div class="kpi-val" style="color:${pctFinal>=100?'#166534':pctFinal>=50?'#1e40af':'#92400e'}">${pctFinal.toFixed(1)}%</div><div class="kpi-sub">del plan kg</div></div>
     </div>
-
-    <!-- TABLA todos procesos -->
-    <div style="font-size:13px;font-weight:500;margin-bottom:.5rem">📋 kg Ejecutados por Semana — todos los procesos</div>
-    <div style="overflow-x:auto">
-      <table style="border-collapse:collapse;font-size:11px;min-width:100%">
-        <thead><tr style="background:#0f172a;color:white">
-          <th style="padding:6px 10px;text-align:left;min-width:140px;position:sticky;left:0;background:#0f172a;z-index:2">Proceso</th>
-          ${semHdrs}
-          <th style="padding:6px 8px;text-align:center;min-width:70px;background:#166534">Total kg</th>
-          <th style="padding:6px 8px;text-align:center;min-width:80px;background:#166534">% Plan</th>
-        </tr></thead>
-        <tbody>${filasProc}${filaTotal}${filaAcum}</tbody>
-      </table>
+    <!-- Curva S -->
+    <div style="background:var(--su);border-radius:9px;padding:12px;margin-bottom:1rem;">
+      <div style="font-size:11px;font-weight:800;color:var(--sd);margin-bottom:8px;">Curva S — Avance acumulado (kg) vs semanas</div>
+      <canvas id="rpt-curvaS-chart" height="140"></canvas>
     </div>
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:2rem;margin-top:2rem;padding-top:1.5rem;border-top:1px solid var(--color-border-tertiary)">
-      ${['Elaborado por','Revisado por','Aprobado por'].map(l=>`<div style="text-align:center"><div style="font-size:10px;color:var(--color-text-secondary);margin-bottom:2rem">${l}:</div><div style="border-top:1px solid var(--color-border-primary);padding-top:5px;font-size:10px;color:var(--color-text-secondary)">Firma y sello</div></div>`).join('')}
+    <!-- Barras semanales por fase kg -->
+    <div style="background:var(--su);border-radius:9px;padding:12px;margin-bottom:1rem;">
+      <div style="font-size:11px;font-weight:800;color:var(--sd);margin-bottom:8px;">Producción semanal por fase (kg)</div>
+      <canvas id="rpt-avpeso-bar" height="110"></canvas>
+    </div>
+    <!-- Tabla -->
+    <div style="font-size:12px;font-weight:800;color:var(--sd);margin:.75rem 0 .5rem;">Detalle semanal (kg)</div>
+    <div class="tw"><table>
+      <thead><tr><th>Semana</th>${FASES.map(f=>`<th class="r" style="color:${FASE_COLORS[f]}">${f} kg</th>`).join('')}<th class="r">Sem. kg</th><th class="r">Acum. kg</th><th class="r" style="min-width:140px">% Avance</th></tr></thead>
+      <tbody>${rows}${totRow}</tbody>
+    </table></div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:2rem;margin-top:2rem;padding-top:1.5rem;border-top:1px solid var(--gl);">
+      ${['Elaborado por','Revisado por','Aprobado por'].map(l=>`<div style="text-align:center;"><div style="font-size:10px;color:var(--gm);margin-bottom:2rem;">${l}:</div><div style="border-top:1px solid var(--tx);padding-top:5px;font-size:10px;color:var(--gm);">Firma y sello</div></div>`).join('')}
     </div>
   </div>`;
 
   setTimeout(()=>{
-    const d=cronoData.find(x=>x.fase===procesoSel)||{fase:procesoSel,rend:500,nCuadrillas:1,semIni:1,kgIni:200,diaIni:0};
-    const progSem=getProgSem(d);
-    const ejecSem=weekEjec.map(w=>w.byFase[procesoSel]||0);
-    let acumE=0,acumP=0;
-    const ejecAcum=ejecSem.map(v=>{acumE+=v;return acumE>0?+acumE.toFixed(0):null;});
-    const progAcum=progSem.map(v=>{acumP+=v;return+acumP.toFixed(0);});
-    const labels=semanas.map(s=>s.lbl);
-    const semsCD=semanas.filter((_,i)=>progSem[i]>0||ejecSem[i]>0);
-    const fmt=v=>Number(v).toLocaleString('es-EC')+' kg';
-    const gc='rgba(255,255,255,0.06)';
-    const xT={color:'#94a3b8',font:{size:9},callback:(v,i)=>(i===0||i%4===0||i===semanas.length-1)?semanas[i]?.lbl:''};
-    const maxSem=Math.ceil(Math.max(...progSem,...ejecSem,1)/5000)*5000;
-    const maxAcum=Math.ceil(Math.max(...progAcum,acumE||1)/5000)*5000;
-    const yOpts=(mx)=>({beginAtZero:true,max:mx,grid:{color:gc},ticks:{color:'#94a3b8',font:{size:9},stepSize:5000,callback:fmt}});
-
-    // Mini tablas
-    document.getElementById('tabla-sem').innerHTML=`
-      <tr><td style="padding:2px 6px;color:${PROG_COLOR};font-weight:500;white-space:nowrap;min-width:120px">PROGRAMADO</td>${semsCD.map(s=>{const v=progSem[s.num-1];return`<td style="padding:2px 4px;text-align:right;color:${v>0?PROG_COLOR:'#334155'};font-size:10px;min-width:42px">${v>0?v.toFixed(0):'—'}</td>`;}).join('')}</tr>
-      <tr><td style="padding:2px 6px;color:${colorE};font-weight:500;white-space:nowrap">EJECUTADO</td>${semsCD.map(s=>{const v=ejecSem[s.num-1];return`<td style="padding:2px 4px;text-align:right;color:${v>0?colorE:'#334155'};font-size:10px">${v>0?v.toFixed(0):'—'}</td>`;}).join('')}</tr>`;
-    document.getElementById('tabla-acum').innerHTML=`
-      <tr><td style="padding:2px 6px;color:${PROG_COLOR};font-weight:500;white-space:nowrap;min-width:120px">PROG. ACUM.</td>${semsCD.map(s=>{let ap=0;progSem.slice(0,s.num).forEach(v=>ap+=v);return`<td style="padding:2px 4px;text-align:right;color:${ap>0?PROG_COLOR:'#334155'};font-size:10px;min-width:42px">${ap>0?ap.toFixed(0):'—'}</td>`;}).join('')}</tr>
-      <tr><td style="padding:2px 6px;color:${colorE};font-weight:500;white-space:nowrap">EJEC. ACUM.</td>${semsCD.map(s=>{let ae=0;ejecSem.slice(0,s.num).forEach(v=>ae+=v);return`<td style="padding:2px 4px;text-align:right;color:${ae>0?colorE:'#334155'};font-size:10px">${ae>0?ae.toFixed(0):'—'}</td>`;}).join('')}</tr>`;
-
     try{
-      if(window._chartSem) window._chartSem.destroy();
-      window._chartSem=new Chart(document.getElementById('chart-sem'),{
-        type:'line',
-        data:{labels,datasets:[
-          // Programado primero (detrás), ejecutado encima
-          {label:'Programado',data:progSem,
-           borderColor:PROG_COLOR,backgroundColor:PROG_COLOR+'22',
-           borderWidth:2,pointRadius:2,pointBackgroundColor:PROG_COLOR,
-           fill:true,tension:0.3,order:2},
-          {label:'Ejecutado',data:ejecSem.map(v=>v>0?v:null),
-           borderColor:colorE,backgroundColor:colorE+'33',
-           borderWidth:3,pointRadius:5,pointBackgroundColor:colorE,
-           fill:true,tension:0.3,spanGaps:false,order:1}
-        ]},
-        options:{responsive:true,maintainAspectRatio:false,
-          plugins:{legend:{display:false},tooltip:{mode:'index',intersect:false,callbacks:{label:ctx=>`${ctx.dataset.label}: ${ctx.raw!=null?fmt(ctx.raw):'—'}`}}},
-          scales:{x:{grid:{color:gc},ticks:xT},y:yOpts(maxSem)}}
+      const labels=weekAcum.map(w=>w.label);
+      const acumCorte=weekAcum.map(w=>+(w.acum['Corte']||0).toFixed(1));
+      const acumTotal=weekAcum.map(w=>+w.totAcum.toFixed(1));
+      const planLine=weekAcum.map((_,i)=>+(totalPlanKg*(i+1)/weekAcum.length).toFixed(1)); // línea plan lineal
+
+      // Curva S
+      mkChart('rpt-curvaS-chart','line',{
+        labels,
+        datasets:[
+          {label:'Plan (lineal ref.)',data:planLine,borderColor:'#9ca3af',borderDash:[6,3],borderWidth:2,pointRadius:0,fill:false,tension:0.3},
+          {label:'Ejecutado acum. (kg)',data:acumTotal,borderColor:'#1e40af',backgroundColor:'#1e40af22',borderWidth:2.5,pointRadius:4,fill:true,tension:0.4},
+          {label:'Corte acum. (kg)',data:acumCorte,borderColor:'#065f46',backgroundColor:'transparent',borderWidth:1.5,pointRadius:3,borderDash:[4,2],tension:0.4}
+        ]
+      },{
+        plugins:{legend:{position:'bottom',labels:{font:{size:9},boxWidth:10}}},
+        scales:{
+          x:{grid:{display:false},ticks:{font:{size:8}}},
+          y:{beginAtZero:true,grid:{color:'#eee'},ticks:{font:{size:9},callback:v=>v>=1000?(v/1000).toFixed(1)+'t':v}}
+        },
+        responsive:true
       });
 
-      if(window._chartAcum) window._chartAcum.destroy();
-      window._chartAcum=new Chart(document.getElementById('chart-acum'),{
-        type:'line',
-        data:{labels,datasets:[
-          {label:'Programado acum.',data:progAcum,
-           borderColor:PROG_COLOR,backgroundColor:PROG_COLOR+'22',
-           borderWidth:2,pointRadius:2,pointBackgroundColor:PROG_COLOR,
-           fill:true,tension:0.4,order:2},
-          {label:'Ejecutado acum.',data:ejecAcum,
-           borderColor:colorE,backgroundColor:colorE+'33',
-           borderWidth:3,pointRadius:5,pointBackgroundColor:colorE,
-           fill:true,tension:0.4,spanGaps:false,order:1}
-        ]},
-        options:{responsive:true,maintainAspectRatio:false,
-          plugins:{legend:{display:false},tooltip:{mode:'index',intersect:false,callbacks:{label:ctx=>`${ctx.dataset.label}: ${ctx.raw!=null?fmt(ctx.raw):'—'}`}}},
-          scales:{x:{grid:{color:gc},ticks:xT},y:yOpts(maxAcum)}}
+      // Barras por fase kg
+      mkChart('rpt-avpeso-bar','bar',{
+        labels,
+        datasets:FASES.map(f=>({
+          label:f,
+          data:weekData.map(w=>(w.byFaseKg[f]||0).toFixed(1)),
+          backgroundColor:FASE_COLORS[f]+'cc',
+          borderRadius:3
+        }))
+      },{
+        plugins:{legend:{position:'bottom',labels:{font:{size:9},boxWidth:10}}},
+        scales:{
+          x:{stacked:true,grid:{display:false},ticks:{font:{size:8}}},
+          y:{stacked:true,beginAtZero:true,grid:{color:'#eee'},ticks:{font:{size:9},callback:v=>v>=1000?(v/1000).toFixed(1)+'t':v}}
+        },
+        responsive:true
       });
     }catch(e){console.warn(e);}
-  },150);
+  },100);
 }
-
 
 // ======================= MODAL =======================
 function renderInformeCharts(cortes, prods, byFase) {
