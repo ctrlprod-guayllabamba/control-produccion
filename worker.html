@@ -3884,41 +3884,87 @@ const FICON={Corte:'✂',Armado:'🔧',Soldadura:'🔥',Perforaciones:'🔩','Li
 // Función SVG universal — soporta múltiples cortes en cualquier esquina
 // cortes = [{ac, lc, esq: 'tl'|'tr'|'bl'|'br'}]
 function calcPoligonoSobrante_wk(W, H, cortes, sc){
+  // Construir polígono de la forma sobrante directamente por esquina
+  // Para múltiples cortes, aplicar secuencialmente sobre el polígono actual
+  // Representación: lista ordenada de vértices en sentido horario
   let pts = [{x:0,y:0},{x:W,y:0},{x:W,y:H},{x:0,y:H}];
   cortes.forEach(c => {
     const cw = Math.round(c.ac * sc);
     const ch = Math.round(c.lc * sc);
     if(!cw || !ch) return;
     const esq = c.esq || 'tl';
+    // Para cada esquina, reemplazar el vértice de esquina con 2 vértices que forman el corte
+    // Orden correcto en sentido horario:
     if(esq === 'tl'){
-      pts = pts.filter(p=>!(p.x===0&&p.y===0));
-      const idx = pts.findIndex(p=>p.x===W&&p.y===0);
-      pts.splice(idx, 0, {x:cw,y:0}, {x:cw,y:ch}, {x:0,y:ch});
+      // Esquina sup-izq: quitar (0,0), insertar recorrido (cw,0)->(cw,ch)->(0,ch)
+      // Polígono: (cw,0) -> (W,0) -> (W,H) -> (0,H) -> (0,ch) -> (cw,ch) -> back
+      const newPts = [];
+      for(let p of pts){
+        if(p.x===0 && p.y===0) {
+          newPts.push({x:cw,y:0});
+        } else if(p.x===0 && p.y===H) {
+          newPts.push({x:0,y:H});
+          newPts.push({x:0,y:ch});
+          newPts.push({x:cw,y:ch});
+        } else {
+          newPts.push(p);
+        }
+      }
+      pts = newPts;
     } else if(esq === 'tr'){
-      pts = pts.filter(p=>!(p.x===W&&p.y===0));
-      const idx = pts.findIndex(p=>p.x===W&&p.y===H);
-      pts.splice(idx, 0, {x:W,y:ch}, {x:W-cw,y:ch}, {x:W-cw,y:0});
+      // Esquina sup-der: quitar (W,0)
+      const newPts = [];
+      for(let p of pts){
+        if(p.x===W && p.y===0) {
+          newPts.push({x:W-cw,y:0});
+          newPts.push({x:W-cw,y:ch});
+          newPts.push({x:W,y:ch});
+        } else {
+          newPts.push(p);
+        }
+      }
+      pts = newPts;
     } else if(esq === 'br'){
-      pts = pts.filter(p=>!(p.x===W&&p.y===H));
-      const idx = pts.findIndex(p=>p.x===0&&p.y===H);
-      pts.splice(idx, 0, {x:W-cw,y:H}, {x:W-cw,y:H-ch}, {x:W,y:H-ch});
+      // Esquina inf-der: quitar (W,H)
+      const newPts = [];
+      for(let p of pts){
+        if(p.x===W && p.y===H) {
+          newPts.push({x:W,y:H-ch});
+          newPts.push({x:W-cw,y:H-ch});
+          newPts.push({x:W-cw,y:H});
+        } else {
+          newPts.push(p);
+        }
+      }
+      pts = newPts;
     } else if(esq === 'bl'){
-      pts = pts.filter(p=>!(p.x===0&&p.y===H));
-      const idx = pts.findIndex(p=>p.x===0&&p.y===0);
-      pts.splice(idx, 0, {x:0,y:H-ch}, {x:cw,y:H-ch}, {x:cw,y:H});
+      // Esquina inf-izq: quitar (0,H)
+      const newPts = [];
+      for(let p of pts){
+        if(p.x===0 && p.y===H) {
+          newPts.push({x:cw,y:H});
+          newPts.push({x:cw,y:H-ch});
+          newPts.push({x:0,y:H-ch});
+        } else {
+          newPts.push(p);
+        }
+      }
+      pts = newPts;
     }
   });
   return pts;
 }
 
 function wkSVGPlancha(esp, ancho, largo, peso){
-  const maxW=300, maxH=280;
-  const sc=Math.min(maxW/ancho, maxH/largo)*0.70;
+  const maxW=200, maxH=360;
+  const scBase=Math.min(maxW/ancho, maxH/largo);
+  const scMinP=60/Math.min(ancho,largo);
+  const sc=Math.max(scBase,scMinP)*0.85;
   const W=Math.round(ancho*sc), H=Math.round(largo*sc);
   const ox=42, oy=28;
   const vw=W+ox+50, vh=H+oy+35;
   const pesoStr = peso ? '~'+peso.toFixed(1)+' kg útil' : '';
-  return '<svg viewBox="-'+ox+' -'+oy+' '+vw+' '+vh+'" style="width:100%;max-height:300px;background:#0d1117;border-radius:10px;display:block" xmlns="http://www.w3.org/2000/svg">'
+  return '<svg viewBox="-'+ox+' -'+oy+' '+vw+' '+vh+'" style="width:100%;max-height:400px;background:#0d1117;border-radius:10px;display:block" xmlns="http://www.w3.org/2000/svg">'
     +'<rect x="0" y="0" width="'+W+'" height="'+H+'" fill="#166534" stroke="#22c55e" stroke-width="2"/>'
     // Cota ancho
     +'<line x1="0" y1="'+(H+14)+'" x2="'+W+'" y2="'+(H+14)+'" stroke="#ff0000" stroke-width="0.8"/>'
@@ -3940,11 +3986,18 @@ function formaLSVG_wk(esp, ancho, largo, ancho_corte, largo_corte, cortes_extra)
   const todosCortes = cortes_extra && cortes_extra.length>0
     ? cortes_extra
     : [{ac: ancho_corte||0, lc: largo_corte||0, esq: 'tl'}];
-  const maxW=300, maxH=260;
-  const sc=Math.min(maxW/ancho, maxH/largo)*0.65;
+  // Escala adaptativa: prioriza que la forma sea legible en móvil
+  // Usar área grande: 340x420px disponibles
+  const maxW=200, maxH=360;
+  const scBase=Math.min(maxW/ancho, maxH/largo);
+  // Asegurar que el lado más corto tenga mínimo 60px
+  const minSide = Math.min(ancho,largo);
+  const maxSide = Math.max(ancho,largo);
+  const scMin = 60/minSide;
+  const sc = Math.max(scBase, scMin) * 0.85;
   const W=Math.round(ancho*sc), H=Math.round(largo*sc);
-  const ox=42, oy=25;
-  const vw=W+ox+50, vh=H+oy+35;
+  const ox=48, oy=30;
+  const vw=W+ox+60, vh=H+oy+45;
 
   const pts = calcPoligonoSobrante_wk(W, H, todosCortes, sc);
   const polyPts = pts.map(p=>`${p.x},${p.y}`).join(' ');
