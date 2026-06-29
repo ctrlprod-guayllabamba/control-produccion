@@ -5753,8 +5753,13 @@ function renderInformeAvancePeso(refFecha){
     const d=cronoData.find(x=>x.fase===proc)||{fase:proc,rend:500,nCuadrillas:1,semIni:1,kgIni:200,diaIni:0};
     const pS=getProgSem(d);
     const eS=weekEjec.map(w=>w.by[proc]||0);
+    // Índice semana actual para cortar la línea ejecutada en "hoy"
+    const hoyStr=new Date().toISOString().split('T')[0];
+    const semActualIdx=semanas.findIndex(s=>hoyStr>=s.fIni&&hoyStr<=s.fFin);
+    const corteIdx=semActualIdx>=0?semActualIdx:semanas.length-1;
     let aE=0,aP=0;
-    const eA=eS.map(v=>{aE+=v;return aE>0?+aE.toFixed(0):null;});
+    // eA: acumula kg hasta semana actual inclusive; futuras = null
+    const eA=eS.map((v,i)=>{if(i>corteIdx)return null;aE+=v;return+aE.toFixed(0);});
     const pA=pS.map(v=>{aP+=v;return+aP.toFixed(0);});
     const lbs=semanas.map(s=>s.lbl);
     const sCD=semanas.filter((_,i)=>pS[i]>0||eS[i]>0);
@@ -5794,8 +5799,8 @@ function renderInformeAvancePeso(refFecha){
 
     // Gráfico 1: semanal — ejecutado order:0 (dibuja encima)
     // Mostrar desde S1 hasta la última semana con dato; el resto null (no dibuja)
-    const ultimaEjIdx = eS.reduce((last,v,i)=>v>0?i:last,-1);
-    const eSplot = eS.map((v,i)=>i<=ultimaEjIdx?v:null);
+    // eSplot: mostrar valor real en semanas con datos, 0 en semanas sin datos hasta hoy, null en futuras
+    const eSplot = eS.map((v,i)=>i<=corteIdx?v:null);
     mkC('cs1',[
       {label:'Programado',data:pS,
        borderColor:PROG,backgroundColor:'transparent',
@@ -5810,8 +5815,8 @@ function renderInformeAvancePeso(refFecha){
     ],mS);
 
     // Gráfico 2: acumulado — extender hasta la última semana con dato
-    const ultimaAcIdx = eA.reduce((last,v,i)=>v!=null?i:last,-1);
-    const eAplot = eA.map((v,i)=>i<=ultimaAcIdx?(v??0):null);
+    // eAplot: eA ya tiene null en semanas futuras, usarlo directamente
+    const eAplot = eA;
     mkC('cs2',[
       {label:'Programado acum.',data:pA,
        borderColor:PROG,backgroundColor:'transparent',
