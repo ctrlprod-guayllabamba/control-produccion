@@ -725,6 +725,8 @@ const DEFAULT_WORKERS=[
 ];
 
 // == API Google Apps Script ======================
+const _gasInFlightWk = {};
+
 const GAS = {
   configured: () => GAS_URL && !GAS_URL.includes('PEGA_AQUI'),
 
@@ -732,6 +734,14 @@ const GAS = {
   get: async (action, params={}) => {
     if (!GAS.configured()) throw new Error('no_url');
     const q = new URLSearchParams({action, ...params}).toString();
+    // Deduplicar: si ya hay una llamada idéntica en curso, reutilizarla
+    if(_gasInFlightWk[q]) return _gasInFlightWk[q];
+    const _p = GAS._getReal(q);
+    _gasInFlightWk[q] = _p;
+    try{ return await _p; } finally { delete _gasInFlightWk[q]; }
+  },
+
+  _getReal: async (q) => {
     // Intento 1: fetch directo
     try {
       const r = await Promise.race([
@@ -763,9 +773,8 @@ const GAS = {
         if(data && data.error) reject(new Error(data.error));
         else resolve(data);
       };
-      const q2 = new URLSearchParams({action, callback:cbName, ...params}).toString();
       script = document.createElement('script');
-      script.src = GAS_URL + '?' + q2;
+      script.src = GAS_URL + '?' + q + '&callback=' + cbName;
       script.onerror = () => {
         clearTimeout(timer);
         delete window[cbName];
@@ -968,7 +977,15 @@ async function sincronizarDesdeServidor(){
   }
 }
 
+let _loadMyRecsInFlight = null;
 async function loadMyRecs(){
+  // Si ya hay una carga en curso, reutilizarla en vez de disparar otra
+  if(_loadMyRecsInFlight) return _loadMyRecsInFlight;
+  _loadMyRecsInFlight = _loadMyRecsReal();
+  try{ return await _loadMyRecsInFlight; } finally { _loadMyRecsInFlight = null; }
+}
+
+async function _loadMyRecsReal(){
   // Cargar registros locales primero
   _cache = LS.g(WORKER_RECS_LS, []);
   // Cargar TODOS los registros del GAS (todos los operarios) para progreso global
