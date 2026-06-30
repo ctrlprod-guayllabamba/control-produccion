@@ -1387,7 +1387,11 @@ async function crearProyectoNuevo(datos){
   throw new Error('No se pudo crear el proyecto');
 }
 
+let _resolveSeleccionProyecto = null;
+
 function pantallaSeleccionProyecto(modoForzado){
+  // Evitar duplicados: si ya hay un modal abierto, no crear otro
+  if(document.getElementById('modal-proyecto')) return;
   const modal = document.createElement('div');
   modal.id = 'modal-proyecto';
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.7);z-index:99998;display:flex;align-items:center;justify-content:center;padding:1rem';
@@ -1466,7 +1470,8 @@ async function confirmarCrearProyecto(){
   try{
     await crearProyectoNuevo(datos);
     document.getElementById('modal-proyecto')?.remove();
-    location.reload();
+    if(_resolveSeleccionProyecto){ _resolveSeleccionProyecto(); _resolveSeleccionProyecto=null; }
+    else { location.reload(); }
   }catch(e){ alert('Error al crear proyecto: '+e.message); }
 }
 
@@ -1475,13 +1480,16 @@ function seleccionarProyectoExistente(id){
   if(!p) return;
   setProyectoActivo(p);
   document.getElementById('modal-proyecto')?.remove();
-  location.reload();
+  if(_resolveSeleccionProyecto){ _resolveSeleccionProyecto(); _resolveSeleccionProyecto=null; }
+  else { location.reload(); }
 }
 
 function abrirSelectorProyecto(){
   cargarListaProyectos().then(()=>pantallaSeleccionProyecto(false));
 }
 
+// inicializarProyecto BLOQUEA hasta que el usuario elija/crea un proyecto,
+// evitando que el resto de la app (loadFromServer, timers, etc.) arranque sin proyecto activo.
 async function inicializarProyecto(){
   await cargarListaProyectos();
   const savedId = localStorage.getItem('prod_sup_proyecto_id');
@@ -1494,8 +1502,11 @@ async function inicializarProyecto(){
     setProyectoActivo(LISTA_PROYECTOS[0]);
     return;
   }
-  // Si hay varios o ninguno, forzar selección
-  pantallaSeleccionProyecto(true);
+  // Si hay varios o ninguno, forzar selección y ESPERAR a que el usuario decida
+  return new Promise((resolve)=>{
+    _resolveSeleccionProyecto = resolve;
+    pantallaSeleccionProyecto(true);
+  });
 }
 
 const LS = {
@@ -1503,11 +1514,21 @@ const LS = {
   load:(k,d)=>{try{const r=localStorage.getItem('prod_sup_'+k);return r?JSON.parse(r):d;}catch(e){return d;}}
 };
 
+const _gasInFlight = {};
+
 const GAS = {
   configured:()=> GAS_URL && GAS_URL!=='PEGA_AQUI_TU_URL_DE_GOOGLE_APPS_SCRIPT',
 
   get: async(action, params={})=>{
     const q=new URLSearchParams({action,...params}).toString();
+    // Deduplicar: si ya hay una llamada idéntica en curso, reutilizar su promesa
+    if(_gasInFlight[q]) return _gasInFlight[q];
+    const _p = GAS._getReal(action, params, q);
+    _gasInFlight[q] = _p;
+    try{ return await _p; } finally { delete _gasInFlight[q]; }
+  },
+
+  _getReal: async(action, params, q)=>{
     // Intento 1: fetch con redirect y timeout
     try {
       const ctrl = new AbortController();
