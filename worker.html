@@ -703,7 +703,7 @@ document.addEventListener('DOMContentLoaded',()=>{
 // ================================================
 // CONFIGURACIÓN — PEGA AQUÍ TU URL DE GOOGLE
 // ================================================
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbzAf0Nn8gjzkCtMKD474oGyCyDj0v7fxr3G0MG6iS-epSEhcke-_6A_6nh___5xnpgk/exec';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycby_NqU8YfPEaQ0x83riRADUXd50LU-IwiKbwxe2-cGSVQKsyAlNEECMDdITZPzxlDeT/exec';
 // Ejemplo: 'https://script.google.com/macros/s/AKfycb.../exec'
 // ================================================
 
@@ -2015,7 +2015,7 @@ function wkMatHTML(m,i){
           ${m.stockRef ? `<div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:8px;font-size:12px;color:#065f46">
             ✅ <strong>${m.colada||'—'}</strong> · ${m.esp}×${m.ancho}×${m.largo}mm · <strong>${(m.peso||0).toFixed(1)} kg</strong>
             ${(m.tipo==='forma_l'||m.tipoOrig==='forma_l'||m.tipoOrig==='forma_compleja')?'<br><span style="color:#3b6d11">⌐ Forma en L — corte: '+m.ancho_corte+'×'+m.largo_corte+'mm</span>':''}
-          <div id="wm-stock-svg-${i}" style="${m._svgStock?'block':'none'};margin-top:8px;background:#0d1117;border-radius:12px;padding:10px;border:1.5px solid #374151">${m._svgStock||''}</div>
+          <div id="wm-stock-svg-${i}" style="display:none;margin-top:8px;background:#0d1117;border-radius:12px;padding:10px;border:1.5px solid #374151"></div>
           </div>` : '<div style="font-size:11px;color:#6b7280">Selecciona un sobrante para usar como materia prima</div>'}
         </div>`
       : `<div style="margin-top:.375rem;background:#fef3c7;border-radius:8px;padding:.75rem;font-size:12px;color:#92400e">
@@ -2109,20 +2109,23 @@ function wkSelStock(i){
   if(isNaN(idx)||idx<0) return;
   const stocks=wkStockDisponible();
   const s=stocks[idx]; if(!s) return;
-  // Construir SVG del sobrante y guardarlo en el material para que sobreviva wkRenderMateriales
-  const _D=7.85e-9;
-  const _pesoSob = (s.tipo==='forma_l'||s.tipo==='forma_compleja')
-    ? (()=>{ const c2=s.cortes_extra&&s.cortes_extra.length>0?s.cortes_extra:[{ac:s.ancho_corte||0,lc:s.largo_corte||0}]; return s.esp*(s.ancho*s.largo-c2.reduce((sm,c)=>sm+(c.ac||0)*(c.lc||0),0))*_D; })()
-    : (s.esp||0)*(s.ancho||0)*(s.largo||0)*_D;
-  let _svgHTML = '';
-  if(s.tipo==='forma_l'||s.tipo==='forma_compleja'){
-    const cortesE = s.cortes_extra&&s.cortes_extra.length>0 ? s.cortes_extra : [{ac:s.ancho_corte||0,lc:s.largo_corte||0,esq:s.esq||'tl'}];
-    _svgHTML = '<div style="margin:8px 0 4px;font-size:11px;font-weight:700;color:#fbbf24">📐 Forma del sobrante disponible</div>'
-      + formaLSVG_wk(s.esp,s.ancho,s.largo,s.ancho_corte,s.largo_corte,cortesE)
-      + '<div style="font-size:11px;color:#4ade80;font-weight:700;text-align:center;margin-top:4px">~'+_pesoSob.toFixed(1)+' kg útil · esp '+s.esp+'mm</div>';
-  } else if(s.ancho>0&&s.largo>0){
-    _svgHTML = '<div style="margin:8px 0 4px;font-size:11px;font-weight:700;color:#fbbf24">📐 Plancha disponible en stock</div>'
-      + wkSVGPlancha(s.esp, s.ancho, s.largo, _pesoSob);
+  // Mostrar SVG prominente del sobrante seleccionado
+  const prevEl = document.getElementById(`wm-stock-svg-${i}`);
+  if(prevEl){
+    const D=7.85e-9;
+    const pesoSob = (s.tipo==='forma_l'||s.tipo==='forma_compleja')
+      ? (()=>{ const c2=s.cortes_extra&&s.cortes_extra.length>0?s.cortes_extra:[{ac:s.ancho_corte||0,lc:s.largo_corte||0}]; return s.esp*(s.ancho*s.largo-c2.reduce((sm,c)=>sm+(c.ac||0)*(c.lc||0),0))*D; })()
+      : (s.esp*s.ancho*s.largo*D);
+    if(s.tipo==='forma_l'||s.tipo==='forma_compleja'){
+      const cortesE = s.cortes_extra&&s.cortes_extra.length>0 ? s.cortes_extra : [{ac:s.ancho_corte||0,lc:s.largo_corte||0,esq:s.esq||'tl'}];
+      prevEl.innerHTML = '<div style="margin:8px 0 4px;font-size:11px;font-weight:700;color:#fbbf24">📐 Forma del sobrante disponible</div>'
+        + formaLSVG_wk(s.esp,s.ancho,s.largo,s.ancho_corte,s.largo_corte,cortesE)
+        + '<div style="font-size:11px;color:#4ade80;font-weight:700;text-align:center;margin-top:4px">~'+pesoSob.toFixed(1)+' kg útil · esp '+s.esp+'mm</div>';
+    } else {
+      prevEl.innerHTML = '<div style="margin:8px 0 4px;font-size:11px;font-weight:700;color:#fbbf24">📐 Plancha disponible en stock</div>'
+        + wkSVGPlancha(s.esp, s.ancho, s.largo, pesoSob);
+    }
+    prevEl.style.display='';
   }
   // Cortes heredados del sobrante seleccionado para traspasarlos al nuevo sobrante resultante
   const _cortesHeredados = (s.tipo==='forma_l'||s.tipo==='forma_compleja')
@@ -2154,14 +2157,8 @@ function wkSelStock(i){
       ? (()=>{ const c2=s.cortes_extra&&s.cortes_extra.length>0?s.cortes_extra:[{ac:s.ancho_corte||0,lc:s.largo_corte||0}]; return s.esp*(s.ancho*s.largo-c2.reduce((sm,c)=>sm+(c.ac||0)*(c.lc||0),0))*D; })()
       : s.esp*s.ancho*s.largo*D,
     tipoOrig: s.tipo,
-    _svgStock: _svgHTML,  // SVG del sobrante para mostrar al operario
   };
   wkRenderMateriales();
-  // Reinyectar SVG después del render (el render destruye el div)
-  if(_svgHTML){
-    const el = document.getElementById(`wm-stock-svg-${i}`);
-    if(el){ el.innerHTML=_svgHTML; el.style.display=''; }
-  }
 }
 
 function wkAddMaterial(){ wkMateriales.push({tipo:'plancha',qty:1,grado:'A588-50'}); wkRenderMateriales(); }
@@ -3884,87 +3881,41 @@ const FICON={Corte:'✂',Armado:'🔧',Soldadura:'🔥',Perforaciones:'🔩','Li
 // Función SVG universal — soporta múltiples cortes en cualquier esquina
 // cortes = [{ac, lc, esq: 'tl'|'tr'|'bl'|'br'}]
 function calcPoligonoSobrante_wk(W, H, cortes, sc){
-  // Construir polígono de la forma sobrante directamente por esquina
-  // Para múltiples cortes, aplicar secuencialmente sobre el polígono actual
-  // Representación: lista ordenada de vértices en sentido horario
   let pts = [{x:0,y:0},{x:W,y:0},{x:W,y:H},{x:0,y:H}];
   cortes.forEach(c => {
     const cw = Math.round(c.ac * sc);
     const ch = Math.round(c.lc * sc);
     if(!cw || !ch) return;
     const esq = c.esq || 'tl';
-    // Para cada esquina, reemplazar el vértice de esquina con 2 vértices que forman el corte
-    // Orden correcto en sentido horario:
     if(esq === 'tl'){
-      // Esquina sup-izq: quitar (0,0), insertar recorrido (cw,0)->(cw,ch)->(0,ch)
-      // Polígono: (cw,0) -> (W,0) -> (W,H) -> (0,H) -> (0,ch) -> (cw,ch) -> back
-      const newPts = [];
-      for(let p of pts){
-        if(p.x===0 && p.y===0) {
-          newPts.push({x:cw,y:0});
-        } else if(p.x===0 && p.y===H) {
-          newPts.push({x:0,y:H});
-          newPts.push({x:0,y:ch});
-          newPts.push({x:cw,y:ch});
-        } else {
-          newPts.push(p);
-        }
-      }
-      pts = newPts;
+      pts = pts.filter(p=>!(p.x===0&&p.y===0));
+      const idx = pts.findIndex(p=>p.x===W&&p.y===0);
+      pts.splice(idx, 0, {x:cw,y:0}, {x:cw,y:ch}, {x:0,y:ch});
     } else if(esq === 'tr'){
-      // Esquina sup-der: quitar (W,0)
-      const newPts = [];
-      for(let p of pts){
-        if(p.x===W && p.y===0) {
-          newPts.push({x:W-cw,y:0});
-          newPts.push({x:W-cw,y:ch});
-          newPts.push({x:W,y:ch});
-        } else {
-          newPts.push(p);
-        }
-      }
-      pts = newPts;
+      pts = pts.filter(p=>!(p.x===W&&p.y===0));
+      const idx = pts.findIndex(p=>p.x===W&&p.y===H);
+      pts.splice(idx, 0, {x:W,y:ch}, {x:W-cw,y:ch}, {x:W-cw,y:0});
     } else if(esq === 'br'){
-      // Esquina inf-der: quitar (W,H)
-      const newPts = [];
-      for(let p of pts){
-        if(p.x===W && p.y===H) {
-          newPts.push({x:W,y:H-ch});
-          newPts.push({x:W-cw,y:H-ch});
-          newPts.push({x:W-cw,y:H});
-        } else {
-          newPts.push(p);
-        }
-      }
-      pts = newPts;
+      pts = pts.filter(p=>!(p.x===W&&p.y===H));
+      const idx = pts.findIndex(p=>p.x===0&&p.y===H);
+      pts.splice(idx, 0, {x:W-cw,y:H}, {x:W-cw,y:H-ch}, {x:W,y:H-ch});
     } else if(esq === 'bl'){
-      // Esquina inf-izq: quitar (0,H)
-      const newPts = [];
-      for(let p of pts){
-        if(p.x===0 && p.y===H) {
-          newPts.push({x:cw,y:H});
-          newPts.push({x:cw,y:H-ch});
-          newPts.push({x:0,y:H-ch});
-        } else {
-          newPts.push(p);
-        }
-      }
-      pts = newPts;
+      pts = pts.filter(p=>!(p.x===0&&p.y===H));
+      const idx = pts.findIndex(p=>p.x===0&&p.y===0);
+      pts.splice(idx, 0, {x:0,y:H-ch}, {x:cw,y:H-ch}, {x:cw,y:H});
     }
   });
   return pts;
 }
 
 function wkSVGPlancha(esp, ancho, largo, peso){
-  const maxW=200, maxH=360;
-  const scBase=Math.min(maxW/ancho, maxH/largo);
-  const scMinP=60/Math.min(ancho,largo);
-  const sc=Math.max(scBase,scMinP)*0.85;
+  const maxW=300, maxH=280;
+  const sc=Math.min(maxW/ancho, maxH/largo)*0.70;
   const W=Math.round(ancho*sc), H=Math.round(largo*sc);
   const ox=42, oy=28;
   const vw=W+ox+50, vh=H+oy+35;
   const pesoStr = peso ? '~'+peso.toFixed(1)+' kg útil' : '';
-  return '<svg viewBox="-'+ox+' -'+oy+' '+vw+' '+vh+'" style="width:100%;max-height:400px;background:#0d1117;border-radius:10px;display:block" xmlns="http://www.w3.org/2000/svg">'
+  return '<svg viewBox="-'+ox+' -'+oy+' '+vw+' '+vh+'" style="width:100%;max-height:300px;background:#0d1117;border-radius:10px;display:block" xmlns="http://www.w3.org/2000/svg">'
     +'<rect x="0" y="0" width="'+W+'" height="'+H+'" fill="#166534" stroke="#22c55e" stroke-width="2"/>'
     // Cota ancho
     +'<line x1="0" y1="'+(H+14)+'" x2="'+W+'" y2="'+(H+14)+'" stroke="#ff0000" stroke-width="0.8"/>'
@@ -3986,18 +3937,11 @@ function formaLSVG_wk(esp, ancho, largo, ancho_corte, largo_corte, cortes_extra)
   const todosCortes = cortes_extra && cortes_extra.length>0
     ? cortes_extra
     : [{ac: ancho_corte||0, lc: largo_corte||0, esq: 'tl'}];
-  // Escala adaptativa: prioriza que la forma sea legible en móvil
-  // Usar área grande: 340x420px disponibles
-  const maxW=200, maxH=360;
-  const scBase=Math.min(maxW/ancho, maxH/largo);
-  // Asegurar que el lado más corto tenga mínimo 60px
-  const minSide = Math.min(ancho,largo);
-  const maxSide = Math.max(ancho,largo);
-  const scMin = 60/minSide;
-  const sc = Math.max(scBase, scMin) * 0.85;
+  const maxW=300, maxH=260;
+  const sc=Math.min(maxW/ancho, maxH/largo)*0.65;
   const W=Math.round(ancho*sc), H=Math.round(largo*sc);
-  const ox=48, oy=30;
-  const vw=W+ox+60, vh=H+oy+45;
+  const ox=42, oy=25;
+  const vw=W+ox+50, vh=H+oy+35;
 
   const pts = calcPoligonoSobrante_wk(W, H, todosCortes, sc);
   const polyPts = pts.map(p=>`${p.x},${p.y}`).join(' ');
