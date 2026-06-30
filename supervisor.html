@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Supervisor — Control Producción Guayllabamba</title>
+<title>Supervisor — Control de Producción</title>
 <style>
 :root{
   --sd:#1a2b4a;--sm:#2e4a7a;--sl:#4a7ab5;--sp:#d6e4f7;--su:#eef4fc;
@@ -439,11 +439,12 @@ global.Chart = class {
   <div id="global-error-banner" style="display:none;position:fixed;top:50px;left:0;right:0;background:#fee2e2;color:#991b1b;font-size:12px;padding:8px 16px;z-index:99999;font-family:monospace;max-height:200px;overflow-y:auto"></div>
 <div class="topbar">
   <div class="topbar-logo">⚙ CtrlProd</div>
-  <div class="topbar-title">CRUCE GUAYLLABAMBA V3 &nbsp;·&nbsp; CPC-DIS-PEG &nbsp;·&nbsp; Tablero 56 Módulos</div>
-  <div class="topbar-badge">TEKLA STRUCTURES</div>
+  <div class="topbar-title" id="topbar-proj-title">Cargando proyecto…</div>
+  <div class="topbar-badge" id="topbar-proj-selector" style="cursor:pointer" onclick="abrirSelectorProyecto()">📁 Cambiar proyecto</div>
 </div>
 
 <div class="tabs-nav">
+
   <button class="tab-btn active" id="tab-dashboard" onclick="goTab('dashboard',this)">Dashboard</button>
   <button class="tab-btn" id="tab-pendientes" onclick="goTab('pendientes',this)">⚠ Pendientes</button>
   <button class="tab-btn" id="tab-partes" onclick="goTab('partes',this)">Listado Partes</button>
@@ -571,26 +572,26 @@ global.Chart = class {
 </div>
 
 <!-- ═══════════════════════════════════════════════════
-     LISTADO PARTES (TEKLA)
+     LISTADO PARTES (MODELO)
 ════════════════════════════════════════════════════ -->
 <div id="panel-partes" class="panel">
 <div class="container">
   <div class="card">
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:.75rem;">
-      <div class="card-hdr" style="margin:0;">Listado de Materiales Tekla – 39 Conjuntos / 12,383 Unidades</div>
+      <div class="card-hdr" style="margin:0;">Listado de Materiales (Modelo BIM) – 39 Conjuntos / 12,383 Unidades</div>
       <div class="no-print" style="display:flex;gap:6px;align-items:center;">
-        <label class="btn btn-g btn-sm" style="cursor:pointer;">📂 Cargar Tekla
+        <label class="btn btn-g btn-sm" style="cursor:pointer;">📂 Cargar Modelo BIM
           <input type="file" accept=".xlsx,.xls" onchange="toast('Archivo recibido. En producción se procesa vía API.')" style="display:none;">
         </label>
         <button class="btn btn-s btn-sm" onclick="window.print()">🖨 Imprimir</button>
       </div>
     </div>
     <div class="fbar no-print">
-      <input type="text" id="tek-q" placeholder="Buscar conjunto, parte o perfil..." oninput="renderTekla()">
-      <select id="tek-tp" onchange="renderTekla()">
+      <input type="text" id="tek-q" placeholder="Buscar conjunto, parte o perfil..." oninput="renderModeloBIM()">
+      <select id="tek-tp" onchange="renderModeloBIM()">
         <option value="">Todos tipos</option><option>VIGA</option><option>PLACA</option><option>ANGULO</option>
       </select>
-      <select id="tek-mat" onchange="renderTekla()">
+      <select id="tek-mat" onchange="renderModeloBIM()">
         <option value="">Todos materiales</option><option>A588-50</option><option>A572-50</option>
       </select>
       <span class="fbar-cnt" id="tek-cnt"></span>
@@ -629,7 +630,7 @@ global.Chart = class {
     </div>
 
     <div class="sec-div"></div>
-    <div style="font-size:10px;font-weight:800;color:var(--sm);text-transform:uppercase;letter-spacing:.06em;margin-bottom:.5rem;">➤ Parte a cortar (Tekla)</div>
+    <div style="font-size:10px;font-weight:800;color:var(--sm);text-transform:uppercase;letter-spacing:.06em;margin-bottom:.5rem;">➤ Parte a cortar (Modelo)</div>
 
     <div class="frow">
       <div class="fg wide"><label>Conjunto</label>
@@ -648,7 +649,7 @@ global.Chart = class {
       <!-- Fila de datos -->
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:.625rem">
         <div style="background:#fff;border-radius:8px;padding:6px 10px;border:1px solid #e5e7eb;text-align:center">
-          <div style="font-size:9px;font-weight:800;color:#6b7280;text-transform:uppercase;margin-bottom:2px">📐 PLAN TEKLA</div>
+          <div style="font-size:9px;font-weight:800;color:#6b7280;text-transform:uppercase;margin-bottom:2px">📐 PLAN MODELO</div>
           <div id="c-info-plan-qty" style="font-size:18px;font-weight:800;color:#1a2b4a">—</div>
           <div id="c-info-plan-kg" style="font-size:11px;color:#6b7280">— kg</div>
         </div>
@@ -1342,6 +1343,161 @@ const GAS_URL = 'https://script.google.com/macros/s/AKfycbzAf0Nn8gjzkCtMKD474oGy
 // Ejemplo: 'https://script.google.com/macros/s/AKfycb.../exec'
 // ================================================
 
+// ════════════════════════════════════════════════════════════
+// MÓDULO DE PROYECTO ACTIVO (multi-proyecto)
+// ════════════════════════════════════════════════════════════
+let PROYECTO_ACTIVO = null; // {id, nombre, empresa, codigo, anio, fechaInicio, fechaFin, estado}
+let LISTA_PROYECTOS = [];
+
+function getProyectoIdActivo(){
+  return PROYECTO_ACTIVO ? PROYECTO_ACTIVO.id : (localStorage.getItem('prod_sup_proyecto_id') || '');
+}
+
+function setProyectoActivo(p){
+  PROYECTO_ACTIVO = p;
+  try{ localStorage.setItem('prod_sup_proyecto_id', p.id); }catch(e){}
+  try{ localStorage.setItem('prod_sup_proyecto_obj', JSON.stringify(p)); }catch(e){}
+  // Reflejar en header
+  const t = document.getElementById('topbar-proj-title');
+  if(t){
+    const partes = [p.nombre||'Sin nombre'];
+    if(p.codigo) partes.push(p.codigo);
+    t.textContent = partes.join('  ·  ');
+  }
+  // Compartir con worker.html via localStorage (mismo origen)
+  try{ localStorage.setItem('prodapp_proyecto_activo', JSON.stringify(p)); }catch(e){}
+}
+
+async function cargarListaProyectos(){
+  try{
+    const r = await GAS.get('getProyectos');
+    LISTA_PROYECTOS = Array.isArray(r) ? r : [];
+  }catch(e){ LISTA_PROYECTOS = []; }
+  return LISTA_PROYECTOS;
+}
+
+async function crearProyectoNuevo(datos){
+  const r = await GAS.post('addProyecto', datos);
+  if(r && r.ok){
+    await cargarListaProyectos();
+    const nuevo = LISTA_PROYECTOS.find(p=>p.id===r.id) || {...datos, id:r.id, estado:'activo'};
+    setProyectoActivo(nuevo);
+    return nuevo;
+  }
+  throw new Error('No se pudo crear el proyecto');
+}
+
+function pantallaSeleccionProyecto(modoForzado){
+  const modal = document.createElement('div');
+  modal.id = 'modal-proyecto';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.7);z-index:99998;display:flex;align-items:center;justify-content:center;padding:1rem';
+
+  const activosHTML = LISTA_PROYECTOS.filter(p=>p.estado!=='archivado').map(p=>`
+    <div onclick="seleccionarProyectoExistente('${p.id}')" style="border:1.5px solid #d1d5db;border-radius:10px;padding:12px 14px;margin-bottom:8px;cursor:pointer;transition:.15s" onmouseover="this.style.borderColor='#3b82f6'" onmouseout="this.style.borderColor='#d1d5db'">
+      <div style="font-weight:700;font-size:14px;color:#111827">${p.nombre||'Sin nombre'}</div>
+      <div style="font-size:12px;color:#6b7280;margin-top:2px">${p.empresa||''} ${p.codigo?'· '+p.codigo:''} ${p.anio?'· '+p.anio:''}</div>
+    </div>
+  `).join('') || '<div style="font-size:13px;color:#9ca3af;padding:1rem;text-align:center">No hay proyectos creados aún</div>';
+
+  modal.innerHTML = `
+    <div style="background:#fff;border-radius:16px;padding:2rem;width:100%;max-width:460px;max-height:90vh;overflow-y:auto">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
+        <span style="font-size:22px">📁</span>
+        <p style="font-size:18px;font-weight:700;margin:0;color:#111827">Selecciona un proyecto</p>
+      </div>
+      <p style="font-size:13px;color:#6b7280;margin:0 0 1.25rem">Elige un proyecto existente o crea uno nuevo</p>
+
+      <div id="lista-proyectos-existentes">${activosHTML}</div>
+
+      <button onclick="mostrarFormNuevoProyecto()" style="width:100%;margin-top:.75rem;background:#eff6ff;color:#1d4ed8;border:1.5px dashed #93c5fd;border-radius:10px;padding:12px;font-weight:700;font-size:13px;cursor:pointer">
+        ➕ Crear proyecto nuevo
+      </button>
+
+      <div id="form-nuevo-proyecto" style="display:none;margin-top:1rem;border-top:1px solid #e5e7eb;padding-top:1rem">
+        <div style="margin-bottom:10px">
+          <label style="font-size:11px;color:#6b7280;display:block;margin-bottom:3px">Nombre de la empresa</label>
+          <input type="text" id="np-empresa" placeholder="Ej: Aceros del Pacífico S.A." style="width:100%;padding:8px;border:1.5px solid #d1d5db;border-radius:8px;font-size:13px">
+        </div>
+        <div style="margin-bottom:10px">
+          <label style="font-size:11px;color:#6b7280;display:block;margin-bottom:3px">Nombre del proyecto</label>
+          <input type="text" id="np-nombre" placeholder="Ej: Puente vehicular Norte" style="width:100%;padding:8px;border:1.5px solid #d1d5db;border-radius:8px;font-size:13px">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+          <div>
+            <label style="font-size:11px;color:#6b7280;display:block;margin-bottom:3px">Código / referencia</label>
+            <input type="text" id="np-codigo" placeholder="PRY-2026-01" style="width:100%;padding:8px;border:1.5px solid #d1d5db;border-radius:8px;font-size:13px">
+          </div>
+          <div>
+            <label style="font-size:11px;color:#6b7280;display:block;margin-bottom:3px">Año</label>
+            <input type="number" id="np-anio" placeholder="2026" style="width:100%;padding:8px;border:1.5px solid #d1d5db;border-radius:8px;font-size:13px">
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
+          <div>
+            <label style="font-size:11px;color:#6b7280;display:block;margin-bottom:3px">Fecha inicio</label>
+            <input type="date" id="np-fini" style="width:100%;padding:8px;border:1.5px solid #d1d5db;border-radius:8px;font-size:13px">
+          </div>
+          <div>
+            <label style="font-size:11px;color:#6b7280;display:block;margin-bottom:3px">Fecha fin estimada</label>
+            <input type="date" id="np-ffin" style="width:100%;padding:8px;border:1.5px solid #d1d5db;border-radius:8px;font-size:13px">
+          </div>
+        </div>
+        <button onclick="confirmarCrearProyecto()" style="width:100%;background:#2563eb;color:#fff;border:none;border-radius:8px;padding:10px;font-weight:700;font-size:13px;cursor:pointer">Guardar y continuar</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+}
+
+function mostrarFormNuevoProyecto(){
+  document.getElementById('form-nuevo-proyecto').style.display='block';
+}
+
+async function confirmarCrearProyecto(){
+  const datos = {
+    empresa: document.getElementById('np-empresa').value.trim(),
+    nombre: document.getElementById('np-nombre').value.trim(),
+    codigo: document.getElementById('np-codigo').value.trim(),
+    anio: document.getElementById('np-anio').value.trim(),
+    fechaInicio: document.getElementById('np-fini').value,
+    fechaFin: document.getElementById('np-ffin').value,
+  };
+  if(!datos.nombre){ alert('Ingresa el nombre del proyecto'); return; }
+  try{
+    await crearProyectoNuevo(datos);
+    document.getElementById('modal-proyecto')?.remove();
+    location.reload();
+  }catch(e){ alert('Error al crear proyecto: '+e.message); }
+}
+
+function seleccionarProyectoExistente(id){
+  const p = LISTA_PROYECTOS.find(x=>x.id===id);
+  if(!p) return;
+  setProyectoActivo(p);
+  document.getElementById('modal-proyecto')?.remove();
+  location.reload();
+}
+
+function abrirSelectorProyecto(){
+  cargarListaProyectos().then(()=>pantallaSeleccionProyecto(false));
+}
+
+async function inicializarProyecto(){
+  await cargarListaProyectos();
+  const savedId = localStorage.getItem('prod_sup_proyecto_id');
+  if(savedId){
+    const existe = LISTA_PROYECTOS.find(p=>p.id===savedId);
+    if(existe){ setProyectoActivo(existe); return; }
+  }
+  // Si solo hay un proyecto (el default migrado), seleccionarlo automáticamente
+  if(LISTA_PROYECTOS.length === 1){
+    setProyectoActivo(LISTA_PROYECTOS[0]);
+    return;
+  }
+  // Si hay varios o ninguno, forzar selección
+  pantallaSeleccionProyecto(true);
+}
+
 const LS = {
   save:(k,v)=>{try{localStorage.setItem('prod_sup_'+k,JSON.stringify(v));}catch(e){}},
   load:(k,d)=>{try{const r=localStorage.getItem('prod_sup_'+k);return r?JSON.parse(r):d;}catch(e){return d;}}
@@ -1380,6 +1536,19 @@ const GAS = {
   },
 
   post: async(action,data)=>{
+    // Inyectar proyecto_id automáticamente en datos de escritura (sin pisar si ya viene)
+    try{
+      const pid = (typeof getProyectoIdActivo==='function') ? getProyectoIdActivo() : '';
+      if(pid){
+        if(Array.isArray(data)){
+          data.forEach(it=>{ if(it && typeof it==='object' && !it.proyecto_id) it.proyecto_id = pid; });
+        } else if(data && typeof data==='object'){
+          if(!data.proyecto_id) data.proyecto_id = pid;
+          if(Array.isArray(data.registros)) data.registros.forEach(it=>{ if(!it.proyecto_id) it.proyecto_id = pid; });
+          if(Array.isArray(data.operarios)) data.operarios.forEach(it=>{ if(!it.proyecto_id) it.proyecto_id = pid; });
+        }
+      }
+    }catch(e){}
     try {
       const ctrl = new AbortController();
       setTimeout(()=>ctrl.abort(), 10000);
@@ -1404,7 +1573,7 @@ async function loadFromServer(){
   if(GAS.configured()){
     try{
       // Cargar operarios
-      const ops = await GAS.get('getOperarios');
+      const ops = await GAS.get('getOperarios', {proyectoId: getProyectoIdActivo()});
       if(ops && Array.isArray(ops) && ops.length) {
         ST.ops=ops; LS.save('ops',ops);
       } else if(Array.isArray(ops) && ops.length===0 && ST.ops.length>0) {
@@ -1413,7 +1582,7 @@ async function loadFromServer(){
 
       // Cargar registros — solo sobreescribir si GAS tiene datos
       // Si GAS devuelve [] pero localStorage tiene datos, mantener localStorage
-      const recs = await GAS.get('getRegistros');
+      const recs = await GAS.get('getRegistros', {proyectoId: getProyectoIdActivo()});
       if(Array.isArray(recs) && recs.length > 0){
         // GAS tiene datos — usar GAS como fuente de verdad
         ST.cortes=[]; ST.prods=[]; ST.exec={};
@@ -1493,7 +1662,7 @@ function exportarTodosDatos() {
   const data = {
     version: 2,
     exportado: new Date().toISOString(),
-    proyecto: TEKLA.proyecto,
+    proyecto: MODELO.proyecto,
     ops:    ST.ops,
     cortes: ST.cortes,
     prods:  ST.prods,
@@ -1556,9 +1725,9 @@ function _doExportExcel(){
   wsP['!cols']=[10,6,12,8,6,14,16,8,6,20].map(w=>({wch:w}));
   XLSX.utils.book_append_sheet(wb, wsP, 'Producción');
 
-  // ── Hoja 3: Resumen Tekla ──────────────────────────────────
+  // ── Hoja 3: Resumen Modelo ──────────────────────────────────
   const resData=[['Conjunto','Parte','Perfil','Plan (uds)','Ejecutado','Pendiente','% Avance']];
-  TEKLA.conjuntos.forEach(cj=>{
+  MODELO.conjuntos.forEach(cj=>{
     cj.partes.forEach(p=>{
       const ej=ST.exec[cj.conjunto]?.[p.parte]?.Corte||0;
       const pend=Math.max(0,p.cantidad-ej);
@@ -1568,7 +1737,7 @@ function _doExportExcel(){
   });
   const wsR=XLSX.utils.aoa_to_sheet(resData);
   wsR['!cols']=[8,6,14,8,8,8,8].map(w=>({wch:w}));
-  XLSX.utils.book_append_sheet(wb, wsR, 'Resumen Tekla');
+  XLSX.utils.book_append_sheet(wb, wsR, 'Resumen Modelo');
 
   // ── Hoja 4: Operarios ──────────────────────────────────────
   const opsData=[['ID','Nombre','Apellido','Rol','Fase','Cédula','Teléfono','Empresa','Estado']];
@@ -1580,7 +1749,7 @@ function _doExportExcel(){
   XLSX.utils.book_append_sheet(wb, wsO, 'Operarios');
 
   XLSX.writeFile(wb, `ControlProduccion_${new Date().toISOString().slice(0,10)}.xlsx`);
-  toast('✅ Excel descargado — 4 hojas: Cortes, Producción, Resumen Tekla, Operarios');
+  toast('✅ Excel descargado — 4 hojas: Cortes, Producción, Resumen Modelo, Operarios');
 }
 
 function importarDatosOperario() {
@@ -1668,7 +1837,7 @@ function importarDatosOperario() {
 // ==================================================
 
 // =========================== DATA ===========================
-const TEKLA = {"proyecto":"CRUCE GUAYLLABAMBA V3","codigo":"CPC-DIS-PEG","fecha":"18.02.2026","conjuntos":[{"conjunto":"E-T-1","marca":"pr64","cantidad":113.0,"perfil":"VIGA","longitud":3024.0,"area":659.76,"material":"A588-50","peso_unit":253.95,"peso_total":28696.07,"partes":[{"parte":"pr64","cantidad":113.0,"perfil":"HI300-10-12*300","longitud":3000.0,"area":605.67,"material":"A588-50","peso_unit":234.56,"peso_total":26505.05},{"parte":"pr65","cantidad":226.0,"perfil":"PL12*300","longitud":300.0,"area":43.93,"material":"A588-50","peso_unit":8.48,"peso_total":1916.03},{"parte":"pr98","cantidad":452.0,"perfil":"PL8*100","longitud":100.0,"area":10.15,"material":"A588-50","peso_unit":0.61,"peso_total":274.99}]},{"conjunto":"E-T-2","marca":"pr73","cantidad":2.0,"perfil":"VIGA","longitud":3024.0,"area":12.17,"material":"A588-50","peso_unit":263.95,"peso_total":527.9,"partes":[{"parte":"pr65","cantidad":4.0,"perfil":"PL12*300","longitud":300.0,"area":0.78,"material":"A588-50","peso_unit":8.48,"peso_total":33.91},{"parte":"pr73","cantidad":2.0,"perfil":"HI300-10-12*300","longitud":3000.0,"area":10.72,"material":"A588-50","peso_unit":234.56,"peso_total":469.12},{"parte":"pr86","cantidad":2.0,"perfil":"PL10*205","longitud":800.0,"area":0.67,"material":"A588-50","peso_unit":12.43,"peso_total":24.87}]},{"conjunto":"E-T-3","marca":"pr73","cantidad":111.0,"perfil":"VIGA","longitud":3024.0,"area":675.41,"material":"A588-50","peso_unit":263.95,"peso_total":29298.27,"partes":[{"parte":"pr65","cantidad":222.0,"perfil":"PL12*300","longitud":300.0,"area":43.16,"material":"A588-50","peso_unit":8.48,"peso_total":1882.12},{"parte":"pr73","cantidad":111.0,"perfil":"HI300-10-12*300","longitud":3000.0,"area":594.95,"material":"A588-50","peso_unit":234.56,"peso_total":26035.94},{"parte":"pr115","cantidad":111.0,"perfil":"PL10*205","longitud":800.0,"area":37.3,"material":"A588-50","peso_unit":12.43,"peso_total":1380.22}]},{"conjunto":"E-T-4","marca":"pr68","cantidad":1.0,"perfil":"VIGA","longitud":7850.0,"area":45.1,"material":"A588-50","peso_unit":2627.53,"peso_total":2627.53,"partes":[{"parte":"pr65","cantidad":6.0,"perfil":"PL12*300","longitud":300.0,"area":1.17,"material":"A588-50","peso_unit":8.48,"peso_total":50.87},{"parte":"pr68","cantidad":1.0,"perfil":"HI250-10-20*300","longitud":7827.0,"area":13.17,"material":"A588-50","peso_unit":865.9,"peso_total":865.9},{"parte":"pr72","cantidad":6.0,"perfil":"HI300-10-12*300","longitud":349.0,"area":3.85,"material":"A588-50","peso_unit":27.29,"peso_total":163.72},{"parte":"pr76","cantidad":3.0,"perfil":"K60*3","longitud":150.0,"area":0.11,"material":"A572-50","peso_unit":0.81,"peso_total":2.42},{"parte":"pr80","cantidad":3.0,"perfil":"PL20*235","longitud":520.0,"area":0.73,"material":"A588-50","peso_unit":16.92,"peso_total":50.77},{"parte":"pr84","cantidad":18.0,"perfil":"PL10*145","longitud":206.0,"area":1.16,"material":"A588-50","peso_unit":2.27,"peso_total":40.93},{"parte":"pr85","cantidad":6.0,"perfil":"PL10*206","longitud":350.0,"area":0.73,"material":"A588-50","peso_unit":4.41,"peso_total":26.49},{"parte":"pr110","cantidad":1.0,"perfil":"HI234-8-12*180","longitud":3151.0,"area":3.47,"material":"A588-50","peso_unit":137.32,"peso_total":137.32},{"parte":"pr111","cantidad":1.0,"perfil":"HI234-8-12*180","longitud":401.0,"area":0.36,"material":"A588-50","peso_unit":13.32,"peso_total":13.32},{"parte":"pr112","cantidad":1.0,"perfil":"PL10*220","longitud":254.0,"area":0.12,"material":"A588-50","peso_unit":4.39,"peso_total":4.39},{"parte":"pr116","cantidad":2.0,"perfil":"PL10*175","longitud":255.0,"area":0.19,"material":"A588-50","peso_unit":3.48,"peso_total":6.96},{"parte":"pr117","cantidad":3.0,"perfil":"PL12*230","longitud":250.0,"area":0.38,"material":"A588-50","peso_unit":5.39,"peso_total":16.16},{"parte":"pr118","cantidad":5.0,"perfil":"PL12*230","longitud":250.0,"area":0.63,"material":"A588-50","peso_unit":5.39,"peso_total":26.94},{"parte":"pr119","cantidad":2.0,"perfil":"HI250-10-20*250","longitud":1686.0,"area":4.42,"material":"A588-50","peso_unit":137.15,"peso_total":274.29},{"parte":"pr121","cantidad":1.0,"perfil":"HI250-10-20*300","longitud":2239.0,"area":3.69,"material":"A588-50","peso_unit":241.53,"peso_total":241.53},{"parte":"pr122","cantidad":1.0,"perfil":"HI250-10-20*300","longitud":4632.0,"area":7.76,"material":"A588-50","peso_unit":509.42,"peso_total":509.42},{"parte":"pr123","cantidad":1.0,"perfil":"PL10*175","longitud":255.0,"area":0.1,"material":"A588-50","peso_unit":3.48,"peso_total":3.48},{"parte":"pr124","cantidad":1.0,"perfil":"HI250-10-20*250","longitud":845.0,"area":0.97,"material":"A588-50","peso_unit":57.17,"peso_total":57.17},{"parte":"pr126","cantidad":1.0,"perfil":"HI250-10-20*300","longitud":1251.0,"area":2.08,"material":"A588-50","peso_unit":135.44,"peso_total":135.44}]},{"conjunto":"E-T-6","marca":"pr63","cantidad":54.0,"perfil":"VIGA","longitud":6000.0,"area":1913.99,"material":"A588-50","peso_unit":2048.77,"peso_total":110633.63,"partes":[{"parte":"pr63","cantidad":54.0,"perfil":"HI250-10-20*300","longitud":6000.0,"area":545.84,"material":"A588-50","peso_unit":664.11,"peso_total":35861.94},{"parte":"pr65","cantidad":216.0,"perfil":"PL12*300","longitud":300.0,"area":41.99,"material":"A588-50","peso_unit":8.48,"peso_total":1831.25},{"parte":"pr67","cantidad":54.0,"perfil":"HI250-10-20*300","longitud":6000.0,"area":545.84,"material":"A588-50","peso_unit":664.11,"peso_total":35861.94},{"parte":"pr72","cantidad":216.0,"perfil":"HI300-10-12*300","longitud":349.0,"area":138.49,"material":"A588-50","peso_unit":27.29,"peso_total":5893.97},{"parte":"pr76","cantidad":108.0,"perfil":"K60*3","longitud":150.0,"area":3.97,"material":"A572-50","peso_unit":0.81,"peso_total":86.98},{"parte":"pr80","cantidad":108.0,"perfil":"PL20*235","longitud":520.0,"area":26.26,"material":"A588-50","peso_unit":16.92,"peso_total":1827.86},{"parte":"pr84","cantidad":648.0,"perfil":"PL10*145","longitud":206.0,"area":41.87,"material":"A588-50","peso_unit":2.27,"peso_total":1473.65},{"parte":"pr85","cantidad":216.0,"perfil":"PL10*206","longitud":350.0,"area":26.4,"material":"A588-50","peso_unit":4.41,"peso_total":953.52},{"parte":"pr110","cantidad":54.0,"perfil":"HI234-8-12*180","longitud":3151.0,"area":187.34,"material":"A588-50","peso_unit":137.32,"peso_total":7415.13},{"parte":"pr111","cantidad":108.0,"perfil":"HI234-8-12*180","longitud":401.0,"area":39.28,"material":"A588-50","peso_unit":13.32,"peso_total":1438.84},{"parte":"pr112","cantidad":108.0,"perfil":"PL10*220","longitud":254.0,"area":13.09,"material":"A588-50","peso_unit":4.39,"peso_total":473.75},{"parte":"pr116","cantidad":108.0,"perfil":"PL10*175","longitud":255.0,"area":10.48,"material":"A588-50","peso_unit":3.48,"peso_total":375.68},{"parte":"pr117","cantidad":216.0,"perfil":"PL12*230","longitud":250.0,"area":27.16,"material":"A588-50","peso_unit":5.39,"peso_total":1163.61},{"parte":"pr118","cantidad":216.0,"perfil":"PL12*230","longitud":250.0,"area":27.16,"material":"A588-50","peso_unit":5.39,"peso_total":1163.61},{"parte":"pr119","cantidad":108.0,"perfil":"HI250-10-20*250","longitud":1686.0,"area":238.82,"material":"A588-50","peso_unit":137.15,"peso_total":14811.91}]},{"conjunto":"E-T-7","marca":"pr63","cantidad":54.0,"perfil":"VIGA","longitud":6000.0,"area":1913.99,"material":"A588-50","peso_unit":2048.77,"peso_total":110633.63,"partes":[{"parte":"pr63","cantidad":54.0,"perfil":"HI250-10-20*300","longitud":6000.0,"area":545.84,"material":"A588-50","peso_unit":664.11,"peso_total":35861.94},{"parte":"pr65","cantidad":216.0,"perfil":"PL12*300","longitud":300.0,"area":41.99,"material":"A588-50","peso_unit":8.48,"peso_total":1831.25},{"parte":"pr67","cantidad":54.0,"perfil":"HI250-10-20*300","longitud":6000.0,"area":545.84,"material":"A588-50","peso_unit":664.11,"peso_total":35861.94},{"parte":"pr72","cantidad":216.0,"perfil":"HI300-10-12*300","longitud":349.0,"area":138.49,"material":"A588-50","peso_unit":27.29,"peso_total":5893.97},{"parte":"pr80","cantidad":108.0,"perfil":"PL20*235","longitud":520.0,"area":26.26,"material":"A588-50","peso_unit":16.92,"peso_total":1827.86},{"parte":"pr84","cantidad":648.0,"perfil":"PL10*145","longitud":206.0,"area":41.87,"material":"A588-50","peso_unit":2.27,"peso_total":1473.65},{"parte":"pr85","cantidad":216.0,"perfil":"PL10*206","longitud":350.0,"area":26.4,"material":"A588-50","peso_unit":4.41,"peso_total":953.52},{"parte":"pr119","cantidad":108.0,"perfil":"HI250-10-20*250","longitud":1686.0,"area":238.82,"material":"A588-50","peso_unit":137.15,"peso_total":14811.91}]},{"conjunto":"E-T-10","marca":"pr105","cantidad":112.0,"perfil":"ANGULO","longitud":4400.0,"area":153.26,"material":"A572-50","peso_unit":42.0,"peso_total":4704.07,"partes":[{"parte":"pr105","cantidad":112.0,"perfil":"L80*8","longitud":4400.0,"area":153.26,"material":"A572-50","peso_unit":42.0,"peso_total":4704.07}]},{"conjunto":"E-T-11","marca":"pr106","cantidad":224.0,"perfil":"ANGULO","longitud":2050.0,"area":142.81,"material":"A572-50","peso_unit":19.57,"peso_total":4383.34,"partes":[{"parte":"pr106","cantidad":224.0,"perfil":"L80*8","longitud":2050.0,"area":142.81,"material":"A572-50","peso_unit":19.57,"peso_total":4383.34}]},{"conjunto":"E-T-12","marca":"pr104","cantidad":111.0,"perfil":"PLACA","longitud":600.0,"area":28.77,"material":"A588-50","peso_unit":11.3,"peso_total":1254.63,"partes":[{"parte":"pr104","cantidad":111.0,"perfil":"PL12*200","longitud":600.0,"area":28.77,"material":"A588-50","peso_unit":11.3,"peso_total":1254.63}]},{"conjunto":"E-T-13","marca":"pr102","cantidad":110.0,"perfil":"ANGULO","longitud":4400.0,"area":140.84,"material":"A572-50","peso_unit":39.24,"peso_total":4316.12,"partes":[{"parte":"pr102","cantidad":110.0,"perfil":"L75*8","longitud":4400.0,"area":140.84,"material":"A572-50","peso_unit":39.24,"peso_total":4316.12}]},{"conjunto":"E-T-21","marca":"pr100","cantidad":444.0,"perfil":"ANGULO","longitud":1980.0,"area":255.82,"material":"A572-50","peso_unit":17.66,"peso_total":7839.64,"partes":[{"parte":"pr100","cantidad":444.0,"perfil":"L75*8","longitud":1980.0,"area":255.82,"material":"A572-50","peso_unit":17.66,"peso_total":7839.64}]},{"conjunto":"E-T-23","marca":"pr101","cantidad":106.0,"perfil":"VIGA","longitud":2330.0,"area":313.98,"material":"A588-50","peso_unit":117.59,"peso_total":12464.1,"partes":[{"parte":"pr101","cantidad":106.0,"perfil":"HI234-8-12*180","longitud":2310.0,"area":288.28,"material":"A588-50","peso_unit":108.81,"peso_total":11534.14},{"parte":"pr112","cantidad":212.0,"perfil":"PL10*220","longitud":254.0,"area":25.7,"material":"A588-50","peso_unit":4.39,"peso_total":929.95}]},{"conjunto":"E-T-40","marca":"pr143","cantidad":2.0,"perfil":"ANGULO","longitud":2064.0,"area":1.28,"material":"A572-50","peso_unit":19.7,"peso_total":39.4,"partes":[{"parte":"pr143","cantidad":2.0,"perfil":"L80*8","longitud":2064.0,"area":1.28,"material":"A572-50","peso_unit":19.7,"peso_total":39.4},{"parte":"pr155","cantidad":440.0,"perfil":"PL15*135","longitud":506.0,"area":68.53,"material":"A588-50","peso_unit":8.04,"peso_total":3536.56},{"parte":"pr154","cantidad":220.0,"perfil":"PL15*300","longitud":506.0,"area":72.06,"material":"A588-50","peso_unit":17.87,"peso_total":3929.51},{"parte":"pr151","cantidad":220.0,"perfil":"PL12*160","longitud":456.0,"area":35.33,"material":"A588-50","peso_unit":6.87,"peso_total":1510.8},{"parte":"pr152","cantidad":220.0,"perfil":"PL15*300","longitud":504.0,"area":71.85,"material":"A588-50","peso_unit":17.81,"peso_total":3917.86},{"parte":"pr153","cantidad":440.0,"perfil":"PL15*135","longitud":504.0,"area":68.33,"material":"A588-50","peso_unit":8.01,"peso_total":3526.08},{"parte":"pr150","cantidad":220.0,"perfil":"PL12*160","longitud":454.0,"area":35.21,"material":"A588-50","peso_unit":6.84,"peso_total":1505.83}]}]};
+const MODELO = {"proyecto":"","codigo":"CPC-DIS-PEG","fecha":"18.02.2026","conjuntos":[{"conjunto":"E-T-1","marca":"pr64","cantidad":113.0,"perfil":"VIGA","longitud":3024.0,"area":659.76,"material":"A588-50","peso_unit":253.95,"peso_total":28696.07,"partes":[{"parte":"pr64","cantidad":113.0,"perfil":"HI300-10-12*300","longitud":3000.0,"area":605.67,"material":"A588-50","peso_unit":234.56,"peso_total":26505.05},{"parte":"pr65","cantidad":226.0,"perfil":"PL12*300","longitud":300.0,"area":43.93,"material":"A588-50","peso_unit":8.48,"peso_total":1916.03},{"parte":"pr98","cantidad":452.0,"perfil":"PL8*100","longitud":100.0,"area":10.15,"material":"A588-50","peso_unit":0.61,"peso_total":274.99}]},{"conjunto":"E-T-2","marca":"pr73","cantidad":2.0,"perfil":"VIGA","longitud":3024.0,"area":12.17,"material":"A588-50","peso_unit":263.95,"peso_total":527.9,"partes":[{"parte":"pr65","cantidad":4.0,"perfil":"PL12*300","longitud":300.0,"area":0.78,"material":"A588-50","peso_unit":8.48,"peso_total":33.91},{"parte":"pr73","cantidad":2.0,"perfil":"HI300-10-12*300","longitud":3000.0,"area":10.72,"material":"A588-50","peso_unit":234.56,"peso_total":469.12},{"parte":"pr86","cantidad":2.0,"perfil":"PL10*205","longitud":800.0,"area":0.67,"material":"A588-50","peso_unit":12.43,"peso_total":24.87}]},{"conjunto":"E-T-3","marca":"pr73","cantidad":111.0,"perfil":"VIGA","longitud":3024.0,"area":675.41,"material":"A588-50","peso_unit":263.95,"peso_total":29298.27,"partes":[{"parte":"pr65","cantidad":222.0,"perfil":"PL12*300","longitud":300.0,"area":43.16,"material":"A588-50","peso_unit":8.48,"peso_total":1882.12},{"parte":"pr73","cantidad":111.0,"perfil":"HI300-10-12*300","longitud":3000.0,"area":594.95,"material":"A588-50","peso_unit":234.56,"peso_total":26035.94},{"parte":"pr115","cantidad":111.0,"perfil":"PL10*205","longitud":800.0,"area":37.3,"material":"A588-50","peso_unit":12.43,"peso_total":1380.22}]},{"conjunto":"E-T-4","marca":"pr68","cantidad":1.0,"perfil":"VIGA","longitud":7850.0,"area":45.1,"material":"A588-50","peso_unit":2627.53,"peso_total":2627.53,"partes":[{"parte":"pr65","cantidad":6.0,"perfil":"PL12*300","longitud":300.0,"area":1.17,"material":"A588-50","peso_unit":8.48,"peso_total":50.87},{"parte":"pr68","cantidad":1.0,"perfil":"HI250-10-20*300","longitud":7827.0,"area":13.17,"material":"A588-50","peso_unit":865.9,"peso_total":865.9},{"parte":"pr72","cantidad":6.0,"perfil":"HI300-10-12*300","longitud":349.0,"area":3.85,"material":"A588-50","peso_unit":27.29,"peso_total":163.72},{"parte":"pr76","cantidad":3.0,"perfil":"K60*3","longitud":150.0,"area":0.11,"material":"A572-50","peso_unit":0.81,"peso_total":2.42},{"parte":"pr80","cantidad":3.0,"perfil":"PL20*235","longitud":520.0,"area":0.73,"material":"A588-50","peso_unit":16.92,"peso_total":50.77},{"parte":"pr84","cantidad":18.0,"perfil":"PL10*145","longitud":206.0,"area":1.16,"material":"A588-50","peso_unit":2.27,"peso_total":40.93},{"parte":"pr85","cantidad":6.0,"perfil":"PL10*206","longitud":350.0,"area":0.73,"material":"A588-50","peso_unit":4.41,"peso_total":26.49},{"parte":"pr110","cantidad":1.0,"perfil":"HI234-8-12*180","longitud":3151.0,"area":3.47,"material":"A588-50","peso_unit":137.32,"peso_total":137.32},{"parte":"pr111","cantidad":1.0,"perfil":"HI234-8-12*180","longitud":401.0,"area":0.36,"material":"A588-50","peso_unit":13.32,"peso_total":13.32},{"parte":"pr112","cantidad":1.0,"perfil":"PL10*220","longitud":254.0,"area":0.12,"material":"A588-50","peso_unit":4.39,"peso_total":4.39},{"parte":"pr116","cantidad":2.0,"perfil":"PL10*175","longitud":255.0,"area":0.19,"material":"A588-50","peso_unit":3.48,"peso_total":6.96},{"parte":"pr117","cantidad":3.0,"perfil":"PL12*230","longitud":250.0,"area":0.38,"material":"A588-50","peso_unit":5.39,"peso_total":16.16},{"parte":"pr118","cantidad":5.0,"perfil":"PL12*230","longitud":250.0,"area":0.63,"material":"A588-50","peso_unit":5.39,"peso_total":26.94},{"parte":"pr119","cantidad":2.0,"perfil":"HI250-10-20*250","longitud":1686.0,"area":4.42,"material":"A588-50","peso_unit":137.15,"peso_total":274.29},{"parte":"pr121","cantidad":1.0,"perfil":"HI250-10-20*300","longitud":2239.0,"area":3.69,"material":"A588-50","peso_unit":241.53,"peso_total":241.53},{"parte":"pr122","cantidad":1.0,"perfil":"HI250-10-20*300","longitud":4632.0,"area":7.76,"material":"A588-50","peso_unit":509.42,"peso_total":509.42},{"parte":"pr123","cantidad":1.0,"perfil":"PL10*175","longitud":255.0,"area":0.1,"material":"A588-50","peso_unit":3.48,"peso_total":3.48},{"parte":"pr124","cantidad":1.0,"perfil":"HI250-10-20*250","longitud":845.0,"area":0.97,"material":"A588-50","peso_unit":57.17,"peso_total":57.17},{"parte":"pr126","cantidad":1.0,"perfil":"HI250-10-20*300","longitud":1251.0,"area":2.08,"material":"A588-50","peso_unit":135.44,"peso_total":135.44}]},{"conjunto":"E-T-6","marca":"pr63","cantidad":54.0,"perfil":"VIGA","longitud":6000.0,"area":1913.99,"material":"A588-50","peso_unit":2048.77,"peso_total":110633.63,"partes":[{"parte":"pr63","cantidad":54.0,"perfil":"HI250-10-20*300","longitud":6000.0,"area":545.84,"material":"A588-50","peso_unit":664.11,"peso_total":35861.94},{"parte":"pr65","cantidad":216.0,"perfil":"PL12*300","longitud":300.0,"area":41.99,"material":"A588-50","peso_unit":8.48,"peso_total":1831.25},{"parte":"pr67","cantidad":54.0,"perfil":"HI250-10-20*300","longitud":6000.0,"area":545.84,"material":"A588-50","peso_unit":664.11,"peso_total":35861.94},{"parte":"pr72","cantidad":216.0,"perfil":"HI300-10-12*300","longitud":349.0,"area":138.49,"material":"A588-50","peso_unit":27.29,"peso_total":5893.97},{"parte":"pr76","cantidad":108.0,"perfil":"K60*3","longitud":150.0,"area":3.97,"material":"A572-50","peso_unit":0.81,"peso_total":86.98},{"parte":"pr80","cantidad":108.0,"perfil":"PL20*235","longitud":520.0,"area":26.26,"material":"A588-50","peso_unit":16.92,"peso_total":1827.86},{"parte":"pr84","cantidad":648.0,"perfil":"PL10*145","longitud":206.0,"area":41.87,"material":"A588-50","peso_unit":2.27,"peso_total":1473.65},{"parte":"pr85","cantidad":216.0,"perfil":"PL10*206","longitud":350.0,"area":26.4,"material":"A588-50","peso_unit":4.41,"peso_total":953.52},{"parte":"pr110","cantidad":54.0,"perfil":"HI234-8-12*180","longitud":3151.0,"area":187.34,"material":"A588-50","peso_unit":137.32,"peso_total":7415.13},{"parte":"pr111","cantidad":108.0,"perfil":"HI234-8-12*180","longitud":401.0,"area":39.28,"material":"A588-50","peso_unit":13.32,"peso_total":1438.84},{"parte":"pr112","cantidad":108.0,"perfil":"PL10*220","longitud":254.0,"area":13.09,"material":"A588-50","peso_unit":4.39,"peso_total":473.75},{"parte":"pr116","cantidad":108.0,"perfil":"PL10*175","longitud":255.0,"area":10.48,"material":"A588-50","peso_unit":3.48,"peso_total":375.68},{"parte":"pr117","cantidad":216.0,"perfil":"PL12*230","longitud":250.0,"area":27.16,"material":"A588-50","peso_unit":5.39,"peso_total":1163.61},{"parte":"pr118","cantidad":216.0,"perfil":"PL12*230","longitud":250.0,"area":27.16,"material":"A588-50","peso_unit":5.39,"peso_total":1163.61},{"parte":"pr119","cantidad":108.0,"perfil":"HI250-10-20*250","longitud":1686.0,"area":238.82,"material":"A588-50","peso_unit":137.15,"peso_total":14811.91}]},{"conjunto":"E-T-7","marca":"pr63","cantidad":54.0,"perfil":"VIGA","longitud":6000.0,"area":1913.99,"material":"A588-50","peso_unit":2048.77,"peso_total":110633.63,"partes":[{"parte":"pr63","cantidad":54.0,"perfil":"HI250-10-20*300","longitud":6000.0,"area":545.84,"material":"A588-50","peso_unit":664.11,"peso_total":35861.94},{"parte":"pr65","cantidad":216.0,"perfil":"PL12*300","longitud":300.0,"area":41.99,"material":"A588-50","peso_unit":8.48,"peso_total":1831.25},{"parte":"pr67","cantidad":54.0,"perfil":"HI250-10-20*300","longitud":6000.0,"area":545.84,"material":"A588-50","peso_unit":664.11,"peso_total":35861.94},{"parte":"pr72","cantidad":216.0,"perfil":"HI300-10-12*300","longitud":349.0,"area":138.49,"material":"A588-50","peso_unit":27.29,"peso_total":5893.97},{"parte":"pr80","cantidad":108.0,"perfil":"PL20*235","longitud":520.0,"area":26.26,"material":"A588-50","peso_unit":16.92,"peso_total":1827.86},{"parte":"pr84","cantidad":648.0,"perfil":"PL10*145","longitud":206.0,"area":41.87,"material":"A588-50","peso_unit":2.27,"peso_total":1473.65},{"parte":"pr85","cantidad":216.0,"perfil":"PL10*206","longitud":350.0,"area":26.4,"material":"A588-50","peso_unit":4.41,"peso_total":953.52},{"parte":"pr119","cantidad":108.0,"perfil":"HI250-10-20*250","longitud":1686.0,"area":238.82,"material":"A588-50","peso_unit":137.15,"peso_total":14811.91}]},{"conjunto":"E-T-10","marca":"pr105","cantidad":112.0,"perfil":"ANGULO","longitud":4400.0,"area":153.26,"material":"A572-50","peso_unit":42.0,"peso_total":4704.07,"partes":[{"parte":"pr105","cantidad":112.0,"perfil":"L80*8","longitud":4400.0,"area":153.26,"material":"A572-50","peso_unit":42.0,"peso_total":4704.07}]},{"conjunto":"E-T-11","marca":"pr106","cantidad":224.0,"perfil":"ANGULO","longitud":2050.0,"area":142.81,"material":"A572-50","peso_unit":19.57,"peso_total":4383.34,"partes":[{"parte":"pr106","cantidad":224.0,"perfil":"L80*8","longitud":2050.0,"area":142.81,"material":"A572-50","peso_unit":19.57,"peso_total":4383.34}]},{"conjunto":"E-T-12","marca":"pr104","cantidad":111.0,"perfil":"PLACA","longitud":600.0,"area":28.77,"material":"A588-50","peso_unit":11.3,"peso_total":1254.63,"partes":[{"parte":"pr104","cantidad":111.0,"perfil":"PL12*200","longitud":600.0,"area":28.77,"material":"A588-50","peso_unit":11.3,"peso_total":1254.63}]},{"conjunto":"E-T-13","marca":"pr102","cantidad":110.0,"perfil":"ANGULO","longitud":4400.0,"area":140.84,"material":"A572-50","peso_unit":39.24,"peso_total":4316.12,"partes":[{"parte":"pr102","cantidad":110.0,"perfil":"L75*8","longitud":4400.0,"area":140.84,"material":"A572-50","peso_unit":39.24,"peso_total":4316.12}]},{"conjunto":"E-T-21","marca":"pr100","cantidad":444.0,"perfil":"ANGULO","longitud":1980.0,"area":255.82,"material":"A572-50","peso_unit":17.66,"peso_total":7839.64,"partes":[{"parte":"pr100","cantidad":444.0,"perfil":"L75*8","longitud":1980.0,"area":255.82,"material":"A572-50","peso_unit":17.66,"peso_total":7839.64}]},{"conjunto":"E-T-23","marca":"pr101","cantidad":106.0,"perfil":"VIGA","longitud":2330.0,"area":313.98,"material":"A588-50","peso_unit":117.59,"peso_total":12464.1,"partes":[{"parte":"pr101","cantidad":106.0,"perfil":"HI234-8-12*180","longitud":2310.0,"area":288.28,"material":"A588-50","peso_unit":108.81,"peso_total":11534.14},{"parte":"pr112","cantidad":212.0,"perfil":"PL10*220","longitud":254.0,"area":25.7,"material":"A588-50","peso_unit":4.39,"peso_total":929.95}]},{"conjunto":"E-T-40","marca":"pr143","cantidad":2.0,"perfil":"ANGULO","longitud":2064.0,"area":1.28,"material":"A572-50","peso_unit":19.7,"peso_total":39.4,"partes":[{"parte":"pr143","cantidad":2.0,"perfil":"L80*8","longitud":2064.0,"area":1.28,"material":"A572-50","peso_unit":19.7,"peso_total":39.4},{"parte":"pr155","cantidad":440.0,"perfil":"PL15*135","longitud":506.0,"area":68.53,"material":"A588-50","peso_unit":8.04,"peso_total":3536.56},{"parte":"pr154","cantidad":220.0,"perfil":"PL15*300","longitud":506.0,"area":72.06,"material":"A588-50","peso_unit":17.87,"peso_total":3929.51},{"parte":"pr151","cantidad":220.0,"perfil":"PL12*160","longitud":456.0,"area":35.33,"material":"A588-50","peso_unit":6.87,"peso_total":1510.8},{"parte":"pr152","cantidad":220.0,"perfil":"PL15*300","longitud":504.0,"area":71.85,"material":"A588-50","peso_unit":17.81,"peso_total":3917.86},{"parte":"pr153","cantidad":440.0,"perfil":"PL15*135","longitud":504.0,"area":68.33,"material":"A588-50","peso_unit":8.01,"peso_total":3526.08},{"parte":"pr150","cantidad":220.0,"perfil":"PL12*160","longitud":454.0,"area":35.21,"material":"A588-50","peso_unit":6.84,"peso_total":1505.83}]}]};
 
 const FASES = ['Corte','Armado','Soldadura','Perforaciones','Limpieza Mecánica','Pintura'];
 
@@ -1734,7 +1903,7 @@ function addExec(conjunto, parte, fase, qty) {
 // Get total executed for a parte in Corte (from cortes)
 function getCortadoQty(conjunto, parte) {
   // Para partes HI descompuestas, calcular vigas completas a partir de las sub-piezas reales
-  const cjData = TEKLA.conjuntos.find(x=>x.conjunto===conjunto);
+  const cjData = MODELO.conjuntos.find(x=>x.conjunto===conjunto);
   const parteData = cjData?.partes.find(p=>p.parte===parte);
   const perfil = parteData?.perfil || '';
   const piezasHI = PIEZAS_HI_SUP[perfil];
@@ -1763,7 +1932,7 @@ function clasificarSubpieza(sp, perfil) {
 }
 
 function getSubpiezaQty(conjunto, parte, nombreSubpieza) {
-  const cjData = TEKLA.conjuntos.find(x=>x.conjunto===conjunto);
+  const cjData = MODELO.conjuntos.find(x=>x.conjunto===conjunto);
   const parteData = cjData?.partes.find(p=>p.parte===parte);
   const perfil = parteData?.perfil || '';
 
@@ -1824,7 +1993,7 @@ window.debugSubpiezas = function(cj='E-T-1', pr='pr64'){
   console.groupEnd();
   console.log('getSubpiezaQty Alma:', getSubpiezaQty(cj,pr,'Alma'));
   console.log('getSubpiezaQty Patín:', getSubpiezaQty(cj,pr,'Patín'));
-  const perfil = TEKLA.conjuntos.find(x=>x.conjunto===cj)?.partes.find(p=>p.parte===pr)?.perfil;
+  const perfil = MODELO.conjuntos.find(x=>x.conjunto===cj)?.partes.find(p=>p.parte===pr)?.perfil;
   console.log('perfil:', perfil, 'ALMA_ESP:', {10:'Alma=esp10 Patín=esp12'});
 };
 // ─────────────────────────────────────────────────────────────────────────
@@ -1836,7 +2005,7 @@ function getCortadoKg(conjunto, parte) {
 
 function getAvanceCjKg(cj) {
   // Avance del conjunto como % de kg cortados vs kg plan total
-  const c = TEKLA.conjuntos.find(c=>c.conjunto===cj);
+  const c = MODELO.conjuntos.find(c=>c.conjunto===cj);
   if(!c) return {pct:0, kgEjec:0, kgPlan:0};
   const kgPlan = c.peso_total || c.partes.reduce((s,p)=>s+(p.peso_total||0),0);
   const kgEjec = c.partes.reduce((s,p)=>s+getCortadoKg(cj,p.parte),0);
@@ -1846,7 +2015,7 @@ function getAvanceCjKg(cj) {
 
 function getVigasCompletas(cj) {
   // Vigas completas = mínimo entre todas las partes considerando qty por viga
-  const c = TEKLA.conjuntos.find(x=>x.conjunto===cj);
+  const c = MODELO.conjuntos.find(x=>x.conjunto===cj);
   if(!c||!c.partes.length) return {vigasCompletas:0, vigasPlan:c?.cantidad||0, detalle:[]};
   const vigasPlan = c.cantidad;
   const PIEZAS_HI_KEYS = ['HI300','HI250','HI234'];
@@ -1883,7 +2052,7 @@ function getVigasCompletas(cj) {
 // Get all partes flattened
 function allPartes() {
   const res = [];
-  TEKLA.conjuntos.forEach(c=>c.partes.forEach(p=>res.push({...p,conjunto:c.conjunto,tipo:c.perfil})));
+  MODELO.conjuntos.forEach(c=>c.partes.forEach(p=>res.push({...p,conjunto:c.conjunto,tipo:c.perfil})));
   return res;
 }
 
@@ -1893,7 +2062,7 @@ function goTab(id, btn) {
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
   document.getElementById('panel-'+id).classList.add('active');
   if(btn) btn.classList.add('active');
-  const renders = {dashboard:renderDashboard,pendientes:renderPendientes,partes:renderTekla,
+  const renders = {dashboard:renderDashboard,pendientes:renderPendientes,partes:renderModeloBIM,
     corte:()=>{initCorteSelects();renderCorteHist();},
     produccion:()=>{initProdSelects();renderProd();},
     fases:renderFases,
@@ -1926,8 +2095,8 @@ const FASE_COLORS_HEX = {
 };
 
 function renderDashboard() {
-  const totalPlan = TEKLA.conjuntos.reduce((s,c)=>s+c.cantidad,0);
-  const totalKgPlan = TEKLA.conjuntos.reduce((s,c)=>s+c.peso_total,0);
+  const totalPlan = MODELO.conjuntos.reduce((s,c)=>s+c.cantidad,0);
+  const totalKgPlan = MODELO.conjuntos.reduce((s,c)=>s+c.peso_total,0);
   const partesTotal = allPartes().reduce((s,p)=>s+p.cantidad,0);
   const totalCortado = ST.cortes.reduce((s,c)=>s+c.qty,0);
   const totalProd = ST.prods.reduce((s,p)=>s+p.qty,0);
@@ -1941,7 +2110,7 @@ function renderDashboard() {
 
   // == KPIs ==
   document.getElementById('kpi-main').innerHTML = `
-    <div class="kpi k-blue"><div class="kpi-lbl">Partes Tekla</div><div class="kpi-val">${partesTotal.toLocaleString()}</div><div class="kpi-sub">${TEKLA.conjuntos.length} conjuntos</div></div>
+    <div class="kpi k-blue"><div class="kpi-lbl">Partes Modelo</div><div class="kpi-val">${partesTotal.toLocaleString()}</div><div class="kpi-sub">${MODELO.conjuntos.length} conjuntos</div></div>
     <div class="kpi k-warn"><div class="kpi-lbl">⚠ Pendientes</div><div class="kpi-val">${pendPartes.toLocaleString()}</div><div class="kpi-sub">por fabricar</div></div>
     <div class="kpi k-orange"><div class="kpi-lbl">Avance global</div><div class="kpi-val">${pctGlobal.toFixed(1)}%</div><div class="kpi-sub">${totalKgEjec.toFixed(0)} kg de ${totalKgPlan.toFixed(0)} kg</div></div>
     <div class="kpi k-green"><div class="kpi-lbl">Kg ejecutados</div><div class="kpi-val">${(totalKgEjec/1000).toFixed(1)}t</div><div class="kpi-sub">de ${(totalKgPlan/1000).toFixed(0)}t plan</div></div>
@@ -1951,9 +2120,9 @@ function renderDashboard() {
     document.getElementById('dash-pct-global').textContent = pctGlobal.toFixed(1)+'% avance';
 
   // == CHART 1: Avance por conjunto (% kg cortado vs plan) ==
-  const cjLabels = TEKLA.conjuntos.map(c=>c.conjunto);
-  const cjPlan   = TEKLA.conjuntos.map(c=>100); // 100% es el máximo
-  const cjEjec   = TEKLA.conjuntos.map(c=>getAvanceCjKg(c.conjunto).pct);
+  const cjLabels = MODELO.conjuntos.map(c=>c.conjunto);
+  const cjPlan   = MODELO.conjuntos.map(c=>100); // 100% es el máximo
+  const cjEjec   = MODELO.conjuntos.map(c=>getAvanceCjKg(c.conjunto).pct);
   mkChart('chart-conjuntos','bar',{
     labels: cjLabels,
     datasets:[
@@ -2046,7 +2215,7 @@ function renderDashboard() {
   });
 
   // == Tabla conjuntos ==
-  document.getElementById('dash-cj').innerHTML = TEKLA.conjuntos.map(c=>{
+  document.getElementById('dash-cj').innerHTML = MODELO.conjuntos.map(c=>{
     const {vigasCompletas} = getVigasCompletas(c.conjunto);
     const ej = vigasCompletas;
     const pend = Math.max(0,c.cantidad-ej);
@@ -2088,7 +2257,7 @@ function renderPendientes() {
   const ft = document.getElementById('pend-tipo')?.value||'';
 
   const rows = []; let totPend=0, totPendKg=0;
-  TEKLA.conjuntos.forEach(c=>{
+  MODELO.conjuntos.forEach(c=>{
     // Calcular vigas completas del conjunto
     const {vigasCompletas, vigasPlan, detalle} = getVigasCompletas(c.conjunto);
     const pendVigas = Math.max(0, vigasPlan - vigasCompletas);
@@ -2114,8 +2283,8 @@ function renderPendientes() {
   });
   rows.sort((a,b)=>b.pendVigas-a.pendVigas);
 
-  const totPlanAll = TEKLA.conjuntos.reduce((s,c)=>s+c.cantidad,0);
-  const totEjAll   = TEKLA.conjuntos.reduce((s,c)=>s+getVigasCompletas(c.conjunto).vigasCompletas,0);
+  const totPlanAll = MODELO.conjuntos.reduce((s,c)=>s+c.cantidad,0);
+  const totEjAll   = MODELO.conjuntos.reduce((s,c)=>s+getVigasCompletas(c.conjunto).vigasCompletas,0);
 
   document.getElementById('kpi-pend').innerHTML = `
     <div class="kpi k-warn"><div class="kpi-lbl">⚠ Pendientes fabricar</div><div class="kpi-val">${totPend.toLocaleString()}</div><div class="kpi-sub">vigas por completar</div></div>
@@ -2178,19 +2347,19 @@ function goToCorte(cj, parte) {
   },250);
 }
 
-// ======================= TEKLA TABLE =======================
+// ======================= MODELO TABLE =======================
 function typeBadge(t){
   if(t==='VIGA') return '<span class="badge b-viga">VIGA</span>';
   if(t==='PLACA') return '<span class="badge b-placa">PLACA</span>';
   if(t==='ANGULO') return '<span class="badge b-angulo">ÁNGULO</span>';
   return `<span class="badge b-pend">${t}</span>`;
 }
-function renderTekla() {
+function renderModeloBIM() {
   const q=(document.getElementById('tek-q')?.value||'').toLowerCase();
   const tp=document.getElementById('tek-tp')?.value||'';
   const mat=document.getElementById('tek-mat')?.value||'';
   let rows='',cjCount=0;
-  TEKLA.conjuntos.forEach(c=>{
+  MODELO.conjuntos.forEach(c=>{
     const match=(!tp||c.perfil===tp)&&c.partes.some(p=>!q||(c.conjunto+p.parte+p.perfil).toLowerCase().includes(q))&&(!mat||c.material===mat);
     if(!match)return; cjCount++;
     const cjAv=getAvanceCjKg(c.conjunto);
@@ -2586,7 +2755,7 @@ function supRenderPiezas(){
 }
 
 function supPiezaHTML(p,i){
-  const formas={rectangular:'Rectángulo',triangulo:'Triángulo / Cuña',trapecio:'Trapecio',circulo:'Círculo / Disco',arco:'Arco / Sector',manual:'Peso manual (Tekla)'};
+  const formas={rectangular:'Rectángulo',triangulo:'Triángulo / Cuña',trapecio:'Trapecio',circulo:'Círculo / Disco',arco:'Arco / Sector',manual:'Peso manual (Modelo)'};
   const dimsPorForma={
     rectangular:`<div class="frow">
       <div class="fg fix"><label>Esp (mm)</label><input type="number" id="sp-esp-${i}" value="${p.esp||''}" placeholder="12" oninput="supUpdPieza(${i})"></div>
@@ -2621,7 +2790,7 @@ function supPiezaHTML(p,i){
     </div>`,
     manual:`<div class="frow">
       <div class="fg"><label>Descripción subparte</label><input type="text" id="sp-desc-${i}" value="${p.desc||''}" placeholder="Ej: Rigidizador diagonal"></div>
-      <div class="fg fix"><label>Peso unit. Tekla (kg)</label><input type="number" id="sp-pm-${i}" value="${p.pesoManual||''}" placeholder="45.32" oninput="supUpdPieza(${i})"></div>
+      <div class="fg fix"><label>Peso unit. Modelo (kg)</label><input type="number" id="sp-pm-${i}" value="${p.pesoManual||''}" placeholder="45.32" oninput="supUpdPieza(${i})"></div>
       <div class="fg fix" style="min-width:60px"><label>Cant.</label><input type="number" id="sp-qty-${i}" value="${p.qty||0}" min="0" oninput="supUpdPieza(${i})"></div>
     </div>`,
   };
@@ -3035,7 +3204,7 @@ function initCorteSelects() {
   const selCj=document.getElementById('c-cj');
   if(!selCj.options.length||selCj.options.length===1){
     selCj.innerHTML='<option value="">Seleccionar conjunto...</option>'+
-      TEKLA.conjuntos.map(c=>`<option value="${c.conjunto}">${c.conjunto} — ${c.perfil} (${c.cantidad} plan)</option>`).join('');
+      MODELO.conjuntos.map(c=>`<option value="${c.conjunto}">${c.conjunto} — ${c.perfil} (${c.cantidad} plan)</option>`).join('');
   }
   const selOp=document.getElementById('c-op');
   selOp.innerHTML='<option value="">Seleccionar...</option>'+
@@ -3055,7 +3224,7 @@ function onConjuntoChange() {
   sel.innerHTML='<option value="">Seleccionar parte...</option>';
   document.getElementById('c-parte-info').style.display='none';
   if(!cj)return;
-  const c=TEKLA.conjuntos.find(x=>x.conjunto===cj);
+  const c=MODELO.conjuntos.find(x=>x.conjunto===cj);
   if(!c)return;
   c.partes.forEach(p=>{
     const ej=getCortadoQty(cj,p.parte);
@@ -3136,7 +3305,7 @@ function updateParteInfo(){
     if(pct>=100 && qty>0){
       msg.style.display='';
       msg.style.background='#f0fdf4'; msg.style.color='#065f46'; msg.style.border='1.5px solid #86efac';
-      msg.innerHTML='✅ ¡COMPLETO! Con este corte se alcanza el 100% del plan Tekla para esta parte.';
+      msg.innerHTML='✅ ¡COMPLETO! Con este corte se alcanza el 100% del plan del modelo para esta parte.';
     } else if(pct>100){
       msg.style.display='';
       msg.style.background='#fef3c7'; msg.style.color='#92400e'; msg.style.border='1.5px solid #fcd34d';
@@ -3144,7 +3313,7 @@ function updateParteInfo(){
     } else if(pend===0){
       msg.style.display='';
       msg.style.background='#f0fdf4'; msg.style.color='#065f46'; msg.style.border='1.5px solid #86efac';
-      msg.innerHTML='✅ Esta parte ya está completamente cortada según el plan Tekla.';
+      msg.innerHTML='✅ Esta parte ya está completamente cortada según el plan del modelo.';
     } else {
       msg.style.display='none';
     }
@@ -3347,12 +3516,12 @@ function calcCorte() {
     sv('c-peso-plancha', pesoPlancha.toFixed(2));
   }
 
-  // 2. Piezas cortadas y su peso (Tekla peso_unit × qty)
+  // 2. Piezas cortadas y su peso (Modelo peso_unit × qty)
   const selParte=document.getElementById('c-parte');
   const opt=selParte?.options[selParte.selectedIndex];
-  const puTekla=parseFloat(opt?.dataset?.pu||0);
+  const puModelo=parseFloat(opt?.dataset?.pu||0);
   const qtyCortada=parseFloat(document.getElementById('c-qty')?.value)||0;
-  const pesoPiezas=qtyCortada&&puTekla ? qtyCortada*puTekla : 0;
+  const pesoPiezas=qtyCortada&&puModelo ? qtyCortada*puModelo : 0;
 
   // 3. Sobrante
   const hay=document.getElementById('c-sob-hay')?.value||'si';
@@ -3443,7 +3612,7 @@ function addCorte() {
   const pu=parseFloat(opt?.dataset?.pu||0);
   const opId=document.getElementById('c-op').value;
   const op=ST.ops.find(o=>o.id==opId);
-  const c=TEKLA.conjuntos.find(x=>x.conjunto===cj);
+  const c=MODELO.conjuntos.find(x=>x.conjunto===cj);
   const p=c?.partes.find(x=>x.parte===parte);
 
   const totalMat =supMateriales.reduce((s,m)=>s+(m.peso||supCalcPesoMat(m)),0);
@@ -3840,7 +4009,7 @@ function delCorte(id){
 function initProdSelects(){
   const selCj=document.getElementById('p-cj');
   if(!selCj.options.length||selCj.options.length===1)
-    selCj.innerHTML='<option value="">Seleccionar...</option>'+TEKLA.conjuntos.map(c=>`<option value="${c.conjunto}">${c.conjunto} — ${c.perfil}</option>`).join('');
+    selCj.innerHTML='<option value="">Seleccionar...</option>'+MODELO.conjuntos.map(c=>`<option value="${c.conjunto}">${c.conjunto} — ${c.perfil}</option>`).join('');
   const selOp=document.getElementById('p-op');
   selOp.innerHTML='<option value="">Seleccionar...</option>'+ST.ops.map(o=>`<option value="${o.id}">${o.nom} ${o.ape} (${o.rol})</option>`).join('');
   const f=document.getElementById('p-fecha');if(f&&!f.value)f.value=today();
@@ -3859,7 +4028,7 @@ let pVigasData = []; // array de vigas del día con sus partes
 
 // ── Resumen global de conjuntos para el formulario de Armado/Producción ──
 function buildResumenConjuntosSup(fase, selCj){
-  return TEKLA.conjuntos.map(c=>{
+  return MODELO.conjuntos.map(c=>{
     const planVigas  = c.cantidad;
     const ej = ST.prods.filter(r=>(r.conjunto||r.cj)===c.conjunto&&r.fase===fase)
                         .reduce((s,r)=>s+(Number(r.vigasCompletas||r.qty)||0),0);
@@ -3927,7 +4096,7 @@ function pRemoveViga(i){
 function pRenderVigas(){
   try {
   const cj = document.getElementById('p-cj')?.value;
-  const c = TEKLA.conjuntos.find(x=>x.conjunto===cj);
+  const c = MODELO.conjuntos.find(x=>x.conjunto===cj);
   const cont = document.getElementById('p-vigas-list');
   if(!cont||!c){ return; }
 
@@ -4054,7 +4223,7 @@ function pSetQty(vigaIdx, parte, val){
 
 function _pUpdatePesoDisplay(vigaIdx){
   const cj=document.getElementById('p-cj')?.value;
-  const c=TEKLA.conjuntos.find(x=>x.conjunto===cj);
+  const c=MODELO.conjuntos.find(x=>x.conjunto===cj);
   if(!c) return;
   const v=pVigasData[vigaIdx];
   let pesoViga=0;
@@ -4077,7 +4246,7 @@ function _pUpdatePesoDisplay(vigaIdx){
 
 function pCalcResumenDia(){
   const cj = document.getElementById('p-cj')?.value;
-  const c = TEKLA.conjuntos.find(x=>x.conjunto===cj);
+  const c = MODELO.conjuntos.find(x=>x.conjunto===cj);
   const resumen = document.getElementById('p-resumen-dia');
   const grid = document.getElementById('p-resumen-grid');
   if(!c||!resumen||!grid) return;
@@ -4140,7 +4309,7 @@ function pUpdateInfo(){
   const fase=document.getElementById('p-fase')?.value||'Armado';
   const qty=parseFloat(document.getElementById('p-qty')?.value)||0;
   if(!cj){ document.getElementById('p-cj-info').style.display='none'; return; }
-  const c=TEKLA.conjuntos.find(x=>x.conjunto===cj);
+  const c=MODELO.conjuntos.find(x=>x.conjunto===cj);
   if(!c) return;
 
   const plan=c.cantidad;
@@ -4191,7 +4360,7 @@ function pRenderRef(){
   const resumen = document.getElementById('p-ref-resumen');
   if(!card||!tbody) return;
   if(!cj){ card.style.display='none'; return; }
-  const c = TEKLA.conjuntos.find(x=>x.conjunto===cj);
+  const c = MODELO.conjuntos.find(x=>x.conjunto===cj);
   if(!c){ card.style.display='none'; return; }
   card.style.display='';
   titulo.textContent = `📋 ${cj} — Partes del conjunto (${c.partes.length} tipos)`;
@@ -4263,7 +4432,7 @@ function addProd(){
   if(!fecha||!cj){toast('⚠ Completa: fecha y conjunto');return;}
   if(pVigasData.length===0||!pVigasData.some(v=>{
     const cj2=document.getElementById('p-cj').value;
-    const c2=TEKLA.conjuntos.find(x=>x.conjunto===cj2);
+    const c2=MODELO.conjuntos.find(x=>x.conjunto===cj2);
     return c2?.partes.some(p=>{
       const piezasHI=PIEZAS_HI_SUP[p.perfil];
       if(piezasHI) return piezasHI.some(sp=>Number(v.subQty?.[p.parte]?.[sp.tipo]||0)>0);
@@ -4273,7 +4442,7 @@ function addProd(){
     toast('⚠ Ingresa al menos una cantidad en al menos una viga');return;
   }
 
-  const c=TEKLA.conjuntos.find(x=>x.conjunto===cj);
+  const c=MODELO.conjuntos.find(x=>x.conjunto===cj);
   const vigasCompletas=pVigasData.filter(v=>c?.partes.every(p=>{
     const piezasHI=PIEZAS_HI_SUP[p.perfil];
     if(piezasHI) return piezasHI.every(sp=>Number(v.subQty?.[p.parte]?.[sp.tipo]||0)>0);
@@ -4326,7 +4495,7 @@ function renderProd(){
 
   document.getElementById('pr-tbody').innerHTML=recs.length?recs.map(r=>{
     const cj=r.conjunto||r.cj;
-    const c=TEKLA.conjuntos.find(x=>x.conjunto===cj);
+    const c=MODELO.conjuntos.find(x=>x.conjunto===cj);
     const vigas=(() => { try{ return JSON.parse(r.detalle_vigas||'[]'); }catch(e){ return []; } })();
     const incompletas=c?vigas.filter(v=>!c.partes.every(p=>{
       const piezasHI=PIEZAS_HI_SUP[p.perfil];
@@ -4339,7 +4508,7 @@ function renderProd(){
     if(pesoMostrar<=0 && r.detalle_vigas){
       try {
         const vigas=JSON.parse(r.detalle_vigas||'[]');
-        const cjData=TEKLA.conjuntos.find(x=>x.conjunto===(r.conjunto||r.cj));
+        const cjData=MODELO.conjuntos.find(x=>x.conjunto===(r.conjunto||r.cj));
         if(cjData) vigas.forEach(v=>{
           cjData.partes.forEach(p=>{
             const piezasHI=PIEZAS_HI_SUP[p.perfil];
@@ -4379,7 +4548,7 @@ function completarVigas(recId){
   const rec=ST.prods.find(r=>r.id===recId);
   if(!rec) return;
   const cj=rec.conjunto||rec.cj;
-  const c=TEKLA.conjuntos.find(x=>x.conjunto===cj);
+  const c=MODELO.conjuntos.find(x=>x.conjunto===cj);
   if(!c) return;
 
   const vigas=(() => { try{ return JSON.parse(rec.detalle_vigas||'[]'); }catch(e){ return []; } })();
@@ -4417,7 +4586,7 @@ function actualizarVigasIncompletas(){
   if(!rec){ addProd(); return; } // fallback a crear nuevo
 
   const cj=document.getElementById('p-cj').value;
-  const c=TEKLA.conjuntos.find(x=>x.conjunto===cj);
+  const c=MODELO.conjuntos.find(x=>x.conjunto===cj);
   if(!c){ toast('⚠ Selecciona el conjunto'); return; }
 
   // Fusionar vigas incompletas actualizadas con las completas originales
@@ -4507,7 +4676,7 @@ function renderFases() {
     let cards = '';
     if(f==='Corte'){
       // Para corte mostrar por conjunto con vigas completas
-      TEKLA.conjuntos.forEach(c=>{
+      MODELO.conjuntos.forEach(c=>{
         const {vigasCompletas, vigasPlan, detalle} = getVigasCompletas(c.conjunto);
         const pct = vigasPlan>0 ? Math.min(100,vigasCompletas/vigasPlan*100) : 0;
         const barColor = pct>=100 ? '#22c55e' : pct>0 ? '#f59e0b' : '#d1d5db';
@@ -4537,7 +4706,7 @@ function renderFases() {
       });
     } else {
       // Para otras fases mantener vista por parte
-      TEKLA.conjuntos.forEach(c=>{
+      MODELO.conjuntos.forEach(c=>{
         c.partes.forEach(p=>{
           const ej = getExecFase(c.conjunto, p.parte, f);
           const pend = Math.max(0, p.cantidad - ej);
@@ -4567,7 +4736,7 @@ function renderFases() {
 }
 
 function openModalFase(cj, parte, fase) {
-  const c = TEKLA.conjuntos.find(x=>x.conjunto===cj);
+  const c = MODELO.conjuntos.find(x=>x.conjunto===cj);
   const p = c?.partes.find(x=>x.parte===parte);
   if(!c||!p) return;
   const ej = getExecFase(cj, parte, fase);
@@ -4634,7 +4803,7 @@ function resetCrono(){_cronoData=JSON.parse(JSON.stringify(CRONO_DEFAULT));saveC
 
 function renderCronograma(){
   const data=getCronoData();
-  const pesoTotal=TEKLA.conjuntos.reduce((s,c)=>s+(c.peso_total||0),0);
+  const pesoTotal=MODELO.conjuntos.reduce((s,c)=>s+(c.peso_total||0),0);
 
   // Leer desde localStorage (persistente) o del DOM si ya está renderizado
   const jorSel  =document.getElementById('crono-jorn')?.value||localStorage.getItem('crono_jorn')||'5.5d';
@@ -5160,7 +5329,7 @@ async function sincronizarOperarios(){
   const st = document.getElementById('op-sync-status');
   if(st) st.textContent = '⏳ Sincronizando con Google Sheets...';
   try {
-    const ops = await GAS.get('getOperarios');
+    const ops = await GAS.get('getOperarios', {proyectoId: getProyectoIdActivo()});
     if(ops && ops.length){
       ST.ops = ops;
       LS.save('ops', ops);
@@ -5357,7 +5526,7 @@ function onRptTipoChange(){
   if(tipo==='conjunto'){
     const sel=document.getElementById('rpt-cj-filter');
     sel.innerHTML='<option value="">Todos los conjuntos</option>'+
-      TEKLA.conjuntos.map(c=>`<option value="${c.conjunto}">${c.conjunto} — ${c.perfil}</option>`).join('');
+      MODELO.conjuntos.map(c=>`<option value="${c.conjunto}">${c.conjunto} — ${c.perfil}</option>`).join('');
   }
   renderInforme();
 }
@@ -5444,7 +5613,7 @@ function renderInforme(){
     <div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:1rem;margin-bottom:1rem;border-bottom:2px solid var(--sd);">
       <div>
         <div style="font-size:17px;font-weight:800;color:var(--sd);text-transform:uppercase;">Informe ${tipo} de Producción</div>
-        <div style="font-size:12px;color:var(--gm);margin-top:3px;">${TEKLA.proyecto} · ${TEKLA.codigo}</div>
+        <div style="font-size:12px;color:var(--gm);margin-top:3px;">${MODELO.proyecto} · ${MODELO.codigo}</div>
         <div style="font-size:11px;color:var(--gm);">${lbl}</div>
       </div>
       <div style="text-align:right;font-size:10px;color:var(--gm);">Generado: ${new Date().toLocaleString('es-EC')}</div>
@@ -5562,7 +5731,7 @@ function renderInformeAvanceProceso(refFecha){
     <div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:1rem;margin-bottom:1rem;border-bottom:2px solid var(--sd);">
       <div>
         <div style="font-size:17px;font-weight:800;color:var(--sd);text-transform:uppercase;">📈 Avance Semanal por Proceso</div>
-        <div style="font-size:12px;color:var(--gm);margin-top:3px;">${TEKLA.proyecto} · ${TEKLA.codigo}</div>
+        <div style="font-size:12px;color:var(--gm);margin-top:3px;">${MODELO.proyecto} · ${MODELO.codigo}</div>
         <div style="font-size:11px;color:var(--gm);">${weeks.length} semanas registradas</div>
       </div>
       <div style="text-align:right;font-size:10px;color:var(--gm);">Generado: ${new Date().toLocaleString('es-EC')}</div>
@@ -5611,7 +5780,7 @@ function renderInformeAvanceProceso(refFecha){
 // ======================= INFORME AVANCE SEMANAL POR PESO / CURVA S =======================
 function renderInformeAvancePeso(refFecha){
   const allRecs=[...ST.cortes,...ST.prods];
-  const totalPlanKg=TEKLA.conjuntos.reduce((s,c)=>s+(c.peso_total||0),0);
+  const totalPlanKg=MODELO.conjuntos.reduce((s,c)=>s+(c.peso_total||0),0);
   const cronoData=getCronoData();
   const fechaIniCrono=localStorage.getItem('crono_fecha_ini')||'2026-06-22';
   const totalSemCrono=parseInt(localStorage.getItem('crono_total_sem')||53);
@@ -5699,7 +5868,7 @@ function renderInformeAvancePeso(refFecha){
   <div style="padding-bottom:.5rem">
     <div style="margin-bottom:1rem">
       <div style="font-size:16px;font-weight:500">Curvas S — Seguimiento por proceso</div>
-      <div style="font-size:11px;color:var(--color-text-secondary)">${TEKLA.proyecto} · Inicio: ${fechaIniCrono} · ${totalSemCrono} sem · ${jorData.label}</div>
+      <div style="font-size:11px;color:var(--color-text-secondary)">${MODELO.proyecto} · Inicio: ${fechaIniCrono} · ${totalSemCrono} sem · ${jorData.label}</div>
     </div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:1rem">
       <div style="background:#0f172a;border-radius:8px;padding:12px"><div style="font-size:11px;color:#64748b">Plan total</div><div style="font-size:20px;font-weight:500;color:white">${(totalPlanKg/1000).toFixed(1)} t</div></div>
@@ -5753,13 +5922,8 @@ function renderInformeAvancePeso(refFecha){
     const d=cronoData.find(x=>x.fase===proc)||{fase:proc,rend:500,nCuadrillas:1,semIni:1,kgIni:200,diaIni:0};
     const pS=getProgSem(d);
     const eS=weekEjec.map(w=>w.by[proc]||0);
-    // Índice semana actual para cortar la línea ejecutada en "hoy"
-    const hoyStr=new Date().toISOString().split('T')[0];
-    const semActualIdx=semanas.findIndex(s=>hoyStr>=s.fIni&&hoyStr<=s.fFin);
-    const corteIdx=semActualIdx>=0?semActualIdx:semanas.length-1;
     let aE=0,aP=0;
-    // eA: acumula kg hasta semana actual inclusive; futuras = null
-    const eA=eS.map((v,i)=>{if(i>corteIdx)return null;aE+=v;return+aE.toFixed(0);});
+    const eA=eS.map(v=>{aE+=v;return aE>0?+aE.toFixed(0):null;});
     const pA=pS.map(v=>{aP+=v;return+aP.toFixed(0);});
     const lbs=semanas.map(s=>s.lbl);
     const sCD=semanas.filter((_,i)=>pS[i]>0||eS[i]>0);
@@ -5797,37 +5961,29 @@ function renderInformeAvancePeso(refFecha){
       });
     };
 
-    // Gráfico 1: semanal — ejecutado order:0 (dibuja encima)
-    // Mostrar desde S1 hasta la última semana con dato; el resto null (no dibuja)
-    // eSplot: mostrar valor real en semanas con datos, 0 en semanas sin datos hasta hoy, null en futuras
-    const eSplot = eS.map((v,i)=>i<=corteIdx?v:null);
+    // Gráfico 1: semanal
+    // Ejecutado va con order:0 (más bajo = dibuja ENCIMA), programado order:1
     mkC('cs1',[
       {label:'Programado',data:pS,
        borderColor:PROG,backgroundColor:'transparent',
        borderWidth:2,borderDash:[5,3],pointRadius:2,pointBackgroundColor:PROG,
        fill:false,tension:0.3,order:1},
-      {label:'Ejecutado',data:eSplot,
+      {label:'Ejecutado',data:eS.map(v=>v>0?v:null),
        borderColor:cE,backgroundColor:cE+'55',
-       borderWidth:3,
-       pointRadius:(ctx)=>(eSplot[ctx.dataIndex]!=null&&eSplot[ctx.dataIndex]>0)?4:0,
-       pointBackgroundColor:cE,
-       fill:true,tension:0.3,spanGaps:true,order:0}
+       borderWidth:3,pointRadius:5,pointBackgroundColor:cE,
+       fill:true,tension:0.3,spanGaps:false,order:0}
     ],mS);
 
-    // Gráfico 2: acumulado — extender hasta la última semana con dato
-    // eAplot: eA ya tiene null en semanas futuras, usarlo directamente
-    const eAplot = eA;
+    // Gráfico 2: acumulado
     mkC('cs2',[
       {label:'Programado acum.',data:pA,
        borderColor:PROG,backgroundColor:'transparent',
        borderWidth:2,borderDash:[5,3],pointRadius:2,pointBackgroundColor:PROG,
        fill:false,tension:0.4,order:1},
-      {label:'Ejecutado acum.',data:eAplot,
+      {label:'Ejecutado acum.',data:eA,
        borderColor:cE,backgroundColor:cE+'55',
-       borderWidth:3,
-       pointRadius:(ctx)=>(eAplot[ctx.dataIndex]!=null&&eAplot[ctx.dataIndex]>0)?4:0,
-       pointBackgroundColor:cE,
-       fill:true,tension:0.4,spanGaps:true,order:0}
+       borderWidth:3,pointRadius:5,pointBackgroundColor:cE,
+       fill:true,tension:0.4,spanGaps:false,order:0}
     ],mA);
 
   },200);
@@ -5857,7 +6013,7 @@ function renderInformeCharts(cortes, prods, byFase) {
 
 
 function openModal(cj){
-  const c=TEKLA.conjuntos.find(x=>x.conjunto===cj);if(!c)return;
+  const c=MODELO.conjuntos.find(x=>x.conjunto===cj);if(!c)return;
   const av=getVigasCompletas(cj);
   const totEj=av.vigasCompletas;
   document.getElementById('modal-ttl').textContent=`${c.conjunto} — ${c.perfil} (${c.cantidad} plan)`;
@@ -6179,6 +6335,7 @@ window.addEventListener('unhandledrejection', e=>{
   if(div){ div.style.display=''; div.innerHTML += `<div>❌ Promise: ${e.reason}</div>`; }
 });
 document.addEventListener('DOMContentLoaded', async ()=>{
+  await inicializarProyecto();
   await loadFromServer();
   renderDashboard();
   ['c-fecha','p-fecha'].forEach(id=>{const el=document.getElementById(id);if(el&&!el.value)el.value=today();});
