@@ -152,12 +152,6 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);min-height
       <div style="font-size:11px;color:var(--gr);text-align:center;margin-top:.5rem">
         Descarga un archivo y envíaselo al supervisor por WhatsApp
       </div>
-      <button onclick="sincronizarDesdeServidor()" style="width:100%;padding:.75rem;background:#0d9488;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;margin-top:.5rem">
-        🔄 Sincronizar desde servidor
-      </button>
-      <div style="font-size:11px;color:var(--gr);text-align:center;margin-top:.375rem">
-        Actualiza los datos desde Google Sheets. No borra nada.
-      </div>
     </div>
     <div style="margin-top:.625rem;padding-top:.625rem;border-top:1px solid var(--bd)">
       <button onclick="limpiarDatosLocales()" style="width:100%;padding:.625rem;background:#fff;color:#991b1b;border:1.5px solid #fca5a5;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">
@@ -703,7 +697,7 @@ document.addEventListener('DOMContentLoaded',()=>{
 // ================================================
 // CONFIGURACIÓN — PEGA AQUÍ TU URL DE GOOGLE
 // ================================================
-const GAS_URL = 'https://script.google.com/macros/s/AKfycby_NqU8YfPEaQ0x83riRADUXd50LU-IwiKbwxe2-cGSVQKsyAlNEECMDdITZPzxlDeT/exec';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbzAf0Nn8gjzkCtMKD474oGyCyDj0v7fxr3G0MG6iS-epSEhcke-_6A_6nh___5xnpgk/exec';
 // Ejemplo: 'https://script.google.com/macros/s/AKfycb.../exec'
 // ================================================
 
@@ -725,8 +719,6 @@ const DEFAULT_WORKERS=[
 ];
 
 // == API Google Apps Script ======================
-const _gasInFlightWk = {};
-
 const GAS = {
   configured: () => GAS_URL && !GAS_URL.includes('PEGA_AQUI'),
 
@@ -734,14 +726,6 @@ const GAS = {
   get: async (action, params={}) => {
     if (!GAS.configured()) throw new Error('no_url');
     const q = new URLSearchParams({action, ...params}).toString();
-    // Deduplicar: si ya hay una llamada idéntica en curso, reutilizarla
-    if(_gasInFlightWk[q]) return _gasInFlightWk[q];
-    const _p = GAS._getReal(q);
-    _gasInFlightWk[q] = _p;
-    try{ return await _p; } finally { delete _gasInFlightWk[q]; }
-  },
-
-  _getReal: async (q) => {
     // Intento 1: fetch directo
     try {
       const r = await Promise.race([
@@ -773,8 +757,9 @@ const GAS = {
         if(data && data.error) reject(new Error(data.error));
         else resolve(data);
       };
+      const q2 = new URLSearchParams({action, callback:cbName, ...params}).toString();
       script = document.createElement('script');
-      script.src = GAS_URL + '?' + q + '&callback=' + cbName;
+      script.src = GAS_URL + '?' + q2;
       script.onerror = () => {
         clearTimeout(timer);
         delete window[cbName];
@@ -948,44 +933,7 @@ function selectWorker(w){
   loadMyRecs().then(renderHomeHist);
 }
 
-async function sincronizarDesdeServidor(){
-  if(!GAS.configured()){ alert('Sin conexión al servidor'); return; }
-  const btn = event?.target;
-  if(btn){ btn.textContent = '⏳ Sincronizando...'; btn.disabled = true; }
-  try{
-    const allRecs = await GAS.get('getRegistros');
-    if(allRecs && allRecs.length){
-      // Conservar solo registros locales que NO están en el server (no sincronizados aún)
-      const serverIds = new Set(allRecs.map(r => String(r.id)));
-      const localPending = LS.g(WORKER_RECS_LS, []).filter(r => !serverIds.has(String(r.id)) && !r._synced);
-      const merged = [...allRecs, ...localPending];
-      LS.s(WORKER_RECS_LS, merged);
-      // _cache debe incluir TODOS los registros para calcular progreso global correctamente
-      _cache = merged;
-      renderHomeHist();
-      // Refrescar la lista de piezas si estamos en esa pantalla
-      if(selCj) buildParteList();
-      if(document.getElementById('sc-cj')?.classList.contains('on')) buildCjList();
-      alert(`✅ Sincronizado — ${allRecs.length} registros del servidor${localPending.length ? ' + ' + localPending.length + ' locales pendientes' : ''}`);
-    } else {
-      alert('⚠️ No se encontraron registros en el servidor.\nSi hubo registros eliminados, usa "Limpiar datos locales" para resetear.');
-    }
-  }catch(e){
-    alert('Error al sincronizar: ' + e.message);
-  }finally{
-    if(btn){ btn.textContent = '🔄 Sincronizar desde servidor'; btn.disabled = false; }
-  }
-}
-
-let _loadMyRecsInFlight = null;
 async function loadMyRecs(){
-  // Si ya hay una carga en curso, reutilizarla en vez de disparar otra
-  if(_loadMyRecsInFlight) return _loadMyRecsInFlight;
-  _loadMyRecsInFlight = _loadMyRecsReal();
-  try{ return await _loadMyRecsInFlight; } finally { _loadMyRecsInFlight = null; }
-}
-
-async function _loadMyRecsReal(){
   // Cargar registros locales primero
   _cache = LS.g(WORKER_RECS_LS, []);
   // Cargar TODOS los registros del GAS (todos los operarios) para progreso global
@@ -1029,53 +977,10 @@ function saveRec(rec) {
 }
 
 function myExec(cj,pr,fase){return _cache.filter(r=>r.cj===cj&&r.pr===pr&&r.fase===fase).reduce((s,r)=>s+r.qty,0);}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// totalExec — CRITERIOS FIJOS (NO MODIFICAR sin revisar supervisor también)
-// -----------------------------------------------------------------------
-// REGLA GENERAL: Para partes normales (PL, L, etc.) suma qty directamente.
-//
-// REGLA HI (vigas descompuestas):
-//   - NO sumar qty del registro — ese campo representa piezas de la plancha,
-//     no vigas completas. Ej: un registro puede tener qty=32 (solo Patines).
-//   - CLASIFICAR sub-piezas por ESPESOR (esp), NO por nombre:
-//       HI300-10-12×300 → esp=10 → Alma (qty:1/viga), esp=12 → Patín (qty:2/viga)
-//   - VIGAS COMPLETAS = min( floor(almas/1), floor(patines/2) )
-//   - Carlos puede registrar planchas de solo Alma o solo Patín en registros
-//     separados cuando una sub-pieza ya está completa — esto es válido.
-//
-// CONSISTENCIA: Este mismo criterio usa el supervisor en getSubpiezaQty()
-//   y getVigasCompletas(). Si se cambia aquí, cambiar allá también.
-// ═══════════════════════════════════════════════════════════════════════════
 function totalExec(cj,pr,fase){
+  // Usar _cache (que incluye datos del GAS) si está disponible
   const all = _cache.length > 0 ? _cache : LS.g(WORKER_RECS_LS, []);
-  const recs = all.filter(r=>(r.cj||r.conjunto)===cj&&(r.pr||r.parte)===pr&&r.fase===fase);
-
-  // Para partes HI descompuestas, calcular vigas completas por sub-pieza
-  const cjData = TEKLA.find(c=>c.cj===cj);
-  const parteData = cjData?.partes.find(p=>p.pr===pr);
-  const piezasHI = parteData ? PIEZAS_HI[parteData.perfil] : null;
-  if(piezasHI && piezasHI.length > 0){
-    const subQty = {};
-    piezasHI.forEach(sp => subQty[sp.tipo] = 0);
-    for(const r of recs){
-      try{
-        const cortes = JSON.parse(r.pl_cortes_por_plancha || '[]');
-        for(const c of cortes){
-          // Clasificar por espesor (esp), NO por nombre — el nombre puede variar
-          const espNum = Number(c.esp);
-          const spDef = piezasHI.find(sp => Number(sp.esp) === espNum);
-          if(spDef) subQty[spDef.tipo] = (subQty[spDef.tipo] || 0) + (Number(c.qty) || 0);
-        }
-      }catch(e){}
-    }
-    // Vigas completas = mínimo entre todas las sub-piezas considerando qty por viga
-    const vigasPorSub = piezasHI.map(sp => Math.floor((subQty[sp.tipo] || 0) / (sp.qty || 1)));
-    return vigasPorSub.length > 0 ? Math.min(...vigasPorSub) : 0;
-  }
-
-  // Para partes normales: suma directa de qty
-  return recs.reduce((s,r)=>s+(Number(r.qty)||0),0);
+  return all.filter(r=>(r.cj||r.conjunto)===cj&&(r.pr||r.parte)===pr&&r.fase===fase).reduce((s,r)=>s+(Number(r.qty)||0),0);
 }
 
 // ======= FASE GRID =======
@@ -1942,13 +1847,11 @@ function wkCalcPesoPieza(p){
 function wkCalcPesoSob(s){
   const t=s.tipo||'plancha', q=s.qty||1; let pu=0;
   if(t==='plancha'&&s.esp&&s.ancho&&s.largo) pu=s.esp*s.ancho*s.largo*D;
-  else if((t==='forma_l'||t==='forma_compleja')&&s.esp&&s.ancho&&s.largo){
+  else if(t==='forma_l'&&s.esp&&s.ancho&&s.largo){
+    // Área L = Rectángulo total - Corte
     const areaTotal=s.ancho*s.largo;
-    const cortes = s.cortes_extra && s.cortes_extra.length>0
-      ? s.cortes_extra
-      : [{ac:s.ancho_corte||0, lc:s.largo_corte||0}];
-    const areaCortes = cortes.reduce((sum,c)=>sum+(c.ac||0)*(c.lc||0), 0);
-    pu=s.esp*(areaTotal-areaCortes)*D;
+    const areaCorte=(s.ancho_corte||0)*(s.largo_corte||0);
+    pu=s.esp*(areaTotal-areaCorte)*D;
   }
   else if(t==='perfil'&&s.kgm&&s.largo) pu=s.kgm*s.largo/1000;
   else if(t==='manual') pu=s.pesoManual||0;
@@ -2031,8 +1934,7 @@ function wkMatHTML(m,i){
           </select>
           ${m.stockRef ? `<div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:8px;font-size:12px;color:#065f46">
             ✅ <strong>${m.colada||'—'}</strong> · ${m.esp}×${m.ancho}×${m.largo}mm · <strong>${(m.peso||0).toFixed(1)} kg</strong>
-            ${(m.tipo==='forma_l'||m.tipoOrig==='forma_l'||m.tipoOrig==='forma_compleja')?'<br><span style="color:#3b6d11">⌐ Forma en L — corte: '+m.ancho_corte+'×'+m.largo_corte+'mm</span>':''}
-          <div id="wm-stock-svg-${i}" style="display:none;margin-top:8px;background:#0d1117;border-radius:12px;padding:10px;border:1.5px solid #374151"></div>
+            ${m.tipo==='forma_l'?'<br><span style="color:#3b6d11">⌐ Forma en L — corte: '+m.ancho_corte+'×'+m.largo_corte+'mm</span>':''}
           </div>` : '<div style="font-size:11px;color:#6b7280">Selecciona un sobrante para usar como materia prima</div>'}
         </div>`
       : `<div style="margin-top:.375rem;background:#fef3c7;border-radius:8px;padding:.75rem;font-size:12px;color:#92400e">
@@ -2063,61 +1965,33 @@ function wkMatHTML(m,i){
 }
 
 function wkStockDisponible(){
-  const recs = _cache.length > 0 ? _cache : (()=>{try{return JSON.parse(localStorage.getItem(WORKER_RECS_LS)||'[]');}catch(e){return[];}})();
-  
-  // 1. Recopilar todos los sobrantes generados
-  const saldos = {};
+  // Lee sobrantes del cache del servidor
+  const recs = _cache.concat(
+    (()=>{try{return JSON.parse(localStorage.getItem('prod_server_cortes')||'[]');}catch(e){return[];}})()
+  );
+  const items=[];
+  const seen=new Set();
   recs.forEach(c=>{
     const sobs=(()=>{try{return JSON.parse(c.sob_por_plancha||'[]');}catch(e){return[];}})();
     sobs.forEach((s,si)=>{
       const peso=Number(s.sobPeso||s.peso||0);
       if(peso<=0||s.dest==='waste') return;
       const key=c.id+'_'+si;
-      if(saldos[key]) return; // ya registrado
-      saldos[key]={
+      if(seen.has(key)) return;
+      seen.add(key);
+      items.push({
         _key:key, _recId:c.id, _sobIdx:si,
         colada:s.colada||c.pl_num||'—',
         grado:s.grado||s.mat||c.pl_mat||'A588-50',
         tipo:s.tipo||'plancha',
         esp:s.esp||0, ancho:s.ancho||0, largo:s.largo||0,
         ancho_corte:s.ancho_corte||0, largo_corte:s.largo_corte||0,
-        esq:s.esq||'tl', cortes_extra:s.cortes_extra||null,
-        qty:s.qty||1, pesoOriginal:peso, saldo:peso,
+        qty:s.qty||1, peso,
         cj:c.conjunto||c.cj, parte:c.parte||c.pr,
-      };
+      });
     });
   });
-
-  // 2. Rastrear cadena de sobrantes — solo el último queda activo
-  recs.forEach(c=>{
-    const planchas=(()=>{try{return JSON.parse(c.pl_planchas||'[]');}catch(e){return[];}})();
-    planchas.forEach(m=>{
-      if(m.tipo==='desde_stock'){
-        if(m.stockRef && saldos[m.stockRef]){
-          saldos[m.stockRef].saldo = 0;
-        }
-        if(m.colada && m.colada !== '—'){
-          const hayNuevoSob = Object.values(saldos).some(s=>
-            String(s._recId) === String(c.id) &&
-            s.colada === m.colada
-          );
-          if(hayNuevoSob){
-            Object.values(saldos).forEach(s=>{
-              if(s.colada === m.colada && Number(s._recId) < Number(c.id)){
-                s.saldo = 0;
-              }
-            });
-          }
-        }
-      }
-    });
-  });
-
-  // 3. Retornar solo los que tienen saldo > 0
-  return Object.values(saldos)
-    .filter(s=>s.saldo>0.01)
-    .sort((a,b)=>Number(b._recId)-Number(a._recId))
-    .map(s=>({...s, peso:s.saldo}));
+  return items;
 }
 
 function wkSelStock(i){
@@ -2126,38 +2000,6 @@ function wkSelStock(i){
   if(isNaN(idx)||idx<0) return;
   const stocks=wkStockDisponible();
   const s=stocks[idx]; if(!s) return;
-  // Mostrar SVG prominente del sobrante seleccionado
-  const prevEl = document.getElementById(`wm-stock-svg-${i}`);
-  if(prevEl){
-    const D=7.85e-9;
-    const pesoSob = (s.tipo==='forma_l'||s.tipo==='forma_compleja')
-      ? (()=>{ const c2=s.cortes_extra&&s.cortes_extra.length>0?s.cortes_extra:[{ac:s.ancho_corte||0,lc:s.largo_corte||0}]; return s.esp*(s.ancho*s.largo-c2.reduce((sm,c)=>sm+(c.ac||0)*(c.lc||0),0))*D; })()
-      : (s.esp*s.ancho*s.largo*D);
-    if(s.tipo==='forma_l'||s.tipo==='forma_compleja'){
-      const cortesE = s.cortes_extra&&s.cortes_extra.length>0 ? s.cortes_extra : [{ac:s.ancho_corte||0,lc:s.largo_corte||0,esq:s.esq||'tl'}];
-      prevEl.innerHTML = '<div style="margin:8px 0 4px;font-size:11px;font-weight:700;color:#fbbf24">📐 Forma del sobrante disponible</div>'
-        + formaLSVG_wk(s.esp,s.ancho,s.largo,s.ancho_corte,s.largo_corte,cortesE)
-        + '<div style="font-size:11px;color:#4ade80;font-weight:700;text-align:center;margin-top:4px">~'+pesoSob.toFixed(1)+' kg útil · esp '+s.esp+'mm</div>';
-    } else {
-      prevEl.innerHTML = '<div style="margin:8px 0 4px;font-size:11px;font-weight:700;color:#fbbf24">📐 Plancha disponible en stock</div>'
-        + wkSVGPlancha(s.esp, s.ancho, s.largo, pesoSob);
-    }
-    prevEl.style.display='';
-  }
-  // Cortes heredados del sobrante seleccionado para traspasarlos al nuevo sobrante resultante
-  const _cortesHeredados = (s.tipo==='forma_l'||s.tipo==='forma_compleja')
-    ? (s.cortes_extra && s.cortes_extra.length>0 ? s.cortes_extra : [{ac:s.ancho_corte||0,lc:s.largo_corte||0,esq:s.esq||'tl'}])
-    : [];
-  // Actualizar sobrante[0] con los cortes heredados si es forma
-  if(_cortesHeredados.length>0 && wkSobrantes[0]){
-    wkSobrantes[0]._cortesHeredados = _cortesHeredados;
-    wkSobrantes[0].esp = s.esp;
-    wkSobrantes[0].ancho = s.ancho;
-    wkSobrantes[0].largo = s.largo;
-    wkSobrantes[0].colada = s.colada;
-    wkSobrantes[0].tipo = 'forma_compleja';
-    wkRenderSobrantes();
-  }
   wkMateriales[i]={
     ...wkMateriales[i],
     tipo:'desde_stock',
@@ -2170,8 +2012,8 @@ function wkSelStock(i){
     ancho_corte: s.ancho_corte, largo_corte: s.largo_corte,
     qty: 1,
     pesoManual: s.peso,
-    peso: (s.tipo==='forma_l'||s.tipo==='forma_compleja')
-      ? (()=>{ const c2=s.cortes_extra&&s.cortes_extra.length>0?s.cortes_extra:[{ac:s.ancho_corte||0,lc:s.largo_corte||0}]; return s.esp*(s.ancho*s.largo-c2.reduce((sm,c)=>sm+(c.ac||0)*(c.lc||0),0))*D; })()
+    peso: s.tipo==='forma_l'
+      ? s.esp*(s.ancho*s.largo - s.ancho_corte*s.largo_corte)*D
       : s.esp*s.ancho*s.largo*D,
     tipoOrig: s.tipo,
   };
@@ -2524,8 +2366,21 @@ function wkSobHTML(s,i){
         <div><label style="font-size:10px;color:#6b7280">Largo (mm)</label><input type="number" id="ws-largo-${i}" value="${s.largo||''}" inputmode="numeric" placeholder="mm" style="width:100%;padding:7px;border:1.5px solid #86efac;border-radius:8px;font-size:15px;font-weight:700" oninput="wkUpdSob(${i})"></div>
         <div><label style="font-size:10px;color:#6b7280">Cant.</label><input type="number" id="ws-qty-${i}" value="${s.qty||1}" inputmode="numeric" min="1" style="width:100%;padding:7px;border:1.5px solid #86efac;border-radius:8px;font-size:15px" oninput="wkUpdSob(${i})"></div>
       </div>`
-    : (s.tipo==='forma_l'||s.tipo==='forma_compleja')
-    ? wkSobFormaHTML(s, i)
+    : s.tipo==='forma_l'
+    ? `<div style="margin-top:.375rem">
+        <div style="font-size:11px;color:#065f46;font-weight:700;margin-bottom:6px">📐 Rectángulo envolvente (dimensiones reales)</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:8px">
+          <div><label style="font-size:10px;color:#6b7280">Esp (mm)</label><input type="number" id="ws-esp-${i}" value="${s.esp||''}" inputmode="numeric" placeholder="12" style="width:100%;padding:7px;border:1.5px solid #86efac;border-radius:8px;font-size:15px;font-weight:700" oninput="wkUpdSob(${i})"></div>
+          <div><label style="font-size:10px;color:#6b7280">Ancho total (mm)</label><input type="number" id="ws-ancho-${i}" value="${s.ancho||''}" inputmode="numeric" placeholder="2500" style="width:100%;padding:7px;border:1.5px solid #86efac;border-radius:8px;font-size:15px;font-weight:700" oninput="wkUpdSob(${i})"></div>
+          <div><label style="font-size:10px;color:#6b7280">Largo total (mm)</label><input type="number" id="ws-largo-${i}" value="${s.largo||''}" inputmode="numeric" placeholder="12000" style="width:100%;padding:7px;border:1.5px solid #86efac;border-radius:8px;font-size:15px;font-weight:700" oninput="wkUpdSob(${i})"></div>
+        </div>
+        <div style="font-size:11px;color:#92400e;font-weight:700;margin-bottom:6px">✂ Corte que se le hizo (zona que falta)</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+          <div><label style="font-size:10px;color:#6b7280">Ancho corte (mm)</label><input type="number" id="ws-ancho-corte-${i}" value="${s.ancho_corte||''}" inputmode="numeric" placeholder="1380" style="width:100%;padding:7px;border:1.5px solid #fcd34d;border-radius:8px;font-size:15px;font-weight:700" oninput="wkUpdSob(${i})"></div>
+          <div><label style="font-size:10px;color:#6b7280">Largo corte (mm)</label><input type="number" id="ws-largo-corte-${i}" value="${s.largo_corte||''}" inputmode="numeric" placeholder="9000" style="width:100%;padding:7px;border:1.5px solid #fcd34d;border-radius:8px;font-size:15px;font-weight:700" oninput="wkUpdSob(${i})"></div>
+          <div><label style="font-size:10px;color:#6b7280">Cant.</label><input type="number" id="ws-qty-${i}" value="${s.qty||1}" inputmode="numeric" min="1" style="width:100%;padding:7px;border:1.5px solid #86efac;border-radius:8px;font-size:15px" oninput="wkUpdSob(${i})"></div>
+        </div>
+      </div>`
     : s.tipo==='perfil'
     ? `<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:.375rem">
         <div><label style="font-size:10px;color:#6b7280">Largo (mm)</label><input type="number" id="ws-largo-${i}" value="${s.largo||''}" inputmode="numeric" placeholder="mm" style="width:100%;padding:7px;border:1.5px solid #86efac;border-radius:8px;font-size:14px" oninput="wkUpdSob(${i})"></div>
@@ -2542,7 +2397,6 @@ function wkSobHTML(s,i){
         <select id="ws-tipo-${i}" style="font-size:12px;border:1px solid #86efac;border-radius:6px;padding:3px 6px;background:#f0fdf4" onchange="wkChgSobTipo(${i})">
           <option value="plancha" ${s.tipo==='plancha'?'selected':''}>Plancha rect.</option>
           <option value="forma_l" ${s.tipo==='forma_l'?'selected':''}>Forma en L</option>
-          <option value="forma_compleja" ${s.tipo==='forma_compleja'?'selected':''}>Forma compleja</option>
           <option value="perfil" ${s.tipo==='perfil'?'selected':''}>Perfil</option>
           <option value="manual" ${s.tipo==='manual'?'selected':''}>Peso manual</option>
         </select>
@@ -2560,90 +2414,9 @@ function wkSobHTML(s,i){
   </div>`;
 }
 
-function wkSobFormaHTML(s, i){
-  const heredados = s._cortesHeredados||[];
-  const tieneHeredados = heredados.length>0;
-  const ESQ_LABELS = {'tl':'↖ Sup-Izq','tr':'↗ Sup-Der','bl':'↙ Inf-Izq','br':'↘ Inf-Der'};
-  const esqActual = s.esq_nuevo||'tl';
-
-  let heredadosHTML = '';
-  if(tieneHeredados){
-    let filas = heredados.map(function(c,ci){
-      return '<div style="font-size:11px;color:#bfdbfe;margin-bottom:2px">Corte '+(ci+1)+': '+(ESQ_LABELS[c.esq||'tl']||c.esq)+' · '+c.ac+'×'+c.lc+' mm</div>';
-    }).join('');
-    heredadosHTML = '<div style="background:#1e3a5f;border-radius:8px;padding:8px 10px;margin-bottom:8px">'
-      +'<div style="font-size:11px;color:#93c5fd;font-weight:700;margin-bottom:4px">🔒 Cortes previos (heredados)</div>'
-      +filas+'</div>';
-  }
-
-  const rdonly = tieneHeredados ? 'readonly' : '';
-  const rdstyle = tieneHeredados ? 'background:#e8f0e8;' : '';
-
-  let esqBtns = ['tl','tr','bl','br'].map(function(esq){
-    const sel = esqActual===esq;
-    const bord = sel ? '#f97316' : '#d1d5db';
-    const bg   = sel ? '#fff7ed' : 'white';
-    const col  = sel ? '#c2410c' : '#374151';
-    return '<button type="button" onclick="wkSobSetEsq(' + i + ',&quot;' + esq + '&quot;)" style="padding:6px 2px;border-radius:6px;font-size:11px;font-weight:700;border:2px solid '+bord+';background:'+bg+';color:'+col+';cursor:pointer">' + ESQ_LABELS[esq] + '</button>';
-  }).join('');
-
-  return '<div style="margin-top:.375rem">'
-    +'<div style="font-size:11px;color:#065f46;font-weight:700;margin-bottom:6px">📐 Rectángulo envolvente</div>'
-    +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:8px">'
-      +'<div><label style="font-size:10px;color:#6b7280">Esp (mm)</label>'
-        +'<input type="number" id="ws-esp-'+i+'" value="'+(s.esp||'')+'" inputmode="numeric" '+rdonly+' style="width:100%;padding:7px;border:1.5px solid #86efac;border-radius:8px;font-size:15px;font-weight:700;'+rdstyle+'" oninput="wkUpdSob('+i+')"></div>'
-      +'<div><label style="font-size:10px;color:#6b7280">Ancho total (mm)</label>'
-        +'<input type="number" id="ws-ancho-'+i+'" value="'+(s.ancho||'')+'" inputmode="numeric" '+rdonly+' style="width:100%;padding:7px;border:1.5px solid #86efac;border-radius:8px;font-size:15px;font-weight:700;'+rdstyle+'" oninput="wkUpdSob('+i+')"></div>'
-      +'<div><label style="font-size:10px;color:#6b7280">Largo total (mm)</label>'
-        +'<input type="number" id="ws-largo-'+i+'" value="'+(s.largo||'')+'" inputmode="numeric" '+rdonly+' style="width:100%;padding:7px;border:1.5px solid #86efac;border-radius:8px;font-size:15px;font-weight:700;'+rdstyle+'" oninput="wkUpdSob('+i+')"></div>'
-    +'</div>'
-    +heredadosHTML
-    +(((s.ancho_corte>=s.ancho&&s.ancho>0)||(s.largo_corte>=s.largo&&s.largo>0))&&s.ancho_corte>0&&s.largo_corte>0
-      ?'<div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;padding:6px 10px;margin-bottom:6px;font-size:11px;color:#92400e;font-weight:700">⚡ El corte abarca todo el ancho/largo → el sobrante quedará como <strong>plancha rectangular simple</strong></div>'
-      :'')
-    +'<div style="font-size:11px;color:#92400e;font-weight:700;margin-bottom:6px">✂ Nuevo corte resultante</div>'
-    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">'
-      +'<div style="grid-column:1/-1"><label style="font-size:10px;color:#6b7280">Esquina del nuevo corte</label>'
-        +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:4px;margin-top:4px">'+esqBtns+'</div>'
-      +'</div>'
-      +'<div><label style="font-size:10px;color:#6b7280">Ancho corte (mm)</label>'
-        +'<input type="number" id="ws-ancho-corte-'+i+'" value="'+(s.ancho_corte||'')+'" inputmode="numeric" placeholder="300" style="width:100%;padding:7px;border:1.5px solid #fcd34d;border-radius:8px;font-size:15px;font-weight:700" oninput="wkUpdSob('+i+')"></div>'
-      +'<div><label style="font-size:10px;color:#6b7280">Largo corte (mm)</label>'
-        +'<input type="number" id="ws-largo-corte-'+i+'" value="'+(s.largo_corte||'')+'" inputmode="numeric" placeholder="300" style="width:100%;padding:7px;border:1.5px solid #fcd34d;border-radius:8px;font-size:15px;font-weight:700" oninput="wkUpdSob('+i+')"></div>'
-    +'</div>'
-    +'<div id="ws-svg-preview-'+i+'"></div>'
-    +'<div style="margin-top:6px"><label style="font-size:10px;color:#6b7280">Cant.</label>'
-      +'<input type="number" id="ws-qty-'+i+'" value="'+(s.qty||1)+'" inputmode="numeric" min="1" style="width:100%;padding:7px;border:1.5px solid #86efac;border-radius:8px;font-size:15px" oninput="wkUpdSob('+i+')"></div>'
-    +'</div>';
-}
-
-function wkSobSetEsq(i, esq){
-  wkSobrantes[i].esq_nuevo = esq;
-  wkRenderSobrantes();
-  // Actualizar SVG preview
-  setTimeout(()=>wkSobUpdPreview(i), 50);
-}
-
-function wkSobUpdPreview(i){
-  const s = wkSobrantes[i];
-  if(!s || (s.tipo!=='forma_l' && s.tipo!=='forma_compleja')) return;
-  const prevEl = document.getElementById(`ws-svg-preview-${i}`);
-  if(!prevEl) return;
-  const heredados = s._cortesHeredados||[];
-  const nuevoCorte = (s.ancho_corte>0 && s.largo_corte>0)
-    ? [{ac:s.ancho_corte, lc:s.largo_corte, esq:s.esq_nuevo||'tl'}]
-    : [];
-  const todosCortes = [...heredados, ...nuevoCorte];
-  if(todosCortes.length>0 && s.ancho>0 && s.largo>0){
-    prevEl.innerHTML = formaLSVG_wk(s.esp||12, s.ancho, s.largo, 0, 0, todosCortes);
-  } else {
-    prevEl.innerHTML = '';
-  }
-}
-
 function wkAddSobrante(){ wkSobrantes.push({tipo:'plancha',qty:1,dest:'stock',esp:wkMateriales[0]?.esp||0}); wkRenderSobrantes(); }
 function wkRmSob(i){ wkSobrantes.splice(i,1); wkRenderSobrantes(); }
-function wkChgSobTipo(i){ const t=document.getElementById(`ws-tipo-${i}`)?.value||'plancha'; wkSobrantes[i]={...wkSobrantes[i],tipo:t}; wkRenderSobrantes(); setTimeout(()=>wkSobUpdPreview(i),50); }
+function wkChgSobTipo(i){ wkSobrantes[i]={...wkSobrantes[i],tipo:document.getElementById(`ws-tipo-${i}`)?.value||'plancha'}; wkRenderSobrantes(); }
 
 function wkUpdSob(i){
   const s=wkSobrantes[i]; if(!s) return;
@@ -2651,44 +2424,9 @@ function wkUpdSob(i){
   s.tipo=document.getElementById(`ws-tipo-${i}`)?.value||'plancha';
   s.dest=document.getElementById(`ws-dest-${i}`)?.value||'stock';
   s.colada=document.getElementById(`ws-colada-${i}`)?.value||'';
-  // Para formas heredadas, esp/ancho/largo pueden venir readonly — respetar valor en s si el input da 0
-  const espI=g(`ws-esp-${i}`); if(espI) s.esp=espI;
-  const anchoI=g(`ws-ancho-${i}`); if(anchoI) s.ancho=anchoI;
-  const largoI=g(`ws-largo-${i}`); if(largoI) s.largo=largoI;
-  s.ancho_corte=g(`ws-ancho-corte-${i}`);
-  s.largo_corte=g(`ws-largo-corte-${i}`);
+  s.esp=g(`ws-esp-${i}`); s.ancho=g(`ws-ancho-${i}`); s.largo=g(`ws-largo-${i}`);
+  s.ancho_corte=g(`ws-ancho-corte-${i}`); s.largo_corte=g(`ws-largo-corte-${i}`);
   s.qty=g(`ws-qty-${i}`)||1; s.kgm=g(`ws-kgm-${i}`); s.pesoManual=g(`ws-pm-${i}`);
-  // Construir cortes_extra acumulados para forma_l / forma_compleja
-  if(s.tipo==='forma_l'||s.tipo==='forma_compleja'){
-    const heredados=s._cortesHeredados||[];
-    // Detectar si el nuevo corte atraviesa todo el ancho o largo → sobrante pasa a ser rectángulo simple
-    const acN=s.ancho_corte||0, lcN=s.largo_corte||0;
-    const anchoEnv=s.ancho||0, largoEnv=s.largo||0;
-    const cortaCompleto = (acN>=anchoEnv||lcN>=largoEnv) && acN>0 && lcN>0;
-    if(cortaCompleto){
-      // Calcular dimensiones del rectángulo resultante
-      // El corte elimina una franja completa: el sobrante queda como plancha simple
-      const largoSob = acN>=anchoEnv ? largoEnv-lcN : largoEnv;
-      const anchoSob = lcN>=largoEnv ? anchoEnv-acN : anchoEnv;
-      s.tipo='plancha';
-      s.ancho=Math.round(anchoSob);
-      s.largo=Math.round(largoSob);
-      s.ancho_corte=0; s.largo_corte=0;
-      s.cortes_extra=[];
-      delete s._cortesHeredados;
-      // Notificar y re-renderizar como plancha
-      const prevEl=document.getElementById('ws-svg-preview-'+i);
-      if(prevEl) prevEl.innerHTML='';
-      wkRenderSobrantes();
-      return;
-    }
-    const nuevoCorte=(acN>0&&lcN>0)
-      ?[{ac:acN,lc:lcN,esq:s.esq_nuevo||'tl'}]:[];
-    s.cortes_extra=[...heredados,...nuevoCorte];
-    if(s.cortes_extra.length>1) s.tipo='forma_compleja';
-    // SVG preview en tiempo real
-    wkSobUpdPreview(i);
-  }
   const peso=wkCalcPesoSob(s); s.peso=peso;
   const lbl=document.getElementById(`ws-peso-lbl-${i}`);
   if(lbl){ lbl.style.display=peso>0?'block':'none'; lbl.textContent=`→ ${peso.toFixed(2)} kg`; }
@@ -2746,36 +2484,6 @@ function wkGuardarCorte(){
       ? Math.min(...wkSubPiezas.map((s,i)=>Math.floor((s.qty||0)/(piezasHI_ref[i]?.qty||1))))
       : Math.min(...wkSubPiezas.map(s=>s.qty||0));
     const qtyVigas = Math.max(0, vigasCompletadas);
-
-    // ── ALERTAS DE EXCESO ─────────────────────────────────────────────────
-    // Verificar sub-piezas individualmente contra el plan
-    const _planVigas = selParte.plan || 0;
-    const _yaEjecutado = _cache.filter(r=>r.fase==='Corte'&&r.cj===selCj.cj&&r.pr===selParte.pr);
-    // Calcular ya cortado por sub-pieza desde registros previos
-    const _piezasHI = PIEZAS_HI[selParte?.perfil] || [];
-    let _alertas = [];
-    for(const sp of wkSubPiezas){
-      if(!sp.qty || sp.qty <= 0) continue;
-      const _planSp = _planVigas * (_piezasHI.find(p=>p.tipo===sp.nombre||p.nombre===sp.nombre)?.qty || 1);
-      // Sumar ya cortado de esta sub-pieza en registros anteriores
-      let _yaCortadoSp = 0;
-      for(const r of _yaEjecutado){
-        try{
-          const pl = JSON.parse(r.pl_cortes_por_plancha||'[]');
-          _yaCortadoSp += pl.filter(p=>p.nombre===sp.nombre||p.esp==sp.esp).reduce((s,p)=>s+(p.qty||0),0);
-        }catch(e){}
-      }
-      const _totalConEste = _yaCortadoSp + sp.qty;
-      if(_totalConEste > _planSp){
-        _alertas.push(`⚠ ${sp.nombre}: vas a registrar ${sp.qty} pzas (ya cortadas: ${_yaCortadoSp}, plan: ${_planSp}) → EXCESO de ${_totalConEste - _planSp} pzas`);
-      }
-    }
-    if(_alertas.length > 0){
-      const _continuar = confirm(`ALERTA DE EXCESO EN SUB-PIEZAS:\n\n${_alertas.join('\n')}\n\n¿Deseas registrar de todas formas?`);
-      if(!_continuar) return;
-    }
-    // ──────────────────────────────────────────────────────────────────────
-
     const desp=parseFloat(Math.max(0,totalMat-totalPesoDesp-totalSob).toFixed(2));
     const m0=wkMateriales[0]||{};
     const sob0=wkSobrantes[0]||{};
@@ -3412,52 +3120,6 @@ function buildForm(){
   }
 }
 
-// ── Resumen global de conjuntos para el panel de armado/fases ────────────
-function buildResumenConjuntos(fase, selCjId){
-  return TEKLA.map(c=>{
-    const planVigas  = c.partes.reduce((s,p)=>Math.min(s,p.plan),999);
-    const ejVigas    = totalExec(c.cj,'—',fase);
-    const pendVigas  = Math.max(0, planVigas - ejVigas);
-    const pesoPlan   = c.partes.reduce((s,p)=>s + p.plan*p.pu, 0);
-    const pesoEjKg   = pesoPlan>0 ? Math.round(ejVigas*(pesoPlan/(planVigas||1))) : 0;
-    const pesoPlanKg = Math.round(pesoPlan);
-    const pesoPendKg = Math.max(0, pesoPlanKg - pesoEjKg);
-    const pct        = planVigas>0 ? Math.min(100, ejVigas/planVigas*100) : 0;
-    const isSel      = c.cj === selCjId;
-    const color      = pct>=100 ? '#065f46' : pct>=50 ? '#1e40af' : '#92400e';
-    const bg         = pct>=100 ? '#f0fdf4' : pct>=50 ? '#eff6ff' : '#fffbeb';
-    const border     = pct>=100 ? '#86efac' : pct>=50 ? '#bfdbfe' : '#fcd34d';
-    return `<div style="border:1.5px solid ${isSel?'#f97316':border};border-radius:10px;padding:.6rem;background:${isSel?'#fff7ed':bg};margin-bottom:.5rem">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.3rem">
-        <div style="font-size:11px;font-weight:800;color:${isSel?'#ea580c':color}">${isSel?'▶ ':''}${c.cj}</div>
-        <div style="font-size:9px;background:${color};color:#fff;border-radius:4px;padding:1px 6px;font-weight:700">${pct.toFixed(0)}%</div>
-      </div>
-      <div style="font-size:9px;color:#6b7280;margin-bottom:.35rem">${c.desc}</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-bottom:.35rem">
-        <div style="background:rgba(0,0,0,.05);border-radius:6px;padding:4px;text-align:center">
-          <div style="font-size:8px;font-weight:700;color:#6b7280">PROG.</div>
-          <div style="font-size:13px;font-weight:800;color:#1a2b4a">${planVigas}</div>
-          <div style="font-size:8px;color:#9ca3af">${pesoPlanKg.toLocaleString()} kg</div>
-        </div>
-        <div style="background:rgba(0,100,0,.07);border-radius:6px;padding:4px;text-align:center">
-          <div style="font-size:8px;font-weight:700;color:#065f46">EJECT.</div>
-          <div style="font-size:13px;font-weight:800;color:#065f46">${ejVigas}</div>
-          <div style="font-size:8px;color:#6b7280">${pesoEjKg.toLocaleString()} kg</div>
-        </div>
-        <div style="background:rgba(220,38,38,.06);border-radius:6px;padding:4px;text-align:center">
-          <div style="font-size:8px;font-weight:700;color:#b91c1c">PEND.</div>
-          <div style="font-size:13px;font-weight:800;color:#b91c1c">${pendVigas}</div>
-          <div style="font-size:8px;color:#9ca3af">${pesoPendKg.toLocaleString()} kg</div>
-        </div>
-      </div>
-      <div style="height:5px;background:#e5e7eb;border-radius:3px;overflow:hidden">
-        <div style="height:100%;width:${pct.toFixed(1)}%;background:${color};border-radius:3px"></div>
-      </div>
-    </div>`;
-  }).join('');
-}
-// ─────────────────────────────────────────────────────────────────────────
-
 function _buildFormVigas(){
   const c = TEKLA.find(x=>x.cj===selCj.cj);
   if(!c){ go('sc-form'); return; }
@@ -3472,14 +3134,6 @@ function _buildFormVigas(){
   wkVigasData = [{qty:{}, subQty:{}}];
 
   const infoHtml = `
-    <details style="margin-bottom:.75rem" open>
-      <summary style="cursor:pointer;font-size:11px;font-weight:800;color:#1e40af;text-transform:uppercase;padding:.5rem .75rem;background:#eff6ff;border:1.5px solid #bfdbfe;border-radius:10px;list-style:none;display:flex;align-items:center;gap:6px">
-        <span>📊</span><span>Resumen global — ${fase}</span>
-        <span style="margin-left:auto;font-size:10px;opacity:.6">▼ ver/ocultar</span>
-      </summary>
-      <div style="margin-top:.5rem" id="wk-resumen-global"></div>
-    </details>
-
     <div style="background:#fffbeb;border:1.5px solid #fcd34d;border-radius:10px;padding:.75rem;margin-bottom:.75rem">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:.5rem">
         <div style="background:#fff;border-radius:8px;padding:6px;text-align:center;border:1px solid #e5e7eb">
@@ -3522,8 +3176,6 @@ function _buildFormVigas(){
   document.getElementById('sb-form').innerHTML = stepbar(2,['Conjunto','Armado']);
   document.getElementById('form-back-btn').onclick = ()=>go('sc-cj');
   go('sc-form');
-  const rgEl = document.getElementById('wk-resumen-global');
-  if(rgEl) rgEl.innerHTML = buildResumenConjuntos(fase, selCj?.cj);
   wkRenderVigas();
 }
 
@@ -3895,146 +3547,45 @@ function setCal(v){
 const FCLS={Corte:'fc',Armado:'fa',Soldadura:'fsold',Perforaciones:'fperf','Limpieza Mecánica':'flim',Pintura:'fpin'};
 const FICON={Corte:'✂',Armado:'🔧',Soldadura:'🔥',Perforaciones:'🔩','Limpieza Mecánica':'🧹',Pintura:'🎨'};
 
-// Función SVG universal — soporta múltiples cortes en cualquier esquina
-// cortes = [{ac, lc, esq: 'tl'|'tr'|'bl'|'br'}]
-function calcPoligonoSobrante_wk(W, H, cortes, sc){
-  let pts = [{x:0,y:0},{x:W,y:0},{x:W,y:H},{x:0,y:H}];
-  cortes.forEach(c => {
-    const cw = Math.round(c.ac * sc);
-    const ch = Math.round(c.lc * sc);
-    if(!cw || !ch) return;
-    const esq = c.esq || 'tl';
-    if(esq === 'tl'){
-      pts = pts.filter(p=>!(p.x===0&&p.y===0));
-      const idx = pts.findIndex(p=>p.x===W&&p.y===0);
-      pts.splice(idx, 0, {x:cw,y:0}, {x:cw,y:ch}, {x:0,y:ch});
-    } else if(esq === 'tr'){
-      pts = pts.filter(p=>!(p.x===W&&p.y===0));
-      const idx = pts.findIndex(p=>p.x===W&&p.y===H);
-      pts.splice(idx, 0, {x:W,y:ch}, {x:W-cw,y:ch}, {x:W-cw,y:0});
-    } else if(esq === 'br'){
-      pts = pts.filter(p=>!(p.x===W&&p.y===H));
-      const idx = pts.findIndex(p=>p.x===0&&p.y===H);
-      pts.splice(idx, 0, {x:W-cw,y:H}, {x:W-cw,y:H-ch}, {x:W,y:H-ch});
-    } else if(esq === 'bl'){
-      pts = pts.filter(p=>!(p.x===0&&p.y===H));
-      const idx = pts.findIndex(p=>p.x===0&&p.y===0);
-      pts.splice(idx, 0, {x:0,y:H-ch}, {x:cw,y:H-ch}, {x:cw,y:H});
-    }
-  });
-  return pts;
-}
-
-function wkSVGPlancha(esp, ancho, largo, peso){
-  const maxW=300, maxH=280;
-  const sc=Math.min(maxW/ancho, maxH/largo)*0.70;
-  const W=Math.round(ancho*sc), H=Math.round(largo*sc);
-  const ox=42, oy=28;
-  const vw=W+ox+50, vh=H+oy+35;
-  const pesoStr = peso ? '~'+peso.toFixed(1)+' kg útil' : '';
-  return '<svg viewBox="-'+ox+' -'+oy+' '+vw+' '+vh+'" style="width:100%;max-height:300px;background:#0d1117;border-radius:10px;display:block" xmlns="http://www.w3.org/2000/svg">'
-    +'<rect x="0" y="0" width="'+W+'" height="'+H+'" fill="#166534" stroke="#22c55e" stroke-width="2"/>'
-    // Cota ancho
-    +'<line x1="0" y1="'+(H+14)+'" x2="'+W+'" y2="'+(H+14)+'" stroke="#ff0000" stroke-width="0.8"/>'
-    +'<line x1="0" y1="'+(H+11)+'" x2="0" y2="'+(H+17)+'" stroke="#ff0000" stroke-width="0.8"/>'
-    +'<line x1="'+W+'" y1="'+(H+11)+'" x2="'+W+'" y2="'+(H+17)+'" stroke="#ff0000" stroke-width="0.8"/>'
-    +'<text x="'+(W/2)+'" y="'+(H+26)+'" text-anchor="middle" font-size="10" fill="#ff0000">'+ancho+'</text>'
-    // Cota largo
-    +'<line x1="-16" y1="0" x2="-16" y2="'+H+'" stroke="#ff0000" stroke-width="0.8"/>'
-    +'<line x1="-19" y1="0" x2="-13" y2="0" stroke="#ff0000" stroke-width="0.8"/>'
-    +'<line x1="-19" y1="'+H+'" x2="-13" y2="'+H+'" stroke="#ff0000" stroke-width="0.8"/>'
-    +'<text x="-24" y="'+(H/2)+'" text-anchor="middle" font-size="10" fill="#ff0000" transform="rotate(-90,-24,'+(H/2)+')">'+largo+'</text>'
-    // Esp + peso
-    +'<text x="'+(W/2)+'" y="'+(H/2-8)+'" text-anchor="middle" font-size="13" fill="#86efac" font-weight="700">'+esp+'mm</text>'
-    +(pesoStr?'<text x="'+(W/2)+'" y="'+(H/2+12)+'" text-anchor="middle" font-size="11" fill="#4ade80">'+pesoStr+'</text>':'')
-    +'</svg>';
-}
-
-function formaLSVG_wk(esp, ancho, largo, ancho_corte, largo_corte, cortes_extra){
-  const todosCortes = cortes_extra && cortes_extra.length>0
-    ? cortes_extra
-    : [{ac: ancho_corte||0, lc: largo_corte||0, esq: 'tl'}];
-  const maxW=300, maxH=260;
+function formaLSVG_wk(esp, ancho, largo, ancho_corte, largo_corte){
+  const maxW=240, maxH=200;
   const sc=Math.min(maxW/ancho, maxH/largo)*0.65;
   const W=Math.round(ancho*sc), H=Math.round(largo*sc);
-  const ox=42, oy=25;
-  const vw=W+ox+50, vh=H+oy+35;
-
-  const pts = calcPoligonoSobrante_wk(W, H, todosCortes, sc);
-  const polyPts = pts.map(p=>`${p.x},${p.y}`).join(' ');
-
-  let rayasHTML = '';
-  todosCortes.forEach((c, i) => {
-    const cw = Math.round(c.ac * sc);
-    const ch = Math.round(c.lc * sc);
-    if(!cw || !ch) return;
-    const esq = c.esq || 'tl';
-    let rx=0, ry=0;
-    if(esq==='tl'){rx=0;ry=0;}
-    else if(esq==='tr'){rx=W-cw;ry=0;}
-    else if(esq==='br'){rx=W-cw;ry=H-ch;}
-    else if(esq==='bl'){rx=0;ry=H-ch;}
-    const uid = `wk${esp}_${i}_${ancho}`;
-    rayasHTML += `<rect x="${rx}" y="${ry}" width="${cw}" height="${ch}" fill="#1a1a2e" stroke="#cc0000" stroke-width="0.8"/>
-    <clipPath id="cl${uid}"><rect x="${rx}" y="${ry}" width="${cw}" height="${ch}"/></clipPath>
-    <g clip-path="url(#cl${uid})">
-      ${Array.from({length:12},(_,j)=>`<line x1="${rx+j*14-14}" y1="${ry}" x2="${rx+cw}" y2="${ry+ch}" stroke="#cc0000" stroke-width="0.6"/>
-      <line x1="${rx}" y1="${ry+j*14}" x2="${rx+cw}" y2="${ry+ch}" stroke="#cc0000" stroke-width="0.6"/>`).join('')}
-    </g>`;
-  });
-
-  // Cotas totales
-  let cotasHTML = `
-    <line x1="0" y1="${H+14}" x2="${W}" y2="${H+14}" stroke="#ff0000" stroke-width="0.7"/>
-    <line x1="0" y1="${H+11}" x2="0" y2="${H+17}" stroke="#ff0000" stroke-width="0.7"/>
-    <line x1="${W}" y1="${H+11}" x2="${W}" y2="${H+17}" stroke="#ff0000" stroke-width="0.7"/>
-    <text x="${W/2}" y="${H+24}" text-anchor="middle" font-size="9" fill="#ff0000">${ancho}</text>
-    <line x1="-14" y1="0" x2="-14" y2="${H}" stroke="#ff0000" stroke-width="0.7"/>
-    <line x1="-17" y1="0" x2="-11" y2="0" stroke="#ff0000" stroke-width="0.7"/>
-    <line x1="-17" y1="${H}" x2="-11" y2="${H}" stroke="#ff0000" stroke-width="0.7"/>
-    <text x="-22" y="${H/2}" text-anchor="middle" font-size="9" fill="#ff0000" transform="rotate(-90,-22,${H/2})">${largo}</text>`;
-
-  // Cotas por corte con colores
-  todosCortes.forEach((c, i) => {
-    const cw = Math.round(c.ac * sc);
-    const ch = Math.round(c.lc * sc);
-    if(!cw || !ch) return;
-    const esq = c.esq || 'tl';
-    const color = ['#ff6600','#ffcc00','#ff00ff','#00ccff'][i%4];
-    const xCota = W+(20+i*14);
-    if(esq==='tl'||esq==='tr'){
-      const x1 = esq==='tl' ? 0 : W-cw;
-      cotasHTML += `<line x1="${x1}" y1="-${18+i*12}" x2="${x1+cw}" y2="-${18+i*12}" stroke="${color}" stroke-width="0.8"/>
-      <line x1="${x1}" y1="-${21+i*12}" x2="${x1}" y2="-${15+i*12}" stroke="${color}" stroke-width="0.8"/>
-      <line x1="${x1+cw}" y1="-${21+i*12}" x2="${x1+cw}" y2="-${15+i*12}" stroke="${color}" stroke-width="0.8"/>
-      <text x="${x1+cw/2}" y="-${22+i*12}" text-anchor="middle" font-size="8" fill="${color}">${c.ac}</text>
-      <line x1="${xCota}" y1="0" x2="${xCota}" y2="${ch}" stroke="${color}" stroke-width="0.8"/>
-      <line x1="${xCota-3}" y1="0" x2="${xCota+3}" y2="0" stroke="${color}" stroke-width="0.8"/>
-      <line x1="${xCota-3}" y1="${ch}" x2="${xCota+3}" y2="${ch}" stroke="${color}" stroke-width="0.8"/>
-      <text x="${xCota+10}" y="${ch/2}" text-anchor="middle" font-size="8" fill="${color}" transform="rotate(90,${xCota+10},${ch/2})">${c.lc}</text>`;
-    } else {
-      const x1 = esq==='bl' ? 0 : W-cw;
-      cotasHTML += `<line x1="${x1}" y1="${H+18+i*12}" x2="${x1+cw}" y2="${H+18+i*12}" stroke="${color}" stroke-width="0.8"/>
-      <line x1="${x1}" y1="${H+15+i*12}" x2="${x1}" y2="${H+21+i*12}" stroke="${color}" stroke-width="0.8"/>
-      <line x1="${x1+cw}" y1="${H+15+i*12}" x2="${x1+cw}" y2="${H+21+i*12}" stroke="${color}" stroke-width="0.8"/>
-      <text x="${x1+cw/2}" y="${H+28+i*12}" text-anchor="middle" font-size="8" fill="${color}">${c.ac}</text>
-      <line x1="${xCota}" y1="${H-ch}" x2="${xCota}" y2="${H}" stroke="${color}" stroke-width="0.8"/>
-      <line x1="${xCota-3}" y1="${H-ch}" x2="${xCota+3}" y2="${H-ch}" stroke="${color}" stroke-width="0.8"/>
-      <line x1="${xCota-3}" y1="${H}" x2="${xCota+3}" y2="${H}" stroke="${color}" stroke-width="0.8"/>
-      <text x="${xCota+10}" y="${H-ch/2}" text-anchor="middle" font-size="8" fill="${color}" transform="rotate(90,${xCota+10},${H-ch/2})">${c.lc}</text>`;
-    }
-  });
-
-  const areaUtil = ancho*largo - todosCortes.reduce((s,c)=>s+(c.ac||0)*(c.lc||0),0);
-  const pesoUtil = (esp * areaUtil * 7.85e-6).toFixed(1);
-
-  return `<svg viewBox="0 0 ${vw} ${vh}" xmlns="http://www.w3.org/2000/svg" style="width:100%;background:#1a1a2e;border-radius:8px;margin-top:6px">
+  const CW=Math.round(ancho_corte*sc), CH=Math.round(largo_corte*sc);
+  const ox=38, oy=22;
+  const vw=W+ox+28, vh=H+oy+28;
+  return `<svg viewBox="0 0 ${vw} ${vh}" xmlns="http://www.w3.org/2000/svg" style="width:100%;background:#1a1a2e;border-radius:6px;margin-top:6px">
     <g transform="translate(${ox},${oy})">
-      ${rayasHTML}
-      <polygon points="${polyPts}" fill="#00cc4418" stroke="#00cc44" stroke-width="2"/>
-      ${cotasHTML}
-      <text x="${W/2}" y="${H/2}" text-anchor="middle" font-size="11" fill="#00cc44" font-weight="bold">${esp}mm</text>
-      <text x="${W/2}" y="${H/2+14}" text-anchor="middle" font-size="9" fill="#86efac">~${pesoUtil} kg útil</text>
+      <rect x="0" y="0" width="${CW}" height="${CH}" fill="#1a1a2e" stroke="#cc0000" stroke-width="1"/>
+      <clipPath id="wfl${esp}${ancho}"><rect x="0" y="0" width="${CW}" height="${CH}"/></clipPath>
+      <g clip-path="url(#wfl${esp}${ancho})">
+        ${Array.from({length:10},(_,i)=>`<line x1="${i*16-16}" y1="0" x2="${CW}" y2="${CH}" stroke="#cc0000" stroke-width="0.8"/>
+        <line x1="0" y1="${i*16}" x2="${CW}" y2="${CH}" stroke="#cc0000" stroke-width="0.8"/>`).join('')}
+      </g>
+      <polygon points="0,${CH} ${CW},${CH} ${CW},0 ${W},0 ${W},${H} 0,${H}" fill="none" stroke="#00cc44" stroke-width="1.5"/>
+      <line x1="0" y1="-10" x2="${CW}" y2="-10" stroke="#ff0000" stroke-width="0.7"/>
+      <line x1="0" y1="-13" x2="0" y2="-7" stroke="#ff0000" stroke-width="0.7"/>
+      <line x1="${CW}" y1="-13" x2="${CW}" y2="-7" stroke="#ff0000" stroke-width="0.7"/>
+      <text x="${CW/2}" y="-13" text-anchor="middle" font-size="8" fill="#ff0000">${ancho_corte}</text>
+      <line x1="${CW}" y1="-10" x2="${W}" y2="-10" stroke="#ff0000" stroke-width="0.7"/>
+      <line x1="${W}" y1="-13" x2="${W}" y2="-7" stroke="#ff0000" stroke-width="0.7"/>
+      <text x="${CW+(W-CW)/2}" y="-13" text-anchor="middle" font-size="8" fill="#ff0000">${ancho-ancho_corte}</text>
+      <line x1="-12" y1="0" x2="-12" y2="${CH}" stroke="#ff0000" stroke-width="0.7"/>
+      <line x1="-15" y1="0" x2="-9" y2="0" stroke="#ff0000" stroke-width="0.7"/>
+      <line x1="-15" y1="${CH}" x2="-9" y2="${CH}" stroke="#ff0000" stroke-width="0.7"/>
+      <text x="-20" y="${CH/2}" text-anchor="middle" font-size="8" fill="#ff0000" transform="rotate(-90,-20,${CH/2})">${largo_corte}</text>
+      <line x1="-12" y1="${CH}" x2="-12" y2="${H}" stroke="#ff0000" stroke-width="0.7"/>
+      <line x1="-15" y1="${H}" x2="-9" y2="${H}" stroke="#ff0000" stroke-width="0.7"/>
+      <text x="-20" y="${CH+(H-CH)/2}" text-anchor="middle" font-size="8" fill="#ff0000" transform="rotate(-90,-20,${CH+(H-CH)/2})">${largo-largo_corte}</text>
+      <line x1="0" y1="${H+12}" x2="${W}" y2="${H+12}" stroke="#ff0000" stroke-width="0.7"/>
+      <line x1="0" y1="${H+9}" x2="0" y2="${H+15}" stroke="#ff0000" stroke-width="0.7"/>
+      <line x1="${W}" y1="${H+9}" x2="${W}" y2="${H+15}" stroke="#ff0000" stroke-width="0.7"/>
+      <text x="${W/2}" y="${H+22}" text-anchor="middle" font-size="8" fill="#ff0000">${ancho}</text>
+      <line x1="${W+12}" y1="0" x2="${W+12}" y2="${H}" stroke="#ff0000" stroke-width="0.7"/>
+      <line x1="${W+9}" y1="0" x2="${W+15}" y2="0" stroke="#ff0000" stroke-width="0.7"/>
+      <line x1="${W+9}" y1="${H}" x2="${W+15}" y2="${H}" stroke="#ff0000" stroke-width="0.7"/>
+      <text x="${W+22}" y="${H/2}" text-anchor="middle" font-size="8" fill="#ff0000" transform="rotate(90,${W+22},${H/2})">${largo}</text>
+      <text x="${CW+(W-CW)/2}" y="${CH+(H-CH)/2}" text-anchor="middle" font-size="11" fill="#00cc44" font-weight="bold">${esp}mm</text>
     </g>
   </svg>`;
 }
@@ -4056,10 +3607,7 @@ function renderHistItems(recs){
         extra+=`<div style="font-size:11px;color:var(--g);margin-top:3px;cursor:${esL?'pointer':'default'}" ${esL?`onclick="document.getElementById('${svgId}').style.display=document.getElementById('${svgId}').style.display==='none'?'':'none'"`:''}">
           📦 ${esL?'⌐ Forma en L · ':''}Sob: ${ps.toFixed(1)} kg${esL?' 👆 toca para ver':''}
         </div>`;
-        if(esL){
-          const cortesE = s.cortes_extra && s.cortes_extra.length>0 ? s.cortes_extra : [{ac:s.ancho_corte,lc:s.largo_corte,esq:s.esq||'tl'}];
-          extra+=`<div id="${svgId}" style="display:none">${formaLSVG_wk(s.esp,s.ancho,s.largo,s.ancho_corte,s.largo_corte,cortesE)}</div>`;
-        }
+        if(esL) extra+=`<div id="${svgId}" style="display:none">${formaLSVG_wk(s.esp,s.ancho,s.largo,s.ancho_corte,s.largo_corte)}</div>`;
       });
       if(!sobs.length&&r.sob_hay==='si'&&r.sob_peso) extra+=`<div style="font-size:11px;color:var(--g);margin-top:1px">📦 Sob: ${r.sob_peso} kg</div>`;
       if(r.desperdicio)extra+=`<div style="font-size:11px;color:var(--r);margin-top:1px">🗑 Desp: ${r.desperdicio} kg</div>`;
