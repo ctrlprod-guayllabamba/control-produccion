@@ -4557,26 +4557,31 @@ function renderFases() {
         </div>`;
       });
     } else {
-      // Para otras fases mantener vista por parte
+      // Para otras fases (Armado, Soldadura, etc.): agrupar por CONJUNTO, no por pieza.
+      // Estos registros se guardan como "viga completa" (parte:"pr64+pr65+pr98", pr:"—"),
+      // así que compararlos contra una pieza individual (p.parte==="pr64") nunca coincidía
+      // y siempre mostraba 0 ejecutado. El plan de "vigas" de un conjunto es el mismo
+      // para todas sus piezas (c.cantidad), así que basta una tarjeta por conjunto.
       TEKLA.conjuntos.forEach(c=>{
-        c.partes.forEach(p=>{
-          const ej = getExecFase(c.conjunto, p.parte, f);
-          const pend = Math.max(0, p.cantidad - ej);
-          const pct = p.cantidad>0 ? Math.min(100,ej/p.cantidad*100) : 0;
-          const barColor = pct>=100 ? '#22c55e' : pct>0 ? '#f59e0b' : '#d1d5db';
-          const textColor = pct>=100 ? '#166534' : pct>0 ? '#92400e' : '#6b7280';
-          cards += `<div style="background:#fff;border:1px solid #e5e7eb;border-radius:7px;padding:8px 10px;cursor:pointer;margin-bottom:6px;" onclick="openModalFase('${c.conjunto}','${p.parte}','${f}')">
-            <div style="font-size:11px;font-weight:700;color:#1a2b4a;">${c.conjunto}</div>
-            <div style="font-size:10px;color:#6c757d;margin-bottom:4px;">${p.parte} · ${p.perfil.length>18?p.perfil.slice(0,18)+'…':p.perfil}</div>
-            <div style="background:#e5e7eb;border-radius:3px;height:5px;overflow:hidden;margin-bottom:4px;">
-              <div style="height:100%;border-radius:3px;background:${barColor};width:${pct.toFixed(0)}%"></div>
-            </div>
-            <div style="display:flex;justify-content:space-between;font-size:10px;">
-              <span style="color:${textColor};font-weight:700;">${ej}/${p.cantidad}</span>
-              <span style="color:${pend>0?'#b45309':'#166534'};font-weight:800;">${pend>0?'⚠ '+pend+' pend.':'✓ OK'}</span>
-            </div>
-          </div>`;
-        });
+        const vigasPlan = c.cantidad || 0;
+        const vigasEj = ST.prods
+          .filter(p=>p.conjunto===c.conjunto && p.fase===f)
+          .reduce((s,p)=>s+(Number(p.qty)||0), 0);
+        const pct = vigasPlan>0 ? Math.min(100, vigasEj/vigasPlan*100) : 0;
+        const barColor = pct>=100 ? '#22c55e' : pct>0 ? '#f59e0b' : '#d1d5db';
+        const textColor = pct>=100 ? '#166534' : pct>0 ? '#92400e' : '#6b7280';
+        const faltanVigas = Math.max(0, vigasPlan - vigasEj);
+        cards += `<div style="background:#fff;border:1px solid #e5e7eb;border-radius:7px;padding:8px 10px;cursor:pointer;margin-bottom:6px;" onclick="openModalFase('${c.conjunto}','${c.partes[0]?.parte||''}','${f}')">
+          <div style="font-size:11px;font-weight:700;color:#1a2b4a;">${c.conjunto}</div>
+          <div style="font-size:10px;color:#6c757d;margin-bottom:4px;">${c.partes.length} partes</div>
+          <div style="background:#e5e7eb;border-radius:3px;height:5px;overflow:hidden;margin-bottom:4px;">
+            <div style="height:100%;border-radius:3px;background:${barColor};width:${pct.toFixed(0)}%"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:10px;">
+            <span style="color:${textColor};font-weight:700;">${vigasEj}/${vigasPlan} vigas</span>
+            <span style="color:${faltanVigas>0?'#b45309':'#166534'};font-weight:800;">${faltanVigas>0?'⚠ '+faltanVigas+' pend.':'✓ OK'}</span>
+          </div>
+        </div>`;
       });
     }
     return `<div style="border-radius:10px;border:1px solid #dee2e6;overflow:hidden;">
@@ -4589,24 +4594,33 @@ function renderFases() {
 
 function openModalFase(cj, parte, fase) {
   const c = TEKLA.conjuntos.find(x=>x.conjunto===cj);
-  const p = c?.partes.find(x=>x.parte===parte);
-  if(!c||!p) return;
-  const ej = getExecFase(cj, parte, fase);
-  const pend = Math.max(0, p.cantidad - ej);
-  document.getElementById('modal-ttl').textContent = `${cj} / ${parte} — ${fase}`;
-  const recs = fase==='Corte'
+  if(!c) return;
+  const esCorte = fase==='Corte';
+  const p = esCorte ? c.partes.find(x=>x.parte===parte) : null;
+  if(esCorte && !p) return;
+
+  // Para Corte: plan/ejecutado es por pieza individual.
+  // Para las demás fases: los registros se guardan por "viga completa" del
+  // conjunto entero, así que el plan/ejecutado correcto es a nivel de conjunto.
+  const plan = esCorte ? p.cantidad : (c.cantidad || 0);
+  const ej   = esCorte ? getExecFase(cj, parte, fase)
+                       : ST.prods.filter(r=>r.conjunto===cj && r.fase===fase).reduce((s,r)=>s+(Number(r.qty)||0),0);
+  const pend = Math.max(0, plan - ej);
+  const tituloParte = esCorte ? parte : `${c.partes.length} partes`;
+  document.getElementById('modal-ttl').textContent = `${cj} / ${tituloParte} — ${fase}`;
+  const recs = esCorte
     ? ST.cortes.filter(r=>r.conjunto===cj&&r.parte===parte)
-    : ST.prods.filter(r=>r.conjunto===cj&&r.parte===parte&&r.fase===fase);
+    : ST.prods.filter(r=>r.conjunto===cj&&r.fase===fase);
   document.getElementById('modal-body').innerHTML = `
     <div class="kpi-row" style="grid-template-columns:repeat(4,1fr);margin-bottom:.75rem;">
-      <div class="kpi"><div class="kpi-lbl">Plan</div><div class="kpi-val">${p.cantidad}</div></div>
+      <div class="kpi"><div class="kpi-lbl">Plan</div><div class="kpi-val">${plan}</div></div>
       <div class="kpi k-green"><div class="kpi-lbl">Ejecutado</div><div class="kpi-val">${ej}</div></div>
       <div class="kpi k-warn"><div class="kpi-lbl">Pendiente</div><div class="kpi-val">${pend}</div></div>
-      <div class="kpi"><div class="kpi-lbl">Avance</div><div class="kpi-val">${p.cantidad>0?(ej/p.cantidad*100).toFixed(0):0}%</div></div>
+      <div class="kpi"><div class="kpi-lbl">Avance</div><div class="kpi-val">${plan>0?(ej/plan*100).toFixed(0):0}%</div></div>
     </div>
-    <div style="font-size:11px;color:#6c757d;margin-bottom:.75rem;">
+    ${esCorte ? `<div style="font-size:11px;color:#6c757d;margin-bottom:.75rem;">
       <strong>Perfil:</strong> ${p.perfil} &nbsp;·&nbsp; <strong>Long:</strong> ${p.longitud||'—'} mm &nbsp;·&nbsp; <strong>Peso unit:</strong> ${p.peso_unit} kg &nbsp;·&nbsp; <strong>Material:</strong> ${p.material}
-    </div>
+    </div>` : ''}
     <div style="font-size:11px;font-weight:800;color:#1a2b4a;margin-bottom:.5rem;">Registros de ejecución</div>
     ${recs.length ? `<div class="tw"><table><thead><tr><th>Fecha</th><th>Operario</th><th class="r">Qty</th>${fase==='Corte'?'<th class="r">Kg partes</th><th class="r">Sobrante</th><th class="r">Desp.</th>':'<th class="r">Kg</th>'}<th>Obs.</th></tr></thead>
     <tbody>${recs.map(r=>fase==='Corte'
