@@ -1952,7 +1952,7 @@ function renderDashboard() {
   const partesTotal = allPartes().reduce((s,p)=>s+p.cantidad,0);
   const totalCortado = ST.cortes.reduce((s,c)=>s+c.qty,0);
   const totalProd = ST.prods.reduce((s,p)=>s+p.qty,0);
-  const totalStock = ST.cortes.reduce((s,c)=>s+getSobrantesDeCorte(c).filter(x=>x.dest==='stock').reduce((a,x)=>a+x.peso,0),0);
+  const totalStock = _calcStockSaldos().reduce((s,x)=>s+(x.saldo>0?x.saldo:0),0);
   const totalDesp = ST.cortes.reduce((s,c)=>s+(c.desperdicio||0),0);
   const totalKgEjec = ST.cortes.reduce((s,c)=>s+Number(c.pesoParts||c.pesoPzas||0),0);
   const pendPartes = allPartes().reduce((s,p)=>s+Math.max(0,p.cantidad-getCortadoQty(p.conjunto,p.parte)),0);
@@ -2089,8 +2089,7 @@ function renderDashboard() {
         <div><span style="font-weight:700;color:var(--sd);">${r.qty} uds</span> <span style="color:var(--gm);font-size:10px;">${r.fecha}</span></div>
       </div>`).join('') : '<div style="color:var(--gm);text-align:center;padding:.75rem;">Sin registros aún.</div>';
 
-  const stockItems = [];
-  ST.cortes.forEach(c=>{ getSobrantesDeCorte(c).filter(x=>x.dest==='stock').forEach(x=>stockItems.push({...x,ref:c.sob_ref||''})); });
+  const stockItems = supStockDisponible();
   document.getElementById('dash-stock-mini').innerHTML = stockItems.length
     ? stockItems.slice(0,5).map(s=>`<div style="padding:5px 0;border-bottom:1px solid var(--gl);font-size:12px;">
         <span class="stock-tag">STOCK</span> <strong>${s.colada}</strong> · ${s.grado} · <strong>${(s.saldo||s.pesoOriginal||s.peso||0).toFixed(1)} kg</strong>
