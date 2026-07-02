@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Supervisor — Control Producción Guayllabamba</title>
+<title>Track Metal V-01 — Supervisor</title>
 <style>
 :root{
   --sd:#1a2b4a;--sm:#2e4a7a;--sl:#4a7ab5;--sp:#d6e4f7;--su:#eef4fc;
@@ -433,14 +433,15 @@ global.Chart = class {
 
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
 
   <div id="global-error-banner" style="display:none;position:fixed;top:50px;left:0;right:0;background:#fee2e2;color:#991b1b;font-size:12px;padding:8px 16px;z-index:99999;font-family:monospace;max-height:200px;overflow-y:auto"></div>
 <div class="topbar">
-  <div class="topbar-logo">⚙ CtrlProd</div>
-  <div class="topbar-title">CRUCE GUAYLLABAMBA V3 &nbsp;·&nbsp; CPC-DIS-PEG &nbsp;·&nbsp; Tablero 56 Módulos</div>
-  <div class="topbar-badge">TEKLA STRUCTURES</div>
+  <div class="topbar-logo">⚙ TRACK METAL V-01</div>
+  <div class="topbar-title" id="topbar-proyecto">Cargando proyecto...</div>
+  <button onclick="abrirModalCargaPlan()" style="background:#166534;color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer;margin-left:10px">📥 Cargar plan</button>
 </div>
 
 <div class="tabs-nav">
@@ -571,26 +572,24 @@ global.Chart = class {
 </div>
 
 <!-- ═══════════════════════════════════════════════════
-     LISTADO PARTES (TEKLA)
+     LISTADO PARTES (PLAN)
 ════════════════════════════════════════════════════ -->
 <div id="panel-partes" class="panel">
 <div class="container">
   <div class="card">
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:.75rem;">
-      <div class="card-hdr" style="margin:0;">Listado de Materiales Tekla – 39 Conjuntos / 12,383 Unidades</div>
+      <div class="card-hdr" style="margin:0;" id="listado-materiales-hdr">Listado de Materiales</div>
       <div class="no-print" style="display:flex;gap:6px;align-items:center;">
-        <label class="btn btn-g btn-sm" style="cursor:pointer;">📂 Cargar Tekla
-          <input type="file" accept=".xlsx,.xls" onchange="toast('Archivo recibido. En producción se procesa vía API.')" style="display:none;">
-        </label>
+        <button class="btn btn-g btn-sm" onclick="abrirModalCargaPlan()">📂 Cargar plan</button>
         <button class="btn btn-s btn-sm" onclick="window.print()">🖨 Imprimir</button>
       </div>
     </div>
     <div class="fbar no-print">
-      <input type="text" id="tek-q" placeholder="Buscar conjunto, parte o perfil..." oninput="renderTekla()">
-      <select id="tek-tp" onchange="renderTekla()">
+      <input type="text" id="tek-q" placeholder="Buscar conjunto, parte o perfil..." oninput="renderPlan()">
+      <select id="tek-tp" onchange="renderPlan()">
         <option value="">Todos tipos</option><option>VIGA</option><option>PLACA</option><option>ANGULO</option>
       </select>
-      <select id="tek-mat" onchange="renderTekla()">
+      <select id="tek-mat" onchange="renderPlan()">
         <option value="">Todos materiales</option><option>A588-50</option><option>A572-50</option>
       </select>
       <span class="fbar-cnt" id="tek-cnt"></span>
@@ -629,7 +628,7 @@ global.Chart = class {
     </div>
 
     <div class="sec-div"></div>
-    <div style="font-size:10px;font-weight:800;color:var(--sm);text-transform:uppercase;letter-spacing:.06em;margin-bottom:.5rem;">➤ Parte a cortar (Tekla)</div>
+    <div style="font-size:10px;font-weight:800;color:var(--sm);text-transform:uppercase;letter-spacing:.06em;margin-bottom:.5rem;">➤ Parte a cortar (plan)</div>
 
     <div class="frow">
       <div class="fg wide"><label>Conjunto</label>
@@ -648,7 +647,7 @@ global.Chart = class {
       <!-- Fila de datos -->
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:.625rem">
         <div style="background:#fff;border-radius:8px;padding:6px 10px;border:1px solid #e5e7eb;text-align:center">
-          <div style="font-size:9px;font-weight:800;color:#6b7280;text-transform:uppercase;margin-bottom:2px">📐 PLAN TEKLA</div>
+          <div style="font-size:9px;font-weight:800;color:#6b7280;text-transform:uppercase;margin-bottom:2px">📐 PLAN PLAN</div>
           <div id="c-info-plan-qty" style="font-size:18px;font-weight:800;color:#1a2b4a">—</div>
           <div id="c-info-plan-kg" style="font-size:11px;color:#6b7280">— kg</div>
         </div>
@@ -1514,7 +1513,7 @@ function exportarTodosDatos() {
   const data = {
     version: 2,
     exportado: new Date().toISOString(),
-    proyecto: TEKLA.proyecto,
+    proyecto: PLAN.proyecto,
     ops:    ST.ops,
     cortes: ST.cortes,
     prods:  ST.prods,
@@ -1577,9 +1576,9 @@ function _doExportExcel(){
   wsP['!cols']=[10,6,12,8,6,14,16,8,6,20].map(w=>({wch:w}));
   XLSX.utils.book_append_sheet(wb, wsP, 'Producción');
 
-  // ── Hoja 3: Resumen Tekla ──────────────────────────────────
+  // ── Hoja 3: Resumen Plan ──────────────────────────────────
   const resData=[['Conjunto','Parte','Perfil','Plan (uds)','Ejecutado','Pendiente','% Avance']];
-  TEKLA.conjuntos.forEach(cj=>{
+  PLAN.conjuntos.forEach(cj=>{
     cj.partes.forEach(p=>{
       const ej=ST.exec[cj.conjunto]?.[p.parte]?.Corte||0;
       const pend=Math.max(0,p.cantidad-ej);
@@ -1589,7 +1588,7 @@ function _doExportExcel(){
   });
   const wsR=XLSX.utils.aoa_to_sheet(resData);
   wsR['!cols']=[8,6,14,8,8,8,8].map(w=>({wch:w}));
-  XLSX.utils.book_append_sheet(wb, wsR, 'Resumen Tekla');
+  XLSX.utils.book_append_sheet(wb, wsR, 'Resumen Plan');
 
   // ── Hoja 4: Operarios ──────────────────────────────────────
   const opsData=[['ID','Nombre','Apellido','Rol','Fase','Cédula','Teléfono','Empresa','Estado']];
@@ -1601,7 +1600,7 @@ function _doExportExcel(){
   XLSX.utils.book_append_sheet(wb, wsO, 'Operarios');
 
   XLSX.writeFile(wb, `ControlProduccion_${new Date().toISOString().slice(0,10)}.xlsx`);
-  toast('✅ Excel descargado — 4 hojas: Cortes, Producción, Resumen Tekla, Operarios');
+  toast('✅ Excel descargado — 4 hojas: Cortes, Producción, Resumen Plan, Operarios');
 }
 
 function importarDatosOperario() {
@@ -1689,7 +1688,176 @@ function importarDatosOperario() {
 // ==================================================
 
 // =========================== DATA ===========================
-const TEKLA = {"proyecto":"CRUCE GUAYLLABAMBA V3","codigo":"CPC-DIS-PEG","fecha":"18.02.2026","conjuntos":[{"conjunto":"E-T-1","marca":"pr64","cantidad":113.0,"perfil":"VIGA","longitud":3024.0,"area":659.76,"material":"A588-50","peso_unit":253.95,"peso_total":28696.07,"partes":[{"parte":"pr64","cantidad":113.0,"perfil":"HI300-10-12*300","longitud":3000.0,"area":605.67,"material":"A588-50","peso_unit":234.56,"peso_total":26505.05},{"parte":"pr65","cantidad":226.0,"perfil":"PL12*300","longitud":300.0,"area":43.93,"material":"A588-50","peso_unit":8.48,"peso_total":1916.03},{"parte":"pr98","cantidad":452.0,"perfil":"PL8*100","longitud":100.0,"area":10.15,"material":"A588-50","peso_unit":0.61,"peso_total":274.99}]},{"conjunto":"E-T-2","marca":"pr73","cantidad":2.0,"perfil":"VIGA","longitud":3024.0,"area":12.17,"material":"A588-50","peso_unit":263.95,"peso_total":527.9,"partes":[{"parte":"pr65","cantidad":4.0,"perfil":"PL12*300","longitud":300.0,"area":0.78,"material":"A588-50","peso_unit":8.48,"peso_total":33.91},{"parte":"pr73","cantidad":2.0,"perfil":"HI300-10-12*300","longitud":3000.0,"area":10.72,"material":"A588-50","peso_unit":234.56,"peso_total":469.12},{"parte":"pr86","cantidad":2.0,"perfil":"PL10*205","longitud":800.0,"area":0.67,"material":"A588-50","peso_unit":12.43,"peso_total":24.87}]},{"conjunto":"E-T-3","marca":"pr73","cantidad":111.0,"perfil":"VIGA","longitud":3024.0,"area":675.41,"material":"A588-50","peso_unit":263.95,"peso_total":29298.27,"partes":[{"parte":"pr65","cantidad":222.0,"perfil":"PL12*300","longitud":300.0,"area":43.16,"material":"A588-50","peso_unit":8.48,"peso_total":1882.12},{"parte":"pr73","cantidad":111.0,"perfil":"HI300-10-12*300","longitud":3000.0,"area":594.95,"material":"A588-50","peso_unit":234.56,"peso_total":26035.94},{"parte":"pr115","cantidad":111.0,"perfil":"PL10*205","longitud":800.0,"area":37.3,"material":"A588-50","peso_unit":12.43,"peso_total":1380.22}]},{"conjunto":"E-T-4","marca":"pr68","cantidad":1.0,"perfil":"VIGA","longitud":7850.0,"area":45.1,"material":"A588-50","peso_unit":2627.53,"peso_total":2627.53,"partes":[{"parte":"pr65","cantidad":6.0,"perfil":"PL12*300","longitud":300.0,"area":1.17,"material":"A588-50","peso_unit":8.48,"peso_total":50.87},{"parte":"pr68","cantidad":1.0,"perfil":"HI250-10-20*300","longitud":7827.0,"area":13.17,"material":"A588-50","peso_unit":865.9,"peso_total":865.9},{"parte":"pr72","cantidad":6.0,"perfil":"HI300-10-12*300","longitud":349.0,"area":3.85,"material":"A588-50","peso_unit":27.29,"peso_total":163.72},{"parte":"pr76","cantidad":3.0,"perfil":"K60*3","longitud":150.0,"area":0.11,"material":"A572-50","peso_unit":0.81,"peso_total":2.42},{"parte":"pr80","cantidad":3.0,"perfil":"PL20*235","longitud":520.0,"area":0.73,"material":"A588-50","peso_unit":16.92,"peso_total":50.77},{"parte":"pr84","cantidad":18.0,"perfil":"PL10*145","longitud":206.0,"area":1.16,"material":"A588-50","peso_unit":2.27,"peso_total":40.93},{"parte":"pr85","cantidad":6.0,"perfil":"PL10*206","longitud":350.0,"area":0.73,"material":"A588-50","peso_unit":4.41,"peso_total":26.49},{"parte":"pr110","cantidad":1.0,"perfil":"HI234-8-12*180","longitud":3151.0,"area":3.47,"material":"A588-50","peso_unit":137.32,"peso_total":137.32},{"parte":"pr111","cantidad":1.0,"perfil":"HI234-8-12*180","longitud":401.0,"area":0.36,"material":"A588-50","peso_unit":13.32,"peso_total":13.32},{"parte":"pr112","cantidad":1.0,"perfil":"PL10*220","longitud":254.0,"area":0.12,"material":"A588-50","peso_unit":4.39,"peso_total":4.39},{"parte":"pr116","cantidad":2.0,"perfil":"PL10*175","longitud":255.0,"area":0.19,"material":"A588-50","peso_unit":3.48,"peso_total":6.96},{"parte":"pr117","cantidad":3.0,"perfil":"PL12*230","longitud":250.0,"area":0.38,"material":"A588-50","peso_unit":5.39,"peso_total":16.16},{"parte":"pr118","cantidad":5.0,"perfil":"PL12*230","longitud":250.0,"area":0.63,"material":"A588-50","peso_unit":5.39,"peso_total":26.94},{"parte":"pr119","cantidad":2.0,"perfil":"HI250-10-20*250","longitud":1686.0,"area":4.42,"material":"A588-50","peso_unit":137.15,"peso_total":274.29},{"parte":"pr121","cantidad":1.0,"perfil":"HI250-10-20*300","longitud":2239.0,"area":3.69,"material":"A588-50","peso_unit":241.53,"peso_total":241.53},{"parte":"pr122","cantidad":1.0,"perfil":"HI250-10-20*300","longitud":4632.0,"area":7.76,"material":"A588-50","peso_unit":509.42,"peso_total":509.42},{"parte":"pr123","cantidad":1.0,"perfil":"PL10*175","longitud":255.0,"area":0.1,"material":"A588-50","peso_unit":3.48,"peso_total":3.48},{"parte":"pr124","cantidad":1.0,"perfil":"HI250-10-20*250","longitud":845.0,"area":0.97,"material":"A588-50","peso_unit":57.17,"peso_total":57.17},{"parte":"pr126","cantidad":1.0,"perfil":"HI250-10-20*300","longitud":1251.0,"area":2.08,"material":"A588-50","peso_unit":135.44,"peso_total":135.44}]},{"conjunto":"E-T-6","marca":"pr63","cantidad":54.0,"perfil":"VIGA","longitud":6000.0,"area":1913.99,"material":"A588-50","peso_unit":2048.77,"peso_total":110633.63,"partes":[{"parte":"pr63","cantidad":54.0,"perfil":"HI250-10-20*300","longitud":6000.0,"area":545.84,"material":"A588-50","peso_unit":664.11,"peso_total":35861.94},{"parte":"pr65","cantidad":216.0,"perfil":"PL12*300","longitud":300.0,"area":41.99,"material":"A588-50","peso_unit":8.48,"peso_total":1831.25},{"parte":"pr67","cantidad":54.0,"perfil":"HI250-10-20*300","longitud":6000.0,"area":545.84,"material":"A588-50","peso_unit":664.11,"peso_total":35861.94},{"parte":"pr72","cantidad":216.0,"perfil":"HI300-10-12*300","longitud":349.0,"area":138.49,"material":"A588-50","peso_unit":27.29,"peso_total":5893.97},{"parte":"pr76","cantidad":108.0,"perfil":"K60*3","longitud":150.0,"area":3.97,"material":"A572-50","peso_unit":0.81,"peso_total":86.98},{"parte":"pr80","cantidad":108.0,"perfil":"PL20*235","longitud":520.0,"area":26.26,"material":"A588-50","peso_unit":16.92,"peso_total":1827.86},{"parte":"pr84","cantidad":648.0,"perfil":"PL10*145","longitud":206.0,"area":41.87,"material":"A588-50","peso_unit":2.27,"peso_total":1473.65},{"parte":"pr85","cantidad":216.0,"perfil":"PL10*206","longitud":350.0,"area":26.4,"material":"A588-50","peso_unit":4.41,"peso_total":953.52},{"parte":"pr110","cantidad":54.0,"perfil":"HI234-8-12*180","longitud":3151.0,"area":187.34,"material":"A588-50","peso_unit":137.32,"peso_total":7415.13},{"parte":"pr111","cantidad":108.0,"perfil":"HI234-8-12*180","longitud":401.0,"area":39.28,"material":"A588-50","peso_unit":13.32,"peso_total":1438.84},{"parte":"pr112","cantidad":108.0,"perfil":"PL10*220","longitud":254.0,"area":13.09,"material":"A588-50","peso_unit":4.39,"peso_total":473.75},{"parte":"pr116","cantidad":108.0,"perfil":"PL10*175","longitud":255.0,"area":10.48,"material":"A588-50","peso_unit":3.48,"peso_total":375.68},{"parte":"pr117","cantidad":216.0,"perfil":"PL12*230","longitud":250.0,"area":27.16,"material":"A588-50","peso_unit":5.39,"peso_total":1163.61},{"parte":"pr118","cantidad":216.0,"perfil":"PL12*230","longitud":250.0,"area":27.16,"material":"A588-50","peso_unit":5.39,"peso_total":1163.61},{"parte":"pr119","cantidad":108.0,"perfil":"HI250-10-20*250","longitud":1686.0,"area":238.82,"material":"A588-50","peso_unit":137.15,"peso_total":14811.91}]},{"conjunto":"E-T-7","marca":"pr63","cantidad":54.0,"perfil":"VIGA","longitud":6000.0,"area":1913.99,"material":"A588-50","peso_unit":2048.77,"peso_total":110633.63,"partes":[{"parte":"pr63","cantidad":54.0,"perfil":"HI250-10-20*300","longitud":6000.0,"area":545.84,"material":"A588-50","peso_unit":664.11,"peso_total":35861.94},{"parte":"pr65","cantidad":216.0,"perfil":"PL12*300","longitud":300.0,"area":41.99,"material":"A588-50","peso_unit":8.48,"peso_total":1831.25},{"parte":"pr67","cantidad":54.0,"perfil":"HI250-10-20*300","longitud":6000.0,"area":545.84,"material":"A588-50","peso_unit":664.11,"peso_total":35861.94},{"parte":"pr72","cantidad":216.0,"perfil":"HI300-10-12*300","longitud":349.0,"area":138.49,"material":"A588-50","peso_unit":27.29,"peso_total":5893.97},{"parte":"pr80","cantidad":108.0,"perfil":"PL20*235","longitud":520.0,"area":26.26,"material":"A588-50","peso_unit":16.92,"peso_total":1827.86},{"parte":"pr84","cantidad":648.0,"perfil":"PL10*145","longitud":206.0,"area":41.87,"material":"A588-50","peso_unit":2.27,"peso_total":1473.65},{"parte":"pr85","cantidad":216.0,"perfil":"PL10*206","longitud":350.0,"area":26.4,"material":"A588-50","peso_unit":4.41,"peso_total":953.52},{"parte":"pr119","cantidad":108.0,"perfil":"HI250-10-20*250","longitud":1686.0,"area":238.82,"material":"A588-50","peso_unit":137.15,"peso_total":14811.91}]},{"conjunto":"E-T-10","marca":"pr105","cantidad":112.0,"perfil":"ANGULO","longitud":4400.0,"area":153.26,"material":"A572-50","peso_unit":42.0,"peso_total":4704.07,"partes":[{"parte":"pr105","cantidad":112.0,"perfil":"L80*8","longitud":4400.0,"area":153.26,"material":"A572-50","peso_unit":42.0,"peso_total":4704.07}]},{"conjunto":"E-T-11","marca":"pr106","cantidad":224.0,"perfil":"ANGULO","longitud":2050.0,"area":142.81,"material":"A572-50","peso_unit":19.57,"peso_total":4383.34,"partes":[{"parte":"pr106","cantidad":224.0,"perfil":"L80*8","longitud":2050.0,"area":142.81,"material":"A572-50","peso_unit":19.57,"peso_total":4383.34}]},{"conjunto":"E-T-12","marca":"pr104","cantidad":111.0,"perfil":"PLACA","longitud":600.0,"area":28.77,"material":"A588-50","peso_unit":11.3,"peso_total":1254.63,"partes":[{"parte":"pr104","cantidad":111.0,"perfil":"PL12*200","longitud":600.0,"area":28.77,"material":"A588-50","peso_unit":11.3,"peso_total":1254.63}]},{"conjunto":"E-T-13","marca":"pr102","cantidad":110.0,"perfil":"ANGULO","longitud":4400.0,"area":140.84,"material":"A572-50","peso_unit":39.24,"peso_total":4316.12,"partes":[{"parte":"pr102","cantidad":110.0,"perfil":"L75*8","longitud":4400.0,"area":140.84,"material":"A572-50","peso_unit":39.24,"peso_total":4316.12}]},{"conjunto":"E-T-21","marca":"pr100","cantidad":444.0,"perfil":"ANGULO","longitud":1980.0,"area":255.82,"material":"A572-50","peso_unit":17.66,"peso_total":7839.64,"partes":[{"parte":"pr100","cantidad":444.0,"perfil":"L75*8","longitud":1980.0,"area":255.82,"material":"A572-50","peso_unit":17.66,"peso_total":7839.64}]},{"conjunto":"E-T-23","marca":"pr101","cantidad":106.0,"perfil":"VIGA","longitud":2330.0,"area":313.98,"material":"A588-50","peso_unit":117.59,"peso_total":12464.1,"partes":[{"parte":"pr101","cantidad":106.0,"perfil":"HI234-8-12*180","longitud":2310.0,"area":288.28,"material":"A588-50","peso_unit":108.81,"peso_total":11534.14},{"parte":"pr112","cantidad":212.0,"perfil":"PL10*220","longitud":254.0,"area":25.7,"material":"A588-50","peso_unit":4.39,"peso_total":929.95}]},{"conjunto":"E-T-40","marca":"pr143","cantidad":2.0,"perfil":"ANGULO","longitud":2064.0,"area":1.28,"material":"A572-50","peso_unit":19.7,"peso_total":39.4,"partes":[{"parte":"pr143","cantidad":2.0,"perfil":"L80*8","longitud":2064.0,"area":1.28,"material":"A572-50","peso_unit":19.7,"peso_total":39.4},{"parte":"pr155","cantidad":440.0,"perfil":"PL15*135","longitud":506.0,"area":68.53,"material":"A588-50","peso_unit":8.04,"peso_total":3536.56},{"parte":"pr154","cantidad":220.0,"perfil":"PL15*300","longitud":506.0,"area":72.06,"material":"A588-50","peso_unit":17.87,"peso_total":3929.51},{"parte":"pr151","cantidad":220.0,"perfil":"PL12*160","longitud":456.0,"area":35.33,"material":"A588-50","peso_unit":6.87,"peso_total":1510.8},{"parte":"pr152","cantidad":220.0,"perfil":"PL15*300","longitud":504.0,"area":71.85,"material":"A588-50","peso_unit":17.81,"peso_total":3917.86},{"parte":"pr153","cantidad":440.0,"perfil":"PL15*135","longitud":504.0,"area":68.33,"material":"A588-50","peso_unit":8.01,"peso_total":3526.08},{"parte":"pr150","cantidad":220.0,"perfil":"PL12*160","longitud":454.0,"area":35.21,"material":"A588-50","peso_unit":6.84,"peso_total":1505.83}]}]};
+const PLAN_SEED = {"proyecto":"CRUCE GUAYLLABAMBA V3","codigo":"CPC-DIS-PEG","conjuntos":[{"conjunto":"E-T-1","marca":"pr64","cantidad":113.0,"perfil":"VIGA","longitud":3024.0,"area":659.76,"material":"A588-50","peso_unit":253.95,"peso_total":28696.07,"partes":[{"parte":"pr64","cantidad":113.0,"perfil":"HI300-10-12*300","longitud":3000.0,"area":605.67,"material":"A588-50","peso_unit":234.56,"peso_total":26505.05},{"parte":"pr65","cantidad":226.0,"perfil":"PL12*300","longitud":300.0,"area":43.93,"material":"A588-50","peso_unit":8.48,"peso_total":1916.03},{"parte":"pr98","cantidad":452.0,"perfil":"PL8*100","longitud":100.0,"area":10.15,"material":"A588-50","peso_unit":0.61,"peso_total":274.99}]},{"conjunto":"E-T-2","marca":"pr73","cantidad":2.0,"perfil":"VIGA","longitud":3024.0,"area":12.17,"material":"A588-50","peso_unit":263.95,"peso_total":527.9,"partes":[{"parte":"pr65","cantidad":4.0,"perfil":"PL12*300","longitud":300.0,"area":0.78,"material":"A588-50","peso_unit":8.48,"peso_total":33.91},{"parte":"pr73","cantidad":2.0,"perfil":"HI300-10-12*300","longitud":3000.0,"area":10.72,"material":"A588-50","peso_unit":234.56,"peso_total":469.12},{"parte":"pr86","cantidad":2.0,"perfil":"PL10*205","longitud":800.0,"area":0.67,"material":"A588-50","peso_unit":12.43,"peso_total":24.87}]},{"conjunto":"E-T-3","marca":"pr73","cantidad":111.0,"perfil":"VIGA","longitud":3024.0,"area":675.41,"material":"A588-50","peso_unit":263.95,"peso_total":29298.27,"partes":[{"parte":"pr65","cantidad":222.0,"perfil":"PL12*300","longitud":300.0,"area":43.16,"material":"A588-50","peso_unit":8.48,"peso_total":1882.12},{"parte":"pr73","cantidad":111.0,"perfil":"HI300-10-12*300","longitud":3000.0,"area":594.95,"material":"A588-50","peso_unit":234.56,"peso_total":26035.94},{"parte":"pr115","cantidad":111.0,"perfil":"PL10*205","longitud":800.0,"area":37.3,"material":"A588-50","peso_unit":12.43,"peso_total":1380.22}]},{"conjunto":"E-T-4","marca":"pr68","cantidad":1.0,"perfil":"VIGA","longitud":7850.0,"area":45.1,"material":"A588-50","peso_unit":2627.53,"peso_total":2627.53,"partes":[{"parte":"pr65","cantidad":6.0,"perfil":"PL12*300","longitud":300.0,"area":1.17,"material":"A588-50","peso_unit":8.48,"peso_total":50.87},{"parte":"pr68","cantidad":1.0,"perfil":"HI250-10-20*300","longitud":7827.0,"area":13.17,"material":"A588-50","peso_unit":865.9,"peso_total":865.9},{"parte":"pr72","cantidad":6.0,"perfil":"HI300-10-12*300","longitud":349.0,"area":3.85,"material":"A588-50","peso_unit":27.29,"peso_total":163.72},{"parte":"pr76","cantidad":3.0,"perfil":"K60*3","longitud":150.0,"area":0.11,"material":"A572-50","peso_unit":0.81,"peso_total":2.42},{"parte":"pr80","cantidad":3.0,"perfil":"PL20*235","longitud":520.0,"area":0.73,"material":"A588-50","peso_unit":16.92,"peso_total":50.77},{"parte":"pr84","cantidad":18.0,"perfil":"PL10*145","longitud":206.0,"area":1.16,"material":"A588-50","peso_unit":2.27,"peso_total":40.93},{"parte":"pr85","cantidad":6.0,"perfil":"PL10*206","longitud":350.0,"area":0.73,"material":"A588-50","peso_unit":4.41,"peso_total":26.49},{"parte":"pr110","cantidad":1.0,"perfil":"HI234-8-12*180","longitud":3151.0,"area":3.47,"material":"A588-50","peso_unit":137.32,"peso_total":137.32},{"parte":"pr111","cantidad":1.0,"perfil":"HI234-8-12*180","longitud":401.0,"area":0.36,"material":"A588-50","peso_unit":13.32,"peso_total":13.32},{"parte":"pr112","cantidad":1.0,"perfil":"PL10*220","longitud":254.0,"area":0.12,"material":"A588-50","peso_unit":4.39,"peso_total":4.39},{"parte":"pr116","cantidad":2.0,"perfil":"PL10*175","longitud":255.0,"area":0.19,"material":"A588-50","peso_unit":3.48,"peso_total":6.96},{"parte":"pr117","cantidad":3.0,"perfil":"PL12*230","longitud":250.0,"area":0.38,"material":"A588-50","peso_unit":5.39,"peso_total":16.16},{"parte":"pr118","cantidad":5.0,"perfil":"PL12*230","longitud":250.0,"area":0.63,"material":"A588-50","peso_unit":5.39,"peso_total":26.94},{"parte":"pr119","cantidad":2.0,"perfil":"HI250-10-20*250","longitud":1686.0,"area":4.42,"material":"A588-50","peso_unit":137.15,"peso_total":274.29},{"parte":"pr121","cantidad":1.0,"perfil":"HI250-10-20*300","longitud":2239.0,"area":3.69,"material":"A588-50","peso_unit":241.53,"peso_total":241.53},{"parte":"pr122","cantidad":1.0,"perfil":"HI250-10-20*300","longitud":4632.0,"area":7.76,"material":"A588-50","peso_unit":509.42,"peso_total":509.42},{"parte":"pr123","cantidad":1.0,"perfil":"PL10*175","longitud":255.0,"area":0.1,"material":"A588-50","peso_unit":3.48,"peso_total":3.48},{"parte":"pr124","cantidad":1.0,"perfil":"HI250-10-20*250","longitud":845.0,"area":0.97,"material":"A588-50","peso_unit":57.17,"peso_total":57.17},{"parte":"pr126","cantidad":1.0,"perfil":"HI250-10-20*300","longitud":1251.0,"area":2.08,"material":"A588-50","peso_unit":135.44,"peso_total":135.44}]},{"conjunto":"E-T-5","marca":"pr80","cantidad":1.0,"perfil":"PLACA","longitud":2235.0,"area":45.1,"material":"A588-50","peso_unit":2627.53,"peso_total":2627.53,"partes":[{"parte":"pr65","cantidad":6.0,"perfil":"PL12*300","longitud":300.0,"area":1.17,"material":"A588-50","peso_unit":8.48,"peso_total":50.87},{"parte":"pr69","cantidad":1.0,"perfil":"HI250-10-20*300","longitud":7827.0,"area":13.17,"material":"A588-50","peso_unit":865.9,"peso_total":865.9},{"parte":"pr72","cantidad":6.0,"perfil":"HI300-10-12*300","longitud":349.0,"area":3.85,"material":"A588-50","peso_unit":27.29,"peso_total":163.72},{"parte":"pr76","cantidad":3.0,"perfil":"K60*3","longitud":150.0,"area":0.11,"material":"A572-50","peso_unit":0.81,"peso_total":2.42},{"parte":"pr80","cantidad":3.0,"perfil":"PL20*235","longitud":520.0,"area":0.73,"material":"A588-50","peso_unit":16.92,"peso_total":50.77},{"parte":"pr84","cantidad":18.0,"perfil":"PL10*145","longitud":206.0,"area":1.16,"material":"A588-50","peso_unit":2.27,"peso_total":40.93},{"parte":"pr85","cantidad":6.0,"perfil":"PL10*206","longitud":350.0,"area":0.73,"material":"A588-50","peso_unit":4.41,"peso_total":26.49},{"parte":"pr110","cantidad":1.0,"perfil":"HI234-8-12*180","longitud":3151.0,"area":3.47,"material":"A588-50","peso_unit":137.32,"peso_total":137.32},{"parte":"pr111","cantidad":1.0,"perfil":"HI234-8-12*180","longitud":401.0,"area":0.36,"material":"A588-50","peso_unit":13.32,"peso_total":13.32},{"parte":"pr112","cantidad":1.0,"perfil":"PL10*220","longitud":254.0,"area":0.12,"material":"A588-50","peso_unit":4.39,"peso_total":4.39},{"parte":"pr116","cantidad":2.0,"perfil":"PL10*175","longitud":255.0,"area":0.19,"material":"A588-50","peso_unit":3.48,"peso_total":6.96},{"parte":"pr117","cantidad":3.0,"perfil":"PL12*230","longitud":250.0,"area":0.38,"material":"A588-50","peso_unit":5.39,"peso_total":16.16},{"parte":"pr118","cantidad":5.0,"perfil":"PL12*230","longitud":250.0,"area":0.63,"material":"A588-50","peso_unit":5.39,"peso_total":26.94},{"parte":"pr119","cantidad":2.0,"perfil":"HI250-10-20*250","longitud":1686.0,"area":4.42,"material":"A588-50","peso_unit":137.15,"peso_total":274.29},{"parte":"pr121","cantidad":1.0,"perfil":"HI250-10-20*300","longitud":2239.0,"area":3.69,"material":"A588-50","peso_unit":241.53,"peso_total":241.53},{"parte":"pr122","cantidad":1.0,"perfil":"HI250-10-20*300","longitud":4632.0,"area":7.76,"material":"A588-50","peso_unit":509.42,"peso_total":509.42},{"parte":"pr123","cantidad":1.0,"perfil":"PL10*175","longitud":255.0,"area":0.1,"material":"A588-50","peso_unit":3.48,"peso_total":3.48},{"parte":"pr124","cantidad":1.0,"perfil":"HI250-10-20*250","longitud":845.0,"area":0.97,"material":"A588-50","peso_unit":57.17,"peso_total":57.17},{"parte":"pr126","cantidad":1.0,"perfil":"HI250-10-20*300","longitud":1251.0,"area":2.08,"material":"A588-50","peso_unit":135.44,"peso_total":135.44}]},{"conjunto":"E-T-6","marca":"pr63","cantidad":54.0,"perfil":"VIGA","longitud":6000.0,"area":1913.99,"material":"A588-50","peso_unit":2048.77,"peso_total":110633.63,"partes":[{"parte":"pr63","cantidad":54.0,"perfil":"HI250-10-20*300","longitud":6000.0,"area":545.84,"material":"A588-50","peso_unit":664.11,"peso_total":35861.94},{"parte":"pr65","cantidad":216.0,"perfil":"PL12*300","longitud":300.0,"area":41.99,"material":"A588-50","peso_unit":8.48,"peso_total":1831.25},{"parte":"pr67","cantidad":54.0,"perfil":"HI250-10-20*300","longitud":6000.0,"area":545.84,"material":"A588-50","peso_unit":664.11,"peso_total":35861.94},{"parte":"pr72","cantidad":216.0,"perfil":"HI300-10-12*300","longitud":349.0,"area":138.49,"material":"A588-50","peso_unit":27.29,"peso_total":5893.97},{"parte":"pr76","cantidad":108.0,"perfil":"K60*3","longitud":150.0,"area":3.97,"material":"A572-50","peso_unit":0.81,"peso_total":86.98},{"parte":"pr80","cantidad":108.0,"perfil":"PL20*235","longitud":520.0,"area":26.26,"material":"A588-50","peso_unit":16.92,"peso_total":1827.86},{"parte":"pr84","cantidad":648.0,"perfil":"PL10*145","longitud":206.0,"area":41.87,"material":"A588-50","peso_unit":2.27,"peso_total":1473.65},{"parte":"pr85","cantidad":216.0,"perfil":"PL10*206","longitud":350.0,"area":26.4,"material":"A588-50","peso_unit":4.41,"peso_total":953.52},{"parte":"pr110","cantidad":54.0,"perfil":"HI234-8-12*180","longitud":3151.0,"area":187.34,"material":"A588-50","peso_unit":137.32,"peso_total":7415.13},{"parte":"pr111","cantidad":108.0,"perfil":"HI234-8-12*180","longitud":401.0,"area":39.28,"material":"A588-50","peso_unit":13.32,"peso_total":1438.84},{"parte":"pr112","cantidad":108.0,"perfil":"PL10*220","longitud":254.0,"area":13.09,"material":"A588-50","peso_unit":4.39,"peso_total":473.75},{"parte":"pr116","cantidad":108.0,"perfil":"PL10*175","longitud":255.0,"area":10.48,"material":"A588-50","peso_unit":3.48,"peso_total":375.68},{"parte":"pr117","cantidad":216.0,"perfil":"PL12*230","longitud":250.0,"area":27.16,"material":"A588-50","peso_unit":5.39,"peso_total":1163.61},{"parte":"pr118","cantidad":216.0,"perfil":"PL12*230","longitud":250.0,"area":27.16,"material":"A588-50","peso_unit":5.39,"peso_total":1163.61},{"parte":"pr119","cantidad":108.0,"perfil":"HI250-10-20*250","longitud":1686.0,"area":238.82,"material":"A588-50","peso_unit":137.15,"peso_total":14811.91}]},{"conjunto":"E-T-7","marca":"pr63","cantidad":54.0,"perfil":"VIGA","longitud":6000.0,"area":1913.99,"material":"A588-50","peso_unit":2048.77,"peso_total":110633.63,"partes":[{"parte":"pr63","cantidad":54.0,"perfil":"HI250-10-20*300","longitud":6000.0,"area":545.84,"material":"A588-50","peso_unit":664.11,"peso_total":35861.94},{"parte":"pr65","cantidad":216.0,"perfil":"PL12*300","longitud":300.0,"area":41.99,"material":"A588-50","peso_unit":8.48,"peso_total":1831.25},{"parte":"pr67","cantidad":54.0,"perfil":"HI250-10-20*300","longitud":6000.0,"area":545.84,"material":"A588-50","peso_unit":664.11,"peso_total":35861.94},{"parte":"pr72","cantidad":216.0,"perfil":"HI300-10-12*300","longitud":349.0,"area":138.49,"material":"A588-50","peso_unit":27.29,"peso_total":5893.97},{"parte":"pr76","cantidad":108.0,"perfil":"K60*3","longitud":150.0,"area":3.97,"material":"A572-50","peso_unit":0.81,"peso_total":86.98},{"parte":"pr80","cantidad":108.0,"perfil":"PL20*235","longitud":520.0,"area":26.26,"material":"A588-50","peso_unit":16.92,"peso_total":1827.86},{"parte":"pr84","cantidad":648.0,"perfil":"PL10*145","longitud":206.0,"area":41.87,"material":"A588-50","peso_unit":2.27,"peso_total":1473.65},{"parte":"pr85","cantidad":216.0,"perfil":"PL10*206","longitud":350.0,"area":26.4,"material":"A588-50","peso_unit":4.41,"peso_total":953.52},{"parte":"pr110","cantidad":54.0,"perfil":"HI234-8-12*180","longitud":3151.0,"area":187.34,"material":"A588-50","peso_unit":137.32,"peso_total":7415.13},{"parte":"pr111","cantidad":108.0,"perfil":"HI234-8-12*180","longitud":401.0,"area":39.28,"material":"A588-50","peso_unit":13.32,"peso_total":1438.84},{"parte":"pr112","cantidad":108.0,"perfil":"PL10*220","longitud":254.0,"area":13.09,"material":"A588-50","peso_unit":4.39,"peso_total":473.75},{"parte":"pr116","cantidad":108.0,"perfil":"PL10*175","longitud":255.0,"area":10.48,"material":"A588-50","peso_unit":3.48,"peso_total":375.68},{"parte":"pr117","cantidad":216.0,"perfil":"PL12*230","longitud":250.0,"area":27.16,"material":"A588-50","peso_unit":5.39,"peso_total":1163.61},{"parte":"pr118","cantidad":216.0,"perfil":"PL12*230","longitud":250.0,"area":27.16,"material":"A588-50","peso_unit":5.39,"peso_total":1163.61},{"parte":"pr119","cantidad":108.0,"perfil":"HI250-10-20*250","longitud":1686.0,"area":238.82,"material":"A588-50","peso_unit":137.15,"peso_total":14811.91}]},{"conjunto":"E-T-8","marca":"pr70","cantidad":1.0,"perfil":"VIGA","longitud":4099.0,"area":23.46,"material":"A588-50","peso_unit":1376.72,"peso_total":1376.72,"partes":[{"parte":"pr65","cantidad":4.0,"perfil":"PL12*300","longitud":300.0,"area":0.78,"material":"A588-50","peso_unit":8.48,"peso_total":33.91},{"parte":"pr70","cantidad":1.0,"perfil":"HI250-10-20*300","longitud":4081.0,"area":6.88,"material":"A588-50","peso_unit":451.39,"peso_total":451.39},{"parte":"pr72","cantidad":4.0,"perfil":"HI300-10-12*300","longitud":349.0,"area":2.56,"material":"A588-50","peso_unit":27.29,"peso_total":109.15},{"parte":"pr76","cantidad":2.0,"perfil":"K60*3","longitud":150.0,"area":0.07,"material":"A572-50","peso_unit":0.81,"peso_total":1.61},{"parte":"pr80","cantidad":1.0,"perfil":"PL20*235","longitud":520.0,"area":0.24,"material":"A588-50","peso_unit":16.92,"peso_total":16.92},{"parte":"pr84","cantidad":14.0,"perfil":"PL10*145","longitud":206.0,"area":0.9,"material":"A588-50","peso_unit":2.27,"peso_total":31.84},{"parte":"pr85","cantidad":2.0,"perfil":"PL10*206","longitud":350.0,"area":0.24,"material":"A588-50","peso_unit":4.41,"peso_total":8.83},{"parte":"pr88","cantidad":1.0,"perfil":"HI250-10-20*300","longitud":1260.0,"area":2.07,"material":"A588-50","peso_unit":134.25,"peso_total":134.25},{"parte":"pr90","cantidad":1.0,"perfil":"HI250-10-20*250","longitud":835.0,"area":0.95,"material":"A588-50","peso_unit":56.25,"peso_total":56.25},{"parte":"pr91","cantidad":1.0,"perfil":"PL10*179","longitud":255.0,"area":0.1,"material":"A588-50","peso_unit":3.56,"peso_total":3.56},{"parte":"pr99","cantidad":1.0,"perfil":"HI250-10-20*300","longitud":1791.0,"area":2.96,"material":"A588-50","peso_unit":192.8,"peso_total":192.8},{"parte":"pr111","cantidad":1.0,"perfil":"HI234-8-12*180","longitud":401.0,"area":0.36,"material":"A588-50","peso_unit":13.32,"peso_total":13.32},{"parte":"pr112","cantidad":1.0,"perfil":"PL10*220","longitud":254.0,"area":0.12,"material":"A588-50","peso_unit":4.39,"peso_total":4.39},{"parte":"pr113","cantidad":2.0,"perfil":"PL12*230","longitud":250.0,"area":0.25,"material":"A588-50","peso_unit":5.39,"peso_total":10.77},{"parte":"pr114","cantidad":1.0,"perfil":"HI250-10-20*300","longitud":1508.0,"area":2.4,"material":"A588-50","peso_unit":156.32,"peso_total":156.32},{"parte":"pr116","cantidad":1.0,"perfil":"PL10*175","longitud":255.0,"area":0.1,"material":"A588-50","peso_unit":3.48,"peso_total":3.48},{"parte":"pr117","cantidad":1.0,"perfil":"PL12*230","longitud":250.0,"area":0.13,"material":"A588-50","peso_unit":5.39,"peso_total":5.39},{"parte":"pr118","cantidad":1.0,"perfil":"PL12*230","longitud":250.0,"area":0.13,"material":"A588-50","peso_unit":5.39,"peso_total":5.39},{"parte":"pr119","cantidad":1.0,"perfil":"HI250-10-20*250","longitud":1686.0,"area":2.21,"material":"A588-50","peso_unit":137.15,"peso_total":137.15}]},{"conjunto":"E-T-9","marca":"pr71","cantidad":1.0,"perfil":"VIGA","longitud":4099.0,"area":23.46,"material":"A588-50","peso_unit":1376.72,"peso_total":1376.72,"partes":[{"parte":"pr65","cantidad":4.0,"perfil":"PL12*300","longitud":300.0,"area":0.78,"material":"A588-50","peso_unit":8.48,"peso_total":33.91},{"parte":"pr71","cantidad":1.0,"perfil":"HI250-10-20*300","longitud":4081.0,"area":6.88,"material":"A588-50","peso_unit":451.39,"peso_total":451.39},{"parte":"pr72","cantidad":4.0,"perfil":"HI300-10-12*300","longitud":349.0,"area":2.56,"material":"A588-50","peso_unit":27.29,"peso_total":109.15},{"parte":"pr76","cantidad":2.0,"perfil":"K60*3","longitud":150.0,"area":0.07,"material":"A572-50","peso_unit":0.81,"peso_total":1.61},{"parte":"pr80","cantidad":1.0,"perfil":"PL20*235","longitud":520.0,"area":0.24,"material":"A588-50","peso_unit":16.92,"peso_total":16.92},{"parte":"pr84","cantidad":14.0,"perfil":"PL10*145","longitud":206.0,"area":0.9,"material":"A588-50","peso_unit":2.27,"peso_total":31.84},{"parte":"pr85","cantidad":2.0,"perfil":"PL10*206","longitud":350.0,"area":0.24,"material":"A588-50","peso_unit":4.41,"peso_total":8.83},{"parte":"pr88","cantidad":1.0,"perfil":"HI250-10-20*300","longitud":1260.0,"area":2.07,"material":"A588-50","peso_unit":134.25,"peso_total":134.25},{"parte":"pr90","cantidad":1.0,"perfil":"HI250-10-20*250","longitud":835.0,"area":0.95,"material":"A588-50","peso_unit":56.25,"peso_total":56.25},{"parte":"pr91","cantidad":1.0,"perfil":"PL10*179","longitud":255.0,"area":0.1,"material":"A588-50","peso_unit":3.56,"peso_total":3.56},{"parte":"pr99","cantidad":1.0,"perfil":"HI250-10-20*300","longitud":1791.0,"area":2.96,"material":"A588-50","peso_unit":192.8,"peso_total":192.8},{"parte":"pr111","cantidad":1.0,"perfil":"HI234-8-12*180","longitud":401.0,"area":0.36,"material":"A588-50","peso_unit":13.32,"peso_total":13.32},{"parte":"pr112","cantidad":1.0,"perfil":"PL10*220","longitud":254.0,"area":0.12,"material":"A588-50","peso_unit":4.39,"peso_total":4.39},{"parte":"pr113","cantidad":2.0,"perfil":"PL12*230","longitud":250.0,"area":0.25,"material":"A588-50","peso_unit":5.39,"peso_total":10.77},{"parte":"pr114","cantidad":1.0,"perfil":"HI250-10-20*300","longitud":1508.0,"area":2.4,"material":"A588-50","peso_unit":156.32,"peso_total":156.32},{"parte":"pr116","cantidad":1.0,"perfil":"PL10*175","longitud":255.0,"area":0.1,"material":"A588-50","peso_unit":3.48,"peso_total":3.48},{"parte":"pr117","cantidad":1.0,"perfil":"PL12*230","longitud":250.0,"area":0.13,"material":"A588-50","peso_unit":5.39,"peso_total":5.39},{"parte":"pr118","cantidad":1.0,"perfil":"PL12*230","longitud":250.0,"area":0.13,"material":"A588-50","peso_unit":5.39,"peso_total":5.39},{"parte":"pr119","cantidad":1.0,"perfil":"HI250-10-20*250","longitud":1686.0,"area":2.21,"material":"A588-50","peso_unit":137.15,"peso_total":137.15}]},{"conjunto":"E-T-10","marca":"pr105","cantidad":112.0,"perfil":"ANGULO","longitud":4400.0,"area":153.26,"material":"A572-50","peso_unit":42.0,"peso_total":4704.07,"partes":[{"parte":"pr105","cantidad":112.0,"perfil":"L80*8","longitud":4400.0,"area":153.26,"material":"A572-50","peso_unit":42.0,"peso_total":4704.07}]},{"conjunto":"E-T-11","marca":"pr106","cantidad":224.0,"perfil":"ANGULO","longitud":2050.0,"area":142.81,"material":"A572-50","peso_unit":19.57,"peso_total":4383.34,"partes":[{"parte":"pr106","cantidad":224.0,"perfil":"L80*8","longitud":2050.0,"area":142.81,"material":"A572-50","peso_unit":19.57,"peso_total":4383.34}]},{"conjunto":"E-T-12","marca":"pr104","cantidad":111.0,"perfil":"PLACA","longitud":600.0,"area":28.77,"material":"A588-50","peso_unit":11.3,"peso_total":1254.63,"partes":[{"parte":"pr104","cantidad":111.0,"perfil":"PL12*200","longitud":600.0,"area":28.77,"material":"A588-50","peso_unit":11.3,"peso_total":1254.63}]},{"conjunto":"E-T-13","marca":"pr102","cantidad":110.0,"perfil":"ANGULO","longitud":4400.0,"area":140.84,"material":"A572-50","peso_unit":39.24,"peso_total":4316.12,"partes":[{"parte":"pr102","cantidad":110.0,"perfil":"L75*8","longitud":4400.0,"area":140.84,"material":"A572-50","peso_unit":39.24,"peso_total":4316.12}]},{"conjunto":"E-T-14","marca":"pr103","cantidad":220.0,"perfil":"ANGULO","longitud":2050.0,"area":131.24,"material":"A572-50","peso_unit":18.28,"peso_total":4021.84,"partes":[{"parte":"pr103","cantidad":220.0,"perfil":"L75*8","longitud":2050.0,"area":131.24,"material":"A572-50","peso_unit":18.28,"peso_total":4021.84}]},{"conjunto":"E-T-15","marca":"pr66","cantidad":110.0,"perfil":"PLACA","longitud":600.0,"area":28.51,"material":"A588-50","peso_unit":11.3,"peso_total":1243.32,"partes":[{"parte":"pr66","cantidad":110.0,"perfil":"PL12*200","longitud":600.0,"area":28.51,"material":"A588-50","peso_unit":11.3,"peso_total":1243.32}]},{"conjunto":"E-T-16","marca":"pr107","cantidad":2.0,"perfil":"ANGULO","longitud":4043.0,"area":2.51,"material":"A572-50","peso_unit":38.59,"peso_total":77.19,"partes":[{"parte":"pr107","cantidad":2.0,"perfil":"L80*8","longitud":4043.0,"area":2.51,"material":"A572-50","peso_unit":38.59,"peso_total":77.19}]},{"conjunto":"E-T-17","marca":"pr125","cantidad":4.0,"perfil":"ANGULO","longitud":1850.0,"area":2.3,"material":"A572-50","peso_unit":17.66,"peso_total":70.64,"partes":[{"parte":"pr125","cantidad":4.0,"perfil":"L80*8","longitud":1850.0,"area":2.3,"material":"A572-50","peso_unit":17.66,"peso_total":70.64}]},{"conjunto":"E-T-18","marca":"pr83","cantidad":1.0,"perfil":"PLACA","longitud":643.0,"area":0.28,"material":"A588-50","peso_unit":12.11,"peso_total":12.11,"partes":[{"parte":"pr83","cantidad":1.0,"perfil":"PL12*200","longitud":643.0,"area":0.28,"material":"A588-50","peso_unit":12.11,"peso_total":12.11}]},{"conjunto":"E-T-19","marca":"pr74","cantidad":4.0,"perfil":"ANGULO","longitud":1650.0,"area":1.92,"material":"A572-50","peso_unit":14.71,"peso_total":58.86,"partes":[{"parte":"pr74","cantidad":4.0,"perfil":"L75*8","longitud":1650.0,"area":1.92,"material":"A572-50","peso_unit":14.71,"peso_total":58.86}]},{"conjunto":"E-T-20","marca":"pr130","cantidad":4.0,"perfil":"ANGULO","longitud":1650.0,"area":1.92,"material":"A572-50","peso_unit":14.71,"peso_total":58.86,"partes":[{"parte":"pr130","cantidad":4.0,"perfil":"L75*8","longitud":1650.0,"area":1.92,"material":"A572-50","peso_unit":14.71,"peso_total":58.86}]},{"conjunto":"E-T-21","marca":"pr100","cantidad":444.0,"perfil":"ANGULO","longitud":1980.0,"area":255.82,"material":"A572-50","peso_unit":17.66,"peso_total":7839.64,"partes":[{"parte":"pr100","cantidad":444.0,"perfil":"L75*8","longitud":1980.0,"area":255.82,"material":"A572-50","peso_unit":17.66,"peso_total":7839.64}]},{"conjunto":"E-T-22","marca":"pr109","cantidad":2.0,"perfil":"VIGA","longitud":2131.0,"area":5.43,"material":"A588-50","peso_unit":107.63,"peso_total":215.27,"partes":[{"parte":"pr109","cantidad":2.0,"perfil":"HI234-8-12*180","longitud":2109.0,"area":4.94,"material":"A588-50","peso_unit":98.86,"peso_total":197.72},{"parte":"pr112","cantidad":4.0,"perfil":"PL10*220","longitud":254.0,"area":0.48,"material":"A588-50","peso_unit":4.39,"peso_total":17.55}]},{"conjunto":"E-T-23","marca":"pr101","cantidad":106.0,"perfil":"VIGA","longitud":2330.0,"area":313.98,"material":"A588-50","peso_unit":117.59,"peso_total":12464.1,"partes":[{"parte":"pr101","cantidad":106.0,"perfil":"HI234-8-12*180","longitud":2310.0,"area":288.28,"material":"A588-50","peso_unit":108.81,"peso_total":11534.14},{"parte":"pr112","cantidad":212.0,"perfil":"PL10*220","longitud":254.0,"area":25.7,"material":"A588-50","peso_unit":4.39,"peso_total":929.95}]},{"conjunto":"E-T-24","marca":"pr87","cantidad":2.0,"perfil":"VIGA","longitud":2370.0,"area":6.01,"material":"A588-50","peso_unit":119.35,"peso_total":238.7,"partes":[{"parte":"pr87","cantidad":2.0,"perfil":"HI234-8-12*180","longitud":2349.0,"area":5.53,"material":"A588-50","peso_unit":110.57,"peso_total":221.15},{"parte":"pr112","cantidad":4.0,"perfil":"PL10*220","longitud":254.0,"area":0.48,"material":"A588-50","peso_unit":4.39,"peso_total":17.55}]},{"conjunto":"E-T-25","marca":"pr141","cantidad":2.0,"perfil":"ANGULO","longitud":4265.0,"area":2.48,"material":"A572-50","peso_unit":38.03,"peso_total":76.06,"partes":[{"parte":"pr141","cantidad":2.0,"perfil":"L75*8","longitud":4265.0,"area":2.48,"material":"A572-50","peso_unit":38.03,"peso_total":76.06}]},{"conjunto":"E-T-26","marca":"pr139","cantidad":2.0,"perfil":"ANGULO","longitud":1980.0,"area":1.15,"material":"A572-50","peso_unit":17.66,"peso_total":35.31,"partes":[{"parte":"pr139","cantidad":2.0,"perfil":"L75*8","longitud":1980.0,"area":1.15,"material":"A572-50","peso_unit":17.66,"peso_total":35.31}]},{"conjunto":"E-T-27","marca":"pr140","cantidad":2.0,"perfil":"ANGULO","longitud":1985.0,"area":1.15,"material":"A572-50","peso_unit":17.7,"peso_total":35.39,"partes":[{"parte":"pr140","cantidad":2.0,"perfil":"L75*8","longitud":1985.0,"area":1.15,"material":"A572-50","peso_unit":17.7,"peso_total":35.39}]},{"conjunto":"E-T-28","marca":"pr156","cantidad":2.0,"perfil":"ANGULO","longitud":2065.0,"area":1.28,"material":"A572-50","peso_unit":19.71,"peso_total":39.41,"partes":[{"parte":"pr156","cantidad":2.0,"perfil":"L80*8","longitud":2065.0,"area":1.28,"material":"A572-50","peso_unit":19.71,"peso_total":39.41}]},{"conjunto":"E-T-30","marca":"pr149","cantidad":2.0,"perfil":"ANGULO","longitud":4266.0,"area":2.65,"material":"A572-50","peso_unit":40.72,"peso_total":81.44,"partes":[{"parte":"pr149","cantidad":2.0,"perfil":"L80*8","longitud":4266.0,"area":2.65,"material":"A572-50","peso_unit":40.72,"peso_total":81.44}]},{"conjunto":"E-T-31","marca":"pr146","cantidad":2.0,"perfil":"ANGULO","longitud":1981.0,"area":1.23,"material":"A572-50","peso_unit":18.91,"peso_total":37.81,"partes":[{"parte":"pr146","cantidad":2.0,"perfil":"L80*8","longitud":1981.0,"area":1.23,"material":"A572-50","peso_unit":18.91,"peso_total":37.81}]},{"conjunto":"E-T-32","marca":"pr145","cantidad":2.0,"perfil":"ANGULO","longitud":1985.0,"area":1.23,"material":"A572-50","peso_unit":18.95,"peso_total":37.89,"partes":[{"parte":"pr145","cantidad":2.0,"perfil":"L80*8","longitud":1985.0,"area":1.23,"material":"A572-50","peso_unit":18.95,"peso_total":37.89}]},{"conjunto":"E-T-33","marca":"pr136","cantidad":106.0,"perfil":"ANGULO","longitud":4402.0,"area":135.79,"material":"A572-50","peso_unit":39.26,"peso_total":4161.29,"partes":[{"parte":"pr136","cantidad":106.0,"perfil":"L75*8","longitud":4402.0,"area":135.79,"material":"A572-50","peso_unit":39.26,"peso_total":4161.29}]},{"conjunto":"E-T-34","marca":"pr135","cantidad":212.0,"perfil":"ANGULO","longitud":2051.0,"area":126.54,"material":"A572-50","peso_unit":18.29,"peso_total":3877.74,"partes":[{"parte":"pr135","cantidad":212.0,"perfil":"L75*8","longitud":2051.0,"area":126.54,"material":"A572-50","peso_unit":18.29,"peso_total":3877.74}]},{"conjunto":"E-T-35","marca":"pr147","cantidad":106.0,"perfil":"ANGULO","longitud":4403.0,"area":145.16,"material":"A572-50","peso_unit":42.03,"peso_total":4455.42,"partes":[{"parte":"pr147","cantidad":106.0,"perfil":"L80*8","longitud":4403.0,"area":145.16,"material":"A572-50","peso_unit":42.03,"peso_total":4455.42}]},{"conjunto":"E-T-36","marca":"pr144","cantidad":212.0,"perfil":"ANGULO","longitud":2052.0,"area":135.27,"material":"A572-50","peso_unit":19.58,"peso_total":4151.89,"partes":[{"parte":"pr144","cantidad":212.0,"perfil":"L80*8","longitud":2052.0,"area":135.27,"material":"A572-50","peso_unit":19.58,"peso_total":4151.89}]},{"conjunto":"E-T-37","marca":"pr134","cantidad":2.0,"perfil":"ANGULO","longitud":4427.0,"area":2.58,"material":"A572-50","peso_unit":39.48,"peso_total":78.96,"partes":[{"parte":"pr134","cantidad":2.0,"perfil":"L75*8","longitud":4427.0,"area":2.58,"material":"A572-50","peso_unit":39.48,"peso_total":78.96}]},{"conjunto":"E-T-38","marca":"pr133","cantidad":4.0,"perfil":"ANGULO","longitud":2064.0,"area":2.4,"material":"A572-50","peso_unit":18.4,"peso_total":73.61,"partes":[{"parte":"pr133","cantidad":4.0,"perfil":"L75*8","longitud":2064.0,"area":2.4,"material":"A572-50","peso_unit":18.4,"peso_total":73.61}]},{"conjunto":"E-T-39","marca":"pr148","cantidad":2.0,"perfil":"ANGULO","longitud":4428.0,"area":2.75,"material":"A572-50","peso_unit":42.27,"peso_total":84.54,"partes":[{"parte":"pr148","cantidad":2.0,"perfil":"L80*8","longitud":4428.0,"area":2.75,"material":"A572-50","peso_unit":42.27,"peso_total":84.54}]},{"conjunto":"E-T-40","marca":"pr143","cantidad":2.0,"perfil":"ANGULO","longitud":2064.0,"area":1.28,"material":"A572-50","peso_unit":19.7,"peso_total":39.4,"partes":[{"parte":"pr143","cantidad":2.0,"perfil":"L80*8","longitud":2064.0,"area":1.28,"material":"A572-50","peso_unit":19.7,"peso_total":39.4}]},{"conjunto":"PC-1","marca":"pr155","cantidad":440.0,"perfil":"PLACA","longitud":506.0,"area":68.53,"material":"A588-50","peso_unit":8.04,"peso_total":3536.56,"partes":[{"parte":"pr155","cantidad":440.0,"perfil":"PL15*135","longitud":506.0,"area":68.53,"material":"A588-50","peso_unit":8.04,"peso_total":3536.56}]},{"conjunto":"PC-2","marca":"pr154","cantidad":220.0,"perfil":"PLACA","longitud":506.0,"area":72.06,"material":"A588-50","peso_unit":17.87,"peso_total":3929.51,"partes":[{"parte":"pr154","cantidad":220.0,"perfil":"PL15*300","longitud":506.0,"area":72.06,"material":"A588-50","peso_unit":17.87,"peso_total":3929.51}]},{"conjunto":"PC-3","marca":"pr151","cantidad":220.0,"perfil":"PLACA","longitud":456.0,"area":35.33,"material":"A588-50","peso_unit":6.87,"peso_total":1510.8,"partes":[{"parte":"pr151","cantidad":220.0,"perfil":"PL12*160","longitud":456.0,"area":35.33,"material":"A588-50","peso_unit":6.87,"peso_total":1510.8}]},{"conjunto":"PC-4","marca":"pr152","cantidad":220.0,"perfil":"PLACA","longitud":504.0,"area":71.85,"material":"A588-50","peso_unit":17.81,"peso_total":3917.86,"partes":[{"parte":"pr152","cantidad":220.0,"perfil":"PL15*300","longitud":504.0,"area":71.85,"material":"A588-50","peso_unit":17.81,"peso_total":3917.86}]},{"conjunto":"PC-5","marca":"pr153","cantidad":440.0,"perfil":"PLACA","longitud":504.0,"area":68.33,"material":"A588-50","peso_unit":8.01,"peso_total":3526.08,"partes":[{"parte":"pr153","cantidad":440.0,"perfil":"PL15*135","longitud":504.0,"area":68.33,"material":"A588-50","peso_unit":8.01,"peso_total":3526.08}]},{"conjunto":"PC-6","marca":"pr150","cantidad":220.0,"perfil":"PLACA","longitud":454.0,"area":35.21,"material":"A588-50","peso_unit":6.84,"peso_total":1505.83,"partes":[{"parte":"pr150","cantidad":220.0,"perfil":"PL12*160","longitud":454.0,"area":35.21,"material":"A588-50","peso_unit":6.84,"peso_total":1505.83}]},{"conjunto":"E-C-1","marca":"pr78","cantidad":113.0,"perfil":"TUBO-4\"X6","longitud":1140.0,"area":173.42,"material":"A572-50","peso_unit":54.59,"peso_total":6169.09,"partes":[{"parte":"pr78","cantidad":113.0,"perfil":"O100*6","longitud":1000.0,"area":35.56,"material":"A572-50","peso_unit":13.68,"peso_total":1546.0},{"parte":"pr96","cantidad":226.0,"perfil":"PL8*150","longitud":200.0,"area":14.83,"material":"A572-50","peso_unit":1.88,"peso_total":425.78},{"parte":"pr97","cantidad":226.0,"perfil":"UPN160","longitud":997.0,"area":123.03,"material":"A572-50","peso_unit":18.57,"peso_total":4197.31}]},{"conjunto":"E-PM-1","marca":"pr77","cantidad":2.0,"perfil":"TC-75X3","longitud":1103.0,"area":9.64,"material":"A572-50","peso_unit":106.53,"peso_total":213.07,"partes":[{"parte":"pr77","cantidad":6.0,"perfil":"K75*3","longitud":1099.0,"area":1.98,"material":"A572-50","peso_unit":7.45,"peso_total":44.72},{"parte":"pr92","cantidad":6.0,"perfil":"PL4*73","longitud":73.0,"area":0.07,"material":"A572-50","peso_unit":0.17,"peso_total":1.0},{"parte":"pr94","cantidad":6.0,"perfil":"PL4*48","longitud":48.0,"area":0.03,"material":"A572-50","peso_unit":0.07,"peso_total":0.43},{"parte":"pr108","cantidad":12.0,"perfil":"K50*3","longitud":2925.0,"area":7.03,"material":"A572-50","peso_unit":12.95,"peso_total":155.4},{"parte":"pr120","cantidad":6.0,"perfil":"K50*3","longitud":433.0,"area":0.52,"material":"A572-50","peso_unit":1.92,"peso_total":11.5}]},{"conjunto":"E-PM-2","marca":"pr77","cantidad":108.0,"perfil":"TC-75X3","longitud":1103.0,"area":263.7,"material":"A572-50","peso_unit":54.09,"peso_total":5842.02,"partes":[{"parte":"pr77","cantidad":216.0,"perfil":"K75*3","longitud":1099.0,"area":71.41,"material":"A572-50","peso_unit":7.45,"peso_total":1610.03},{"parte":"pr92","cantidad":216.0,"perfil":"PL4*73","longitud":73.0,"area":2.55,"material":"A572-50","peso_unit":0.17,"peso_total":36.14},{"parte":"pr108","cantidad":324.0,"perfil":"K50*3","longitud":2925.0,"area":189.73,"material":"A572-50","peso_unit":12.95,"peso_total":4195.85}]},{"conjunto":"E-PM-3","marca":"pr77","cantidad":2.0,"perfil":"TC-75X3","longitud":1103.0,"area":4.18,"material":"A572-50","peso_unit":46.16,"peso_total":92.33,"partes":[{"parte":"pr77","cantidad":4.0,"perfil":"K75*3","longitud":1099.0,"area":1.32,"material":"A572-50","peso_unit":7.45,"peso_total":29.82},{"parte":"pr92","cantidad":4.0,"perfil":"PL4*73","longitud":73.0,"area":0.05,"material":"A572-50","peso_unit":0.17,"peso_total":0.67},{"parte":"pr94","cantidad":6.0,"perfil":"PL4*48","longitud":48.0,"area":0.03,"material":"A572-50","peso_unit":0.07,"peso_total":0.43},{"parte":"pr95","cantidad":6.0,"perfil":"K50*3","longitud":108.0,"area":0.13,"material":"A572-50","peso_unit":0.48,"peso_total":2.87},{"parte":"pr127","cantidad":6.0,"perfil":"K50*3","longitud":2204.0,"area":2.65,"material":"A572-50","peso_unit":9.76,"peso_total":58.54}]},{"conjunto":"E-PM-4","marca":"pr173","cantidad":318.0,"perfil":"TC-50X3","longitud":2931.0,"area":186.63,"material":"A572-50","peso_unit":12.98,"peso_total":4127.16,"partes":[{"parte":"pr173","cantidad":318.0,"perfil":"K50*3","longitud":2931.0,"area":186.63,"material":"A572-50","peso_unit":12.98,"peso_total":4127.16}]},{"conjunto":"E-PM-5","marca":"pr174","cantidad":6.0,"perfil":"TC-50X3","longitud":2974.0,"area":3.57,"material":"A572-50","peso_unit":13.17,"peso_total":79.0,"partes":[{"parte":"pr174","cantidad":6.0,"perfil":"K50*3","longitud":2974.0,"area":3.57,"material":"A572-50","peso_unit":13.17,"peso_total":79.0}]},{"conjunto":"E-PM-6","marca":"pr172","cantidad":6.0,"perfil":"TC-50X3","longitud":2684.0,"area":3.23,"material":"A572-50","peso_unit":11.89,"peso_total":71.32,"partes":[{"parte":"pr172","cantidad":6.0,"perfil":"K50*3","longitud":2684.0,"area":3.23,"material":"A572-50","peso_unit":11.89,"peso_total":71.32}]},{"conjunto":"ANC-1","marca":"pr196","cantidad":24.0,"perfil":"BARRA DE ANCLAJE","longitud":2282.0,"area":51.75,"material":"A588-50","peso_unit":213.92,"peso_total":5134.16,"partes":[{"parte":"pr193","cantidad":48.0,"perfil":"PL25*210","longitud":210.0,"area":4.06,"material":"A588-50","peso_unit":6.69,"peso_total":320.93},{"parte":"pr194","cantidad":96.0,"perfil":"PL25*106","longitud":120.0,"area":2.08,"material":"A588-50","peso_unit":1.21,"peso_total":116.05},{"parte":"pr195","cantidad":288.0,"perfil":"UPN100","longitud":100.0,"area":10.71,"material":"A572-50","peso_unit":1.04,"peso_total":299.98},{"parte":"pr196","cantidad":24.0,"perfil":"PL38*245","longitud":2244.0,"area":30.5,"material":"A588-50","peso_unit":161.96,"peso_total":3887.11},{"parte":"pr197","cantidad":24.0,"perfil":"PL38*250","longitud":285.0,"area":4.4,"material":"A588-50","peso_unit":21.25,"peso_total":510.09}]}]};
+
+// PLAN es ahora una variable dinámica: arranca con los datos semilla
+// (para no mostrar la pantalla vacía mientras carga) y se reemplaza con
+// lo que devuelva el backend en cuanto esté disponible. Así el plan
+// vive en Google Sheets, no hardcodeado en el archivo.
+let PLAN = {proyecto: PLAN_SEED.proyecto, codigo: PLAN_SEED.codigo, conjuntos: PLAN_SEED.conjuntos};
+
+async function cargarPlanDesdeServidor(){
+  if(!GAS.configured()){ actualizarTopbarProyecto(); return; }
+  try{
+    const conjuntos = await GAS.get('getPlanConjuntos', {proyectoId: PROYECTO_DEFAULT_FRONT});
+    if(Array.isArray(conjuntos) && conjuntos.length > 0){
+      PLAN.conjuntos = conjuntos;
+    } else if(Array.isArray(conjuntos) && conjuntos.length === 0){
+      // Primera vez que corre el sistema con esta hoja: migrar la semilla al backend
+      // para que quede como fuente de verdad de ahora en adelante.
+      await GAS.post('addPlanConjuntos', {proyectoId: PROYECTO_DEFAULT_FRONT, conjuntos: PLAN_SEED.conjuntos});
+      // PLAN.conjuntos ya tiene la semilla desde la inicialización de arriba, no hace falta recargar
+    }
+  }catch(e){
+    console.warn('No se pudo cargar PLAN del servidor, usando datos semilla locales:', e.message);
+  }
+  actualizarTopbarProyecto();
+}
+function actualizarTopbarProyecto(){
+  const el = document.getElementById('topbar-proyecto');
+  if(el) el.textContent = `${PLAN.proyecto || 'Proyecto sin nombre'} · ${PLAN.codigo || ''}`.trim().replace(/·\s*$/, '');
+}
+const PROYECTO_DEFAULT_FRONT = 'PRY-0001'; // debe coincidir con PROYECTO_DEFAULT del backend
+
+// ════════════════════════════════════════════════════════════
+// CARGA DE PLAN DESDE EXCEL (mismo formato de listado de piezas por conjunto:
+// "LISTADO DE PARTES POR CONJUNTOS DE PLAN STRUCTURES")
+// ════════════════════════════════════════════════════════════
+function _esSepPlan(v){
+  if(v===null||v===undefined) return true;
+  const s=String(v).trim();
+  return s===''||s.startsWith('=')||s.startsWith('-');
+}
+function _limpioPlan(v){ return v===null||v===undefined ? '' : String(v).trim(); }
+
+function _parsearHojaPlan(rows){
+  const conjuntos=[];
+  let actual=null, encabezadoPasado=false;
+  for(const row of rows){
+    const [colA,colB,colC,colD,colE,colF,colG,colH,colI,colJ] = row;
+    if(colA && String(colA).includes('Conjunto') && colB && String(colB).includes('Parte')){
+      encabezadoPasado=true; continue;
+    }
+    if(!encabezadoPasado) continue;
+    if(_esSepPlan(colA) && _esSepPlan(colB)) continue;
+    if(colF!=null && String(colF).includes('Total')) continue;
+
+    const conjuntoVal=_limpioPlan(colA), parteVal=_limpioPlan(colB);
+    if(conjuntoVal && !_esSepPlan(conjuntoVal) && parteVal && typeof colC==='number'){
+      actual={
+        conjunto:conjuntoVal, marca:parteVal, cantidad:colC||0, perfil:_limpioPlan(colD),
+        longitud:colE||0, area:colF||0, material:_limpioPlan(colG),
+        peso_unit:colI||0, peso_total:colJ||0, partes:[]
+      };
+      conjuntos.push(actual);
+    } else if(parteVal && actual){
+      actual.partes.push({
+        parte:parteVal, cantidad:colC||0, perfil:_limpioPlan(colD),
+        longitud:colE||0, area:colF||0, material:_limpioPlan(colG),
+        peso_unit:colI||0, peso_total:colJ||0
+      });
+    }
+  }
+  return conjuntos;
+}
+
+function _leerArchivoExcel(file){
+  return new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onload=(e)=>{
+      try{
+        const wb=XLSX.read(new Uint8Array(e.target.result), {type:'array'});
+        const ws=wb.Sheets[wb.SheetNames[0]];
+        const rows=XLSX.utils.sheet_to_json(ws, {header:1, defval:null, raw:true});
+        resolve(_parsearHojaPlan(rows));
+      }catch(err){ reject(err); }
+    };
+    reader.onerror=()=>reject(new Error('No se pudo leer '+file.name));
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+function abrirModalCargaPlan(){
+  document.getElementById('modal-ttl').textContent='📥 Cargar plan de piezas (Excel)';
+  document.getElementById('modal-body').innerHTML=`
+    <div style="font-size:12px;color:#6c757d;margin-bottom:.75rem;">
+      Selecciona uno o varios archivos Excel con el listado de piezas por conjunto
+      (mismo formato que ya usas para exportar el plan de tu software de modelado). Los conjuntos que ya existan
+      en el proyecto se detectan automáticamente y no se duplican.
+    </div>
+    <input type="file" id="plan-file-input" accept=".xlsx,.xls" multiple style="margin-bottom:.75rem;width:100%">
+    <div id="plan-preview" style="font-size:12px;"></div>
+    <div class="act-row" style="margin-top:.75rem;">
+      <button class="btn btn-p" id="plan-btn-confirmar" onclick="confirmarCargaPlan()" disabled>Agregar al proyecto</button>
+    </div>`;
+  document.getElementById('modal-bg').classList.add('open');
+  document.getElementById('plan-file-input').addEventListener('change', previewCargaPlan);
+  window._planPendiente = null;
+}
+
+async function previewCargaPlan(ev){
+  const files=Array.from(ev.target.files||[]);
+  const preview=document.getElementById('plan-preview');
+  const btn=document.getElementById('plan-btn-confirmar');
+  if(!files.length){ preview.innerHTML=''; btn.disabled=true; return; }
+  preview.innerHTML='⏳ Leyendo archivos...';
+  btn.disabled=true;
+  try{
+    let todos=[];
+    const porArchivo=[];
+    for(const f of files){
+      const conjuntos=await _leerArchivoExcel(f);
+      todos=todos.concat(conjuntos);
+      porArchivo.push(`${f.name}: ${conjuntos.length} conjuntos`);
+    }
+    // Detectar cuáles ya existen en el proyecto actual (en memoria)
+    const existentes=new Set(PLAN.conjuntos.map(c=>c.conjunto));
+    const nuevos=[], repetidos=[];
+    const vistosEnEsteLote=new Set();
+    todos.forEach(c=>{
+      if(existentes.has(c.conjunto) || vistosEnEsteLote.has(c.conjunto)){
+        repetidos.push(c.conjunto);
+      } else {
+        nuevos.push(c); vistosEnEsteLote.add(c.conjunto);
+      }
+    });
+    const pesoNuevo=nuevos.reduce((s,c)=>s+(c.peso_total||0),0);
+    preview.innerHTML=`
+      <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:8px;margin-bottom:.5rem;">
+        ${porArchivo.map(x=>`<div>${x}</div>`).join('')}
+      </div>
+      <div style="font-weight:700;color:#166534;">✅ ${nuevos.length} conjuntos nuevos a agregar (${(pesoNuevo/1000).toFixed(1)} t)</div>
+      ${repetidos.length ? `<div style="font-weight:700;color:#b45309;margin-top:4px;">⚠ ${repetidos.length} ya existían y se omitirán: ${repetidos.slice(0,10).join(', ')}${repetidos.length>10?'...':''}</div>` : ''}
+    `;
+    window._planPendiente=nuevos;
+    btn.disabled = nuevos.length===0;
+  }catch(err){
+    preview.innerHTML=`<div style="color:#991b1b;">❌ Error leyendo el archivo: ${err.message}</div>`;
+    btn.disabled=true;
+  }
+}
+
+async function confirmarCargaPlan(){
+  const nuevos=window._planPendiente||[];
+  if(!nuevos.length) return;
+  const btn=document.getElementById('plan-btn-confirmar');
+  btn.disabled=true; btn.textContent='Guardando...';
+  try{
+    const resp=await GAS.post('addPlanConjuntos', {proyectoId:PROYECTO_DEFAULT_FRONT, conjuntos:nuevos});
+    if(resp && resp.ok){
+      await cargarPlanDesdeServidor();
+      renderDashboard();
+      closeModal();
+      alert(`✅ Se agregaron ${resp.agregados} conjuntos nuevos al proyecto.${resp.omitidos&&resp.omitidos.length?'\n⚠ '+resp.omitidos.length+' ya existían y no se duplicaron.':''}`);
+    } else {
+      alert('❌ No se pudo guardar en el servidor. Revisa la conexión e intenta de nuevo.');
+      btn.disabled=false; btn.textContent='Agregar al proyecto';
+    }
+  }catch(err){
+    alert('❌ Error: '+err.message);
+    btn.disabled=false; btn.textContent='Agregar al proyecto';
+  }
+}
 
 const FASES = ['Corte','Armado','Soldadura','Perforaciones','Limpieza Mecánica','Pintura'];
 
@@ -1755,7 +1923,7 @@ function addExec(conjunto, parte, fase, qty) {
 // Get total executed for a parte in Corte (from cortes)
 function getCortadoQty(conjunto, parte) {
   // Para partes HI descompuestas, calcular vigas completas a partir de las sub-piezas reales
-  const cjData = TEKLA.conjuntos.find(x=>x.conjunto===conjunto);
+  const cjData = PLAN.conjuntos.find(x=>x.conjunto===conjunto);
   const parteData = cjData?.partes.find(p=>p.parte===parte);
   const perfil = parteData?.perfil || '';
   const piezasHI = PIEZAS_HI_SUP[perfil];
@@ -1784,7 +1952,7 @@ function clasificarSubpieza(sp, perfil) {
 }
 
 function getSubpiezaQty(conjunto, parte, nombreSubpieza) {
-  const cjData = TEKLA.conjuntos.find(x=>x.conjunto===conjunto);
+  const cjData = PLAN.conjuntos.find(x=>x.conjunto===conjunto);
   const parteData = cjData?.partes.find(p=>p.parte===parte);
   const perfil = parteData?.perfil || '';
 
@@ -1845,7 +2013,7 @@ window.debugSubpiezas = function(cj='E-T-1', pr='pr64'){
   console.groupEnd();
   console.log('getSubpiezaQty Alma:', getSubpiezaQty(cj,pr,'Alma'));
   console.log('getSubpiezaQty Patín:', getSubpiezaQty(cj,pr,'Patín'));
-  const perfil = TEKLA.conjuntos.find(x=>x.conjunto===cj)?.partes.find(p=>p.parte===pr)?.perfil;
+  const perfil = PLAN.conjuntos.find(x=>x.conjunto===cj)?.partes.find(p=>p.parte===pr)?.perfil;
   console.log('perfil:', perfil, 'ALMA_ESP:', {10:'Alma=esp10 Patín=esp12'});
 };
 // ─────────────────────────────────────────────────────────────────────────
@@ -1857,7 +2025,7 @@ function getCortadoKg(conjunto, parte) {
 
 function getAvanceCjKg(cj) {
   // Avance del conjunto como % de kg cortados vs kg plan total
-  const c = TEKLA.conjuntos.find(c=>c.conjunto===cj);
+  const c = PLAN.conjuntos.find(c=>c.conjunto===cj);
   if(!c) return {pct:0, kgEjec:0, kgPlan:0};
   const kgPlan = c.peso_total || c.partes.reduce((s,p)=>s+(p.peso_total||0),0);
   const kgEjec = c.partes.reduce((s,p)=>s+getCortadoKg(cj,p.parte),0);
@@ -1867,7 +2035,7 @@ function getAvanceCjKg(cj) {
 
 function getVigasCompletas(cj) {
   // Vigas completas = mínimo entre todas las partes considerando qty por viga
-  const c = TEKLA.conjuntos.find(x=>x.conjunto===cj);
+  const c = PLAN.conjuntos.find(x=>x.conjunto===cj);
   if(!c||!c.partes.length) return {vigasCompletas:0, vigasPlan:c?.cantidad||0, detalle:[]};
   const vigasPlan = c.cantidad;
   const PIEZAS_HI_KEYS = ['HI300','HI250','HI234'];
@@ -1904,7 +2072,7 @@ function getVigasCompletas(cj) {
 // Get all partes flattened
 function allPartes() {
   const res = [];
-  TEKLA.conjuntos.forEach(c=>c.partes.forEach(p=>res.push({...p,conjunto:c.conjunto,tipo:c.perfil})));
+  PLAN.conjuntos.forEach(c=>c.partes.forEach(p=>res.push({...p,conjunto:c.conjunto,tipo:c.perfil})));
   return res;
 }
 
@@ -1914,7 +2082,7 @@ function goTab(id, btn) {
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
   document.getElementById('panel-'+id).classList.add('active');
   if(btn) btn.classList.add('active');
-  const renders = {dashboard:renderDashboard,pendientes:renderPendientes,partes:renderTekla,
+  const renders = {dashboard:renderDashboard,pendientes:renderPendientes,partes:renderPlan,
     corte:()=>{initCorteSelects();renderCorteHist();},
     produccion:()=>{initProdSelects();renderProd();},
     fases:renderFases,
@@ -1947,8 +2115,8 @@ const FASE_COLORS_HEX = {
 };
 
 function renderDashboard() {
-  const totalPlan = TEKLA.conjuntos.reduce((s,c)=>s+c.cantidad,0);
-  const totalKgPlan = TEKLA.conjuntos.reduce((s,c)=>s+c.peso_total,0);
+  const totalPlan = PLAN.conjuntos.reduce((s,c)=>s+c.cantidad,0);
+  const totalKgPlan = PLAN.conjuntos.reduce((s,c)=>s+c.peso_total,0);
   const partesTotal = allPartes().reduce((s,p)=>s+p.cantidad,0);
   const totalCortado = ST.cortes.reduce((s,c)=>s+c.qty,0);
   const totalProd = ST.prods.reduce((s,p)=>s+p.qty,0);
@@ -1962,7 +2130,7 @@ function renderDashboard() {
 
   // == KPIs ==
   document.getElementById('kpi-main').innerHTML = `
-    <div class="kpi k-blue"><div class="kpi-lbl">Partes Tekla</div><div class="kpi-val">${partesTotal.toLocaleString()}</div><div class="kpi-sub">${TEKLA.conjuntos.length} conjuntos</div></div>
+    <div class="kpi k-blue"><div class="kpi-lbl">Partes plan</div><div class="kpi-val">${partesTotal.toLocaleString()}</div><div class="kpi-sub">${PLAN.conjuntos.length} conjuntos</div></div>
     <div class="kpi k-warn"><div class="kpi-lbl">⚠ Pendientes</div><div class="kpi-val">${pendPartes.toLocaleString()}</div><div class="kpi-sub">por fabricar</div></div>
     <div class="kpi k-orange"><div class="kpi-lbl">Avance global</div><div class="kpi-val">${pctGlobal.toFixed(1)}%</div><div class="kpi-sub">${totalKgEjec.toFixed(0)} kg de ${totalKgPlan.toFixed(0)} kg</div></div>
     <div class="kpi k-green"><div class="kpi-lbl">Kg ejecutados</div><div class="kpi-val">${(totalKgEjec/1000).toFixed(1)}t</div><div class="kpi-sub">de ${(totalKgPlan/1000).toFixed(0)}t plan</div></div>
@@ -1972,9 +2140,9 @@ function renderDashboard() {
     document.getElementById('dash-pct-global').textContent = pctGlobal.toFixed(1)+'% avance';
 
   // == CHART 1: Avance por conjunto (% kg cortado vs plan) ==
-  const cjLabels = TEKLA.conjuntos.map(c=>c.conjunto);
-  const cjPlan   = TEKLA.conjuntos.map(c=>100); // 100% es el máximo
-  const cjEjec   = TEKLA.conjuntos.map(c=>getAvanceCjKg(c.conjunto).pct);
+  const cjLabels = PLAN.conjuntos.map(c=>c.conjunto);
+  const cjPlan   = PLAN.conjuntos.map(c=>100); // 100% es el máximo
+  const cjEjec   = PLAN.conjuntos.map(c=>getAvanceCjKg(c.conjunto).pct);
   mkChart('chart-conjuntos','bar',{
     labels: cjLabels,
     datasets:[
@@ -2067,7 +2235,7 @@ function renderDashboard() {
   });
 
   // == Tabla conjuntos ==
-  document.getElementById('dash-cj').innerHTML = TEKLA.conjuntos.map(c=>{
+  document.getElementById('dash-cj').innerHTML = PLAN.conjuntos.map(c=>{
     const {vigasCompletas} = getVigasCompletas(c.conjunto);
     const ej = vigasCompletas;
     const pend = Math.max(0,c.cantidad-ej);
@@ -2108,7 +2276,7 @@ function renderPendientes() {
   const ft = document.getElementById('pend-tipo')?.value||'';
 
   const rows = []; let totPend=0, totPendKg=0;
-  TEKLA.conjuntos.forEach(c=>{
+  PLAN.conjuntos.forEach(c=>{
     // Calcular vigas completas del conjunto
     const {vigasCompletas, vigasPlan, detalle} = getVigasCompletas(c.conjunto);
     const pendVigas = Math.max(0, vigasPlan - vigasCompletas);
@@ -2134,8 +2302,8 @@ function renderPendientes() {
   });
   rows.sort((a,b)=>b.pendVigas-a.pendVigas);
 
-  const totPlanAll = TEKLA.conjuntos.reduce((s,c)=>s+c.cantidad,0);
-  const totEjAll   = TEKLA.conjuntos.reduce((s,c)=>s+getVigasCompletas(c.conjunto).vigasCompletas,0);
+  const totPlanAll = PLAN.conjuntos.reduce((s,c)=>s+c.cantidad,0);
+  const totEjAll   = PLAN.conjuntos.reduce((s,c)=>s+getVigasCompletas(c.conjunto).vigasCompletas,0);
 
   document.getElementById('kpi-pend').innerHTML = `
     <div class="kpi k-warn"><div class="kpi-lbl">⚠ Pendientes fabricar</div><div class="kpi-val">${totPend.toLocaleString()}</div><div class="kpi-sub">vigas por completar</div></div>
@@ -2198,19 +2366,19 @@ function goToCorte(cj, parte) {
   },250);
 }
 
-// ======================= TEKLA TABLE =======================
+// ======================= PLAN TABLE =======================
 function typeBadge(t){
   if(t==='VIGA') return '<span class="badge b-viga">VIGA</span>';
   if(t==='PLACA') return '<span class="badge b-placa">PLACA</span>';
   if(t==='ANGULO') return '<span class="badge b-angulo">ÁNGULO</span>';
   return `<span class="badge b-pend">${t}</span>`;
 }
-function renderTekla() {
+function renderPlan() {
   const q=(document.getElementById('tek-q')?.value||'').toLowerCase();
   const tp=document.getElementById('tek-tp')?.value||'';
   const mat=document.getElementById('tek-mat')?.value||'';
   let rows='',cjCount=0;
-  TEKLA.conjuntos.forEach(c=>{
+  PLAN.conjuntos.forEach(c=>{
     const match=(!tp||c.perfil===tp)&&c.partes.some(p=>!q||(c.conjunto+p.parte+p.perfil).toLowerCase().includes(q))&&(!mat||c.material===mat);
     if(!match)return; cjCount++;
     const cjAv=getAvanceCjKg(c.conjunto);
@@ -2606,7 +2774,7 @@ function supRenderPiezas(){
 }
 
 function supPiezaHTML(p,i){
-  const formas={rectangular:'Rectángulo',triangulo:'Triángulo / Cuña',trapecio:'Trapecio',circulo:'Círculo / Disco',arco:'Arco / Sector',manual:'Peso manual (Tekla)'};
+  const formas={rectangular:'Rectángulo',triangulo:'Triángulo / Cuña',trapecio:'Trapecio',circulo:'Círculo / Disco',arco:'Arco / Sector',manual:'Peso manual (plan)'};
   const dimsPorForma={
     rectangular:`<div class="frow">
       <div class="fg fix"><label>Esp (mm)</label><input type="number" id="sp-esp-${i}" value="${p.esp||''}" placeholder="12" oninput="supUpdPieza(${i})"></div>
@@ -2641,7 +2809,7 @@ function supPiezaHTML(p,i){
     </div>`,
     manual:`<div class="frow">
       <div class="fg"><label>Descripción subparte</label><input type="text" id="sp-desc-${i}" value="${p.desc||''}" placeholder="Ej: Rigidizador diagonal"></div>
-      <div class="fg fix"><label>Peso unit. Tekla (kg)</label><input type="number" id="sp-pm-${i}" value="${p.pesoManual||''}" placeholder="45.32" oninput="supUpdPieza(${i})"></div>
+      <div class="fg fix"><label>Peso unit. plan (kg)</label><input type="number" id="sp-pm-${i}" value="${p.pesoManual||''}" placeholder="45.32" oninput="supUpdPieza(${i})"></div>
       <div class="fg fix" style="min-width:60px"><label>Cant.</label><input type="number" id="sp-qty-${i}" value="${p.qty||0}" min="0" oninput="supUpdPieza(${i})"></div>
     </div>`,
   };
@@ -3055,7 +3223,7 @@ function initCorteSelects() {
   const selCj=document.getElementById('c-cj');
   if(!selCj.options.length||selCj.options.length===1){
     selCj.innerHTML='<option value="">Seleccionar conjunto...</option>'+
-      TEKLA.conjuntos.map(c=>`<option value="${c.conjunto}">${c.conjunto} — ${c.perfil} (${c.cantidad} plan)</option>`).join('');
+      PLAN.conjuntos.map(c=>`<option value="${c.conjunto}">${c.conjunto} — ${c.perfil} (${c.cantidad} plan)</option>`).join('');
   }
   const selOp=document.getElementById('c-op');
   selOp.innerHTML='<option value="">Seleccionar...</option>'+
@@ -3075,7 +3243,7 @@ function onConjuntoChange() {
   sel.innerHTML='<option value="">Seleccionar parte...</option>';
   document.getElementById('c-parte-info').style.display='none';
   if(!cj)return;
-  const c=TEKLA.conjuntos.find(x=>x.conjunto===cj);
+  const c=PLAN.conjuntos.find(x=>x.conjunto===cj);
   if(!c)return;
   c.partes.forEach(p=>{
     const ej=getCortadoQty(cj,p.parte);
@@ -3156,7 +3324,7 @@ function updateParteInfo(){
     if(pct>=100 && qty>0){
       msg.style.display='';
       msg.style.background='#f0fdf4'; msg.style.color='#065f46'; msg.style.border='1.5px solid #86efac';
-      msg.innerHTML='✅ ¡COMPLETO! Con este corte se alcanza el 100% del plan Tekla para esta parte.';
+      msg.innerHTML='✅ ¡COMPLETO! Con este corte se alcanza el 100% del plan para esta parte.';
     } else if(pct>100){
       msg.style.display='';
       msg.style.background='#fef3c7'; msg.style.color='#92400e'; msg.style.border='1.5px solid #fcd34d';
@@ -3164,7 +3332,7 @@ function updateParteInfo(){
     } else if(pend===0){
       msg.style.display='';
       msg.style.background='#f0fdf4'; msg.style.color='#065f46'; msg.style.border='1.5px solid #86efac';
-      msg.innerHTML='✅ Esta parte ya está completamente cortada según el plan Tekla.';
+      msg.innerHTML='✅ Esta parte ya está completamente cortada según el plan.';
     } else {
       msg.style.display='none';
     }
@@ -3367,12 +3535,12 @@ function calcCorte() {
     sv('c-peso-plancha', pesoPlancha.toFixed(2));
   }
 
-  // 2. Piezas cortadas y su peso (Tekla peso_unit × qty)
+  // 2. Piezas cortadas y su peso (peso_unit del plan × qty)
   const selParte=document.getElementById('c-parte');
   const opt=selParte?.options[selParte.selectedIndex];
-  const puTekla=parseFloat(opt?.dataset?.pu||0);
+  const puPlan=parseFloat(opt?.dataset?.pu||0);
   const qtyCortada=parseFloat(document.getElementById('c-qty')?.value)||0;
-  const pesoPiezas=qtyCortada&&puTekla ? qtyCortada*puTekla : 0;
+  const pesoPiezas=qtyCortada&&puPlan ? qtyCortada*puPlan : 0;
 
   // 3. Sobrante
   const hay=document.getElementById('c-sob-hay')?.value||'si';
@@ -3463,7 +3631,7 @@ function addCorte() {
   const pu=parseFloat(opt?.dataset?.pu||0);
   const opId=document.getElementById('c-op').value;
   const op=ST.ops.find(o=>o.id==opId);
-  const c=TEKLA.conjuntos.find(x=>x.conjunto===cj);
+  const c=PLAN.conjuntos.find(x=>x.conjunto===cj);
   const p=c?.partes.find(x=>x.parte===parte);
 
   const totalMat =supMateriales.reduce((s,m)=>s+(m.peso||supCalcPesoMat(m)),0);
@@ -3860,7 +4028,7 @@ function delCorte(id){
 function initProdSelects(){
   const selCj=document.getElementById('p-cj');
   if(!selCj.options.length||selCj.options.length===1)
-    selCj.innerHTML='<option value="">Seleccionar...</option>'+TEKLA.conjuntos.map(c=>`<option value="${c.conjunto}">${c.conjunto} — ${c.perfil}</option>`).join('');
+    selCj.innerHTML='<option value="">Seleccionar...</option>'+PLAN.conjuntos.map(c=>`<option value="${c.conjunto}">${c.conjunto} — ${c.perfil}</option>`).join('');
   const selOp=document.getElementById('p-op');
   selOp.innerHTML='<option value="">Seleccionar...</option>'+ST.ops.map(o=>`<option value="${o.id}">${o.nom} ${o.ape} (${o.rol})</option>`).join('');
   const f=document.getElementById('p-fecha');if(f&&!f.value)f.value=today();
@@ -3879,7 +4047,7 @@ let pVigasData = []; // array de vigas del día con sus partes
 
 // ── Resumen global de conjuntos para el formulario de Armado/Producción ──
 function buildResumenConjuntosSup(fase, selCj){
-  return TEKLA.conjuntos.map(c=>{
+  return PLAN.conjuntos.map(c=>{
     const planVigas  = c.cantidad;
     const ej = ST.prods.filter(r=>(r.conjunto||r.cj)===c.conjunto&&r.fase===fase)
                         .reduce((s,r)=>s+(Number(r.vigasCompletas||r.qty)||0),0);
@@ -3947,7 +4115,7 @@ function pRemoveViga(i){
 function pRenderVigas(){
   try {
   const cj = document.getElementById('p-cj')?.value;
-  const c = TEKLA.conjuntos.find(x=>x.conjunto===cj);
+  const c = PLAN.conjuntos.find(x=>x.conjunto===cj);
   const cont = document.getElementById('p-vigas-list');
   if(!cont||!c){ return; }
 
@@ -4074,7 +4242,7 @@ function pSetQty(vigaIdx, parte, val){
 
 function _pUpdatePesoDisplay(vigaIdx){
   const cj=document.getElementById('p-cj')?.value;
-  const c=TEKLA.conjuntos.find(x=>x.conjunto===cj);
+  const c=PLAN.conjuntos.find(x=>x.conjunto===cj);
   if(!c) return;
   const v=pVigasData[vigaIdx];
   let pesoViga=0;
@@ -4097,7 +4265,7 @@ function _pUpdatePesoDisplay(vigaIdx){
 
 function pCalcResumenDia(){
   const cj = document.getElementById('p-cj')?.value;
-  const c = TEKLA.conjuntos.find(x=>x.conjunto===cj);
+  const c = PLAN.conjuntos.find(x=>x.conjunto===cj);
   const resumen = document.getElementById('p-resumen-dia');
   const grid = document.getElementById('p-resumen-grid');
   if(!c||!resumen||!grid) return;
@@ -4160,7 +4328,7 @@ function pUpdateInfo(){
   const fase=document.getElementById('p-fase')?.value||'Armado';
   const qty=parseFloat(document.getElementById('p-qty')?.value)||0;
   if(!cj){ document.getElementById('p-cj-info').style.display='none'; return; }
-  const c=TEKLA.conjuntos.find(x=>x.conjunto===cj);
+  const c=PLAN.conjuntos.find(x=>x.conjunto===cj);
   if(!c) return;
 
   const plan=c.cantidad;
@@ -4211,7 +4379,7 @@ function pRenderRef(){
   const resumen = document.getElementById('p-ref-resumen');
   if(!card||!tbody) return;
   if(!cj){ card.style.display='none'; return; }
-  const c = TEKLA.conjuntos.find(x=>x.conjunto===cj);
+  const c = PLAN.conjuntos.find(x=>x.conjunto===cj);
   if(!c){ card.style.display='none'; return; }
   card.style.display='';
   titulo.textContent = `📋 ${cj} — Partes del conjunto (${c.partes.length} tipos)`;
@@ -4283,7 +4451,7 @@ function addProd(){
   if(!fecha||!cj){toast('⚠ Completa: fecha y conjunto');return;}
   if(pVigasData.length===0||!pVigasData.some(v=>{
     const cj2=document.getElementById('p-cj').value;
-    const c2=TEKLA.conjuntos.find(x=>x.conjunto===cj2);
+    const c2=PLAN.conjuntos.find(x=>x.conjunto===cj2);
     return c2?.partes.some(p=>{
       const piezasHI=PIEZAS_HI_SUP[p.perfil];
       if(piezasHI) return piezasHI.some(sp=>Number(v.subQty?.[p.parte]?.[sp.tipo]||0)>0);
@@ -4293,7 +4461,7 @@ function addProd(){
     toast('⚠ Ingresa al menos una cantidad en al menos una viga');return;
   }
 
-  const c=TEKLA.conjuntos.find(x=>x.conjunto===cj);
+  const c=PLAN.conjuntos.find(x=>x.conjunto===cj);
   const vigasCompletas=pVigasData.filter(v=>c?.partes.every(p=>{
     const piezasHI=PIEZAS_HI_SUP[p.perfil];
     if(piezasHI) return piezasHI.every(sp=>Number(v.subQty?.[p.parte]?.[sp.tipo]||0)>0);
@@ -4346,7 +4514,7 @@ function renderProd(){
 
   document.getElementById('pr-tbody').innerHTML=recs.length?recs.map(r=>{
     const cj=r.conjunto||r.cj;
-    const c=TEKLA.conjuntos.find(x=>x.conjunto===cj);
+    const c=PLAN.conjuntos.find(x=>x.conjunto===cj);
     const vigas=(() => { try{ return JSON.parse(r.detalle_vigas||'[]'); }catch(e){ return []; } })();
     const incompletas=c?vigas.filter(v=>!c.partes.every(p=>{
       const piezasHI=PIEZAS_HI_SUP[p.perfil];
@@ -4359,7 +4527,7 @@ function renderProd(){
     if(pesoMostrar<=0 && r.detalle_vigas){
       try {
         const vigas=JSON.parse(r.detalle_vigas||'[]');
-        const cjData=TEKLA.conjuntos.find(x=>x.conjunto===(r.conjunto||r.cj));
+        const cjData=PLAN.conjuntos.find(x=>x.conjunto===(r.conjunto||r.cj));
         if(cjData) vigas.forEach(v=>{
           cjData.partes.forEach(p=>{
             const piezasHI=PIEZAS_HI_SUP[p.perfil];
@@ -4399,7 +4567,7 @@ function completarVigas(recId){
   const rec=ST.prods.find(r=>r.id===recId);
   if(!rec) return;
   const cj=rec.conjunto||rec.cj;
-  const c=TEKLA.conjuntos.find(x=>x.conjunto===cj);
+  const c=PLAN.conjuntos.find(x=>x.conjunto===cj);
   if(!c) return;
 
   const vigas=(() => { try{ return JSON.parse(rec.detalle_vigas||'[]'); }catch(e){ return []; } })();
@@ -4437,7 +4605,7 @@ function actualizarVigasIncompletas(){
   if(!rec){ addProd(); return; } // fallback a crear nuevo
 
   const cj=document.getElementById('p-cj').value;
-  const c=TEKLA.conjuntos.find(x=>x.conjunto===cj);
+  const c=PLAN.conjuntos.find(x=>x.conjunto===cj);
   if(!c){ toast('⚠ Selecciona el conjunto'); return; }
 
   // Fusionar vigas incompletas actualizadas con las completas originales
@@ -4527,7 +4695,7 @@ function renderFases() {
     let cards = '';
     if(f==='Corte'){
       // Para corte mostrar por conjunto con vigas completas
-      TEKLA.conjuntos.forEach(c=>{
+      PLAN.conjuntos.forEach(c=>{
         const {vigasCompletas, vigasPlan, detalle} = getVigasCompletas(c.conjunto);
         const pct = vigasPlan>0 ? Math.min(100,vigasCompletas/vigasPlan*100) : 0;
         const barColor = pct>=100 ? '#22c55e' : pct>0 ? '#f59e0b' : '#d1d5db';
@@ -4561,7 +4729,7 @@ function renderFases() {
       // así que compararlos contra una pieza individual (p.parte==="pr64") nunca coincidía
       // y siempre mostraba 0 ejecutado. El plan de "vigas" de un conjunto es el mismo
       // para todas sus piezas (c.cantidad), así que basta una tarjeta por conjunto.
-      TEKLA.conjuntos.forEach(c=>{
+      PLAN.conjuntos.forEach(c=>{
         const vigasPlan = c.cantidad || 0;
         const vigasEj = ST.prods
           .filter(p=>p.conjunto===c.conjunto && p.fase===f)
@@ -4592,7 +4760,7 @@ function renderFases() {
 }
 
 function openModalFase(cj, parte, fase) {
-  const c = TEKLA.conjuntos.find(x=>x.conjunto===cj);
+  const c = PLAN.conjuntos.find(x=>x.conjunto===cj);
   if(!c) return;
   const esCorte = fase==='Corte';
   const p = esCorte ? c.partes.find(x=>x.parte===parte) : null;
@@ -4668,7 +4836,7 @@ function resetCrono(){_cronoData=JSON.parse(JSON.stringify(CRONO_DEFAULT));saveC
 
 function renderCronograma(){
   const data=getCronoData();
-  const pesoTotal=TEKLA.conjuntos.reduce((s,c)=>s+(c.peso_total||0),0);
+  const pesoTotal=PLAN.conjuntos.reduce((s,c)=>s+(c.peso_total||0),0);
 
   // Leer desde localStorage (persistente) o del DOM si ya está renderizado
   const jorSel  =document.getElementById('crono-jorn')?.value||localStorage.getItem('crono_jorn')||'5.5d';
@@ -5391,7 +5559,7 @@ function onRptTipoChange(){
   if(tipo==='conjunto'){
     const sel=document.getElementById('rpt-cj-filter');
     sel.innerHTML='<option value="">Todos los conjuntos</option>'+
-      TEKLA.conjuntos.map(c=>`<option value="${c.conjunto}">${c.conjunto} — ${c.perfil}</option>`).join('');
+      PLAN.conjuntos.map(c=>`<option value="${c.conjunto}">${c.conjunto} — ${c.perfil}</option>`).join('');
   }
   renderInforme();
 }
@@ -5478,7 +5646,7 @@ function renderInforme(){
     <div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:1rem;margin-bottom:1rem;border-bottom:2px solid var(--sd);">
       <div>
         <div style="font-size:17px;font-weight:800;color:var(--sd);text-transform:uppercase;">Informe ${tipo} de Producción</div>
-        <div style="font-size:12px;color:var(--gm);margin-top:3px;">${TEKLA.proyecto} · ${TEKLA.codigo}</div>
+        <div style="font-size:12px;color:var(--gm);margin-top:3px;">${PLAN.proyecto} · ${PLAN.codigo}</div>
         <div style="font-size:11px;color:var(--gm);">${lbl}</div>
       </div>
       <div style="text-align:right;font-size:10px;color:var(--gm);">Generado: ${new Date().toLocaleString('es-EC')}</div>
@@ -5596,7 +5764,7 @@ function renderInformeAvanceProceso(refFecha){
     <div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:1rem;margin-bottom:1rem;border-bottom:2px solid var(--sd);">
       <div>
         <div style="font-size:17px;font-weight:800;color:var(--sd);text-transform:uppercase;">📈 Avance Semanal por Proceso</div>
-        <div style="font-size:12px;color:var(--gm);margin-top:3px;">${TEKLA.proyecto} · ${TEKLA.codigo}</div>
+        <div style="font-size:12px;color:var(--gm);margin-top:3px;">${PLAN.proyecto} · ${PLAN.codigo}</div>
         <div style="font-size:11px;color:var(--gm);">${weeks.length} semanas registradas</div>
       </div>
       <div style="text-align:right;font-size:10px;color:var(--gm);">Generado: ${new Date().toLocaleString('es-EC')}</div>
@@ -5645,7 +5813,7 @@ function renderInformeAvanceProceso(refFecha){
 // ======================= INFORME AVANCE SEMANAL POR PESO / CURVA S =======================
 function renderInformeAvancePeso(refFecha){
   const allRecs=[...ST.cortes,...ST.prods];
-  const totalPlanKg=TEKLA.conjuntos.reduce((s,c)=>s+(c.peso_total||0),0);
+  const totalPlanKg=PLAN.conjuntos.reduce((s,c)=>s+(c.peso_total||0),0);
   const cronoData=getCronoData();
   const fechaIniCrono=localStorage.getItem('crono_fecha_ini')||'2026-06-22';
   const totalSemCrono=parseInt(localStorage.getItem('crono_total_sem')||53);
@@ -5733,7 +5901,7 @@ function renderInformeAvancePeso(refFecha){
   <div style="padding-bottom:.5rem">
     <div style="margin-bottom:1rem">
       <div style="font-size:16px;font-weight:500">Curvas S — Seguimiento por proceso</div>
-      <div style="font-size:11px;color:var(--color-text-secondary)">${TEKLA.proyecto} · Inicio: ${fechaIniCrono} · ${totalSemCrono} sem · ${jorData.label}</div>
+      <div style="font-size:11px;color:var(--color-text-secondary)">${PLAN.proyecto} · Inicio: ${fechaIniCrono} · ${totalSemCrono} sem · ${jorData.label}</div>
     </div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:1rem">
       <div style="background:#0f172a;border-radius:8px;padding:12px"><div style="font-size:11px;color:#64748b">Plan total</div><div style="font-size:20px;font-weight:500;color:white">${(totalPlanKg/1000).toFixed(1)} t</div></div>
@@ -5891,7 +6059,7 @@ function renderInformeCharts(cortes, prods, byFase) {
 
 
 function openModal(cj){
-  const c=TEKLA.conjuntos.find(x=>x.conjunto===cj);if(!c)return;
+  const c=PLAN.conjuntos.find(x=>x.conjunto===cj);if(!c)return;
   const av=getVigasCompletas(cj);
   const totEj=av.vigasCompletas;
   document.getElementById('modal-ttl').textContent=`${c.conjunto} — ${c.perfil} (${c.cantidad} plan)`;
@@ -6213,6 +6381,7 @@ window.addEventListener('unhandledrejection', e=>{
   if(div){ div.style.display=''; div.innerHTML += `<div>❌ Promise: ${e.reason}</div>`; }
 });
 document.addEventListener('DOMContentLoaded', async ()=>{
+  await cargarPlanDesdeServidor();
   await loadFromServer();
   renderDashboard();
   ['c-fecha','p-fecha'].forEach(id=>{const el=document.getElementById(id);if(el&&!el.value)el.value=today();});
