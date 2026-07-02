@@ -4104,7 +4104,7 @@ function addProd(){
   const cj=document.getElementById('p-cj').value;
   const fase=document.getElementById('p-fase').value;
   const opId=document.getElementById('p-op').value;
-  const pesoTotal=parseFloat(document.getElementById('p-peso').value)||0;
+  const pesoTotal_old=parseFloat(document.getElementById('p-peso').value)||0; // legacy
   if(!fecha||!cj){toast('⚠ Completa: fecha y conjunto');return;}
   if(pVigasData.length===0||!pVigasData.some(v=>{
     const cj2=document.getElementById('p-cj').value;
@@ -4126,6 +4126,23 @@ function addProd(){
   })).length;
   const qty=pVigasData.length;
   const op=ST.ops.find(o=>o.id==opId);
+
+  // Recalcular peso directamente desde pVigasData (no depender del campo p-peso)
+  let pesoTotal=0;
+  pVigasData.forEach(v=>{
+    c?.partes.forEach(p=>{
+      const piezasHI=PIEZAS_HI_SUP[p.perfil];
+      if(piezasHI){
+        piezasHI.forEach(sp=>{
+          const q=Number(v.subQty?.[p.parte]?.[sp.tipo]||0);
+          if(q>0) pesoTotal+=sp.esp*sp.ancho*(p.longitud||3000)*7.85e-6*q;
+        });
+      } else {
+        const q=Number(v.qty?.[p.parte]||0);
+        if(q>0) pesoTotal+=(p.peso_unit||0)*q;
+      }
+    });
+  });
 
   const rec={
     id:Date.now(), fecha, turno:document.getElementById('p-turno').value,

@@ -2481,9 +2481,14 @@ function wkGuardarCorte(){
     // qty = vigas completadas = mínimo entre sub-piezas / cantidad por viga
     const piezasHI_ref = PIEZAS_HI[selParte?.perfil];
     const vigasCompletadas = piezasHI_ref
-      ? Math.min(...wkSubPiezas.map((s,i)=>Math.floor((s.qty||0)/(piezasHI_ref[i]?.qty||1))))
-      : Math.min(...wkSubPiezas.map(s=>s.qty||0));
+      ? Math.min(...piezasHI_ref.map((sp,i)=>{
+          const subp = wkSubPiezas.find(s=>s.nombre===sp.tipo||s.esp===sp.esp);
+          return Math.floor((subp?.qty||0)/(sp.qty||1));
+        }))
+      : Math.min(...wkSubPiezas.filter(s=>s.qty>0).map(s=>s.qty||0));
     const qtyVigas = Math.max(0, vigasCompletadas);
+    // Si no hay vigas completas, usar total de piezas para que qty > 0
+    const qtyFinal = qtyVigas > 0 ? qtyVigas : totalQtyDesp;
     const desp=parseFloat(Math.max(0,totalMat-totalPesoDesp-totalSob).toFixed(2));
     const m0=wkMateriales[0]||{};
     const sob0=wkSobrantes[0]||{};
@@ -2496,7 +2501,7 @@ function wkGuardarCorte(){
       id:Date.now(), tipo:'corte', fecha:todayISO(), hora:timeNow(),
       opId:W.id, opNom:`${W.nom} ${W.ape}`, opRol:W.rol,
       fase:'Corte', cj:selCj.cj, pr:selParte.pr, perfil:selParte.perfil,
-      qty:qtyVigas, pesoPzas:totalPesoDesp, calidad, obs:document.getElementById('ct-obs')?.value.trim()||'',
+      qty:qtyFinal, pesoPzas:totalPesoDesp, calidad, obs:document.getElementById('ct-obs')?.value.trim()||'',
       pl_planchas:JSON.stringify(wkMateriales),
       pl_tipo:m0.tipo||'plancha', pl_num:m0.colada||'—', pl_mat:m0.grado||'—',
       pl_esp:m0.esp||0, pl_ancho:m0.ancho||0, pl_largo:m0.largo||0,
