@@ -1440,16 +1440,37 @@ async function loadFromServer(){
           }
         });
         LS.save('cortes',ST.cortes); LS.save('prods',ST.prods);
+        // Todo lo que ya está confirmado en el servidor no debe reenviarse nunca
+        LS.save('confirmados', recs.map(r => String(r.id)));
       } else if(Array.isArray(recs) && recs.length === 0){
         // GAS vacío — mantener datos locales, intentar re-sincronizar
         const localCortes = LS.load('cortes',[]);
         const localProds  = LS.load('prods',[]);
         if(localCortes.length > 0 || localProds.length > 0){
-          // Hay datos locales — mantenerlos y reenviar al GAS
+          // Hay datos locales — mantenerlos, pero SOLO reenviar los que
+          // no estén ya confirmados como enviados. Reenviar ciegamente
+          // todo cada vez que GAS responde vacío (por ejemplo, un hipo
+          // momentáneo de la API de Sheets) es lo que causaba que los
+          // registros se duplicaran sin control cada 30s de auto-refresh.
           _loadFromLS();
           const todosLocal = [...localCortes, ...localProds];
-          todosLocal.forEach(r => GAS.post('addRegistro', r).catch(()=>{}));
-          if(si){ si.textContent=`🟡 Re-sincronizando ${todosLocal.length} registros...`; si.style.color='var(--warnt)'; }
+          const yaConfirmados = new Set(LS.load('confirmados', []));
+          const pendientes = todosLocal.filter(r => !yaConfirmados.has(String(r.id)));
+          if(pendientes.length > 0){
+            pendientes.forEach(r => {
+              GAS.post('addRegistro', r)
+                .then(resp => {
+                  if(resp && resp.ok){
+                    yaConfirmados.add(String(r.id));
+                    LS.save('confirmados', Array.from(yaConfirmados));
+                  }
+                })
+                .catch(()=>{});
+            });
+            if(si){ si.textContent=`🟡 Re-sincronizando ${pendientes.length} registros...`; si.style.color='var(--warnt)'; }
+          } else {
+            if(si){ si.textContent='🟢 Datos locales ya sincronizados'; si.style.color='var(--gt)'; }
+          }
           return;
         }
       }
