@@ -1701,7 +1701,7 @@ async function cargarPlanDesdeServidor(){
   try{
     const conjuntos = await GAS.get('getPlanConjuntos', {proyectoId: PROYECTO_DEFAULT_FRONT});
     if(Array.isArray(conjuntos) && conjuntos.length > 0){
-      PLAN.conjuntos = conjuntos;
+      PLAN.conjuntos = sanearConjuntosPlan(conjuntos);
     } else if(Array.isArray(conjuntos) && conjuntos.length === 0){
       // Primera vez que corre el sistema con esta hoja: migrar la semilla al backend
       // para que quede como fuente de verdad de ahora en adelante.
@@ -1712,6 +1712,28 @@ async function cargarPlanDesdeServidor(){
     console.warn('No se pudo cargar PLAN del servidor, usando datos semilla locales:', e.message);
   }
   actualizarTopbarProyecto();
+}
+// Convierte cantidad/peso_total (y los mismos campos dentro de cada parte) a números
+// válidos. Una hoja de Google Sheets puede devolver '' en vez de 0 si una celda quedó
+// vacía por cualquier motivo — sin esto, un solo dato vacío rompe TODAS las sumas del
+// dashboard (aparece "NaN kg" en vez del total).
+function sanearConjuntosPlan(conjuntos){
+  return conjuntos.map(c => ({
+    ...c,
+    cantidad: Number(c.cantidad) || 0,
+    peso_total: Number(c.peso_total) || 0,
+    peso_unit: Number(c.peso_unit) || 0,
+    longitud: Number(c.longitud) || 0,
+    area: Number(c.area) || 0,
+    partes: (c.partes||[]).map(p => ({
+      ...p,
+      cantidad: Number(p.cantidad) || 0,
+      peso_total: Number(p.peso_total) || 0,
+      peso_unit: Number(p.peso_unit) || 0,
+      longitud: Number(p.longitud) || 0,
+      area: Number(p.area) || 0,
+    }))
+  }));
 }
 function actualizarTopbarProyecto(){
   const el = document.getElementById('topbar-proyecto');
@@ -2115,8 +2137,8 @@ const FASE_COLORS_HEX = {
 };
 
 function renderDashboard() {
-  const totalPlan = PLAN.conjuntos.reduce((s,c)=>s+c.cantidad,0);
-  const totalKgPlan = PLAN.conjuntos.reduce((s,c)=>s+c.peso_total,0);
+  const totalPlan = PLAN.conjuntos.reduce((s,c)=>s+(Number(c.cantidad)||0),0);
+  const totalKgPlan = PLAN.conjuntos.reduce((s,c)=>s+(Number(c.peso_total)||0),0);
   const partesTotal = allPartes().reduce((s,p)=>s+p.cantidad,0);
   const totalCortado = ST.cortes.reduce((s,c)=>s+c.qty,0);
   const totalProd = ST.prods.reduce((s,p)=>s+p.qty,0);
