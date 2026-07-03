@@ -440,8 +440,12 @@ global.Chart = class {
   <div id="global-error-banner" style="display:none;position:fixed;top:50px;left:0;right:0;background:#fee2e2;color:#991b1b;font-size:12px;padding:8px 16px;z-index:99999;font-family:monospace;max-height:200px;overflow-y:auto"></div>
 <div class="topbar">
   <div class="topbar-logo">⚙ TRACK METAL V-01</div>
-  <div class="topbar-title" id="topbar-proyecto">Cargando proyecto...</div>
-  <button onclick="abrirModalCargaPlan()" style="background:#166534;color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer;margin-left:10px">📥 Cargar plan</button>
+  <select id="topbar-proyecto-select" onchange="cambiarProyecto(this.value)"
+    style="background:#1e3a5f;color:#fff;border:1px solid rgba(255,255,255,.25);border-radius:6px;padding:6px 10px;font-size:13px;font-weight:700;max-width:280px;cursor:pointer">
+    <option>Cargando proyectos...</option>
+  </select>
+  <button onclick="abrirModalNuevoProyecto()" style="background:#1e40af;color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer;margin-left:8px">+ Nuevo proyecto</button>
+  <button onclick="abrirModalCargaPlan()" style="background:#166534;color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer;margin-left:8px">📥 Cargar plan</button>
 </div>
 
 <div class="tabs-nav">
@@ -1346,10 +1350,31 @@ const LS = {
   load:(k,d)=>{try{const r=localStorage.getItem('prod_sup_'+k);return r?JSON.parse(r):d;}catch(e){return d;}}
 };
 
+// Proyecto actualmente seleccionado. Persiste en localStorage (fuera de LS,
+// porque esta clave NO es un dato de proyecto — es la elección de CUÁL
+// proyecto ver). LSK() namespacea el resto de las claves (cortes, prods,
+// ops, etc.) por proyecto, para que cambiar de proyecto nunca mezcle datos
+// de uno con otro en el mismo navegador.
+let PROYECTO_ACTUAL = (()=>{ try{ return localStorage.getItem('sup_proyecto_actual') || 'PRY-0001'; }catch(e){ return 'PRY-0001'; } })();
+function setProyectoActual(id){
+  PROYECTO_ACTUAL = id;
+  try{ localStorage.setItem('sup_proyecto_actual', id); }catch(e){}
+}
+function LSK(key){ return `${key}_${PROYECTO_ACTUAL}`; }
+
+// Acciones que deben filtrarse/etiquetarse por proyecto automáticamente.
+// Así no hay que tocar cada llamada suelta por el código — el selector de
+// proyecto activo (PROYECTO_ACTUAL) se inyecta solo.
+const PROYECTO_SCOPED_GET  = ['getOperarios','getRegistros','getCorrecciones','getAlertas','getPlanConjuntos'];
+const PROYECTO_SCOPED_POST = ['addRegistro','addOperario','addCorreccion','addAlerta','addPlanConjuntos','clearRegistros'];
+
 const GAS = {
   configured:()=> GAS_URL && GAS_URL!=='PEGA_AQUI_TU_URL_DE_GOOGLE_APPS_SCRIPT',
 
   get: async(action, params={})=>{
+    if(PROYECTO_SCOPED_GET.includes(action) && params.proyectoId===undefined){
+      params = {...params, proyectoId: PROYECTO_ACTUAL};
+    }
     const q=new URLSearchParams({action,...params}).toString();
     // Intento 1: fetch con redirect y timeout
     try {
@@ -1379,6 +1404,10 @@ const GAS = {
   },
 
   post: async(action,data)=>{
+    if(PROYECTO_SCOPED_POST.includes(action) && data && typeof data==='object' && !Array.isArray(data)){
+      if(data.proyecto_id===undefined) data.proyecto_id = PROYECTO_ACTUAL;
+      if(data.proyectoId===undefined)  data.proyectoId  = PROYECTO_ACTUAL;
+    }
     try {
       const ctrl = new AbortController();
       setTimeout(()=>ctrl.abort(), 10000);
@@ -1393,7 +1422,7 @@ const GAS = {
 };
 
 function saveAll(){
-  LS.save('ops',ST.ops); LS.save('cortes',ST.cortes); LS.save('prods',ST.prods);
+  LS.save(LSK('ops'),ST.ops); LS.save(LSK('cortes'),ST.cortes); LS.save(LSK('prods'),ST.prods);
 }
 
 async function loadFromServer(){
@@ -1405,7 +1434,7 @@ async function loadFromServer(){
       // Cargar operarios
       const ops = await GAS.get('getOperarios');
       if(ops && Array.isArray(ops) && ops.length) {
-        ST.ops=ops; LS.save('ops',ops);
+        ST.ops=ops; LS.save(LSK('ops'),ops);
       } else if(Array.isArray(ops) && ops.length===0 && ST.ops.length>0) {
         GAS.post('bulkOperarios', ST.ops).catch(()=>{});
       }
@@ -1438,13 +1467,13 @@ async function loadFromServer(){
             addExec(r.conjunto,r.parte,r.fase,ejQty);
           }
         });
-        LS.save('cortes',ST.cortes); LS.save('prods',ST.prods);
+        LS.save(LSK('cortes'),ST.cortes); LS.save(LSK('prods'),ST.prods);
         // Todo lo que ya está confirmado en el servidor no debe reenviarse nunca
-        LS.save('confirmados', recs.map(r => String(r.id)));
+        LS.save(LSK('confirmados'), recs.map(r => String(r.id)));
       } else if(Array.isArray(recs) && recs.length === 0){
         // GAS vacío — mantener datos locales, intentar re-sincronizar
-        const localCortes = LS.load('cortes',[]);
-        const localProds  = LS.load('prods',[]);
+        const localCortes = LS.load(LSK('cortes'),[]);
+        const localProds  = LS.load(LSK('prods'),[]);
         if(localCortes.length > 0 || localProds.length > 0){
           // Hay datos locales — mantenerlos, pero SOLO reenviar los que
           // no estén ya confirmados como enviados. Reenviar ciegamente
@@ -1453,7 +1482,7 @@ async function loadFromServer(){
           // registros se duplicaran sin control cada 30s de auto-refresh.
           _loadFromLS();
           const todosLocal = [...localCortes, ...localProds];
-          const yaConfirmados = new Set(LS.load('confirmados', []));
+          const yaConfirmados = new Set(LS.load(LSK('confirmados'), []));
           const pendientes = todosLocal.filter(r => !yaConfirmados.has(String(r.id)));
           if(pendientes.length > 0){
             pendientes.forEach(r => {
@@ -1461,7 +1490,7 @@ async function loadFromServer(){
                 .then(resp => {
                   if(resp && resp.ok){
                     yaConfirmados.add(String(r.id));
-                    LS.save('confirmados', Array.from(yaConfirmados));
+                    LS.save(LSK('confirmados'), Array.from(yaConfirmados));
                   }
                 })
                 .catch(()=>{});
@@ -1487,8 +1516,8 @@ async function loadFromServer(){
 }
 
 function _loadFromLS(){
-  const ops=LS.load('ops',null); if(ops&&ops.length) ST.ops=ops;
-  ST.cortes=LS.load('cortes',[]); ST.prods=LS.load('prods',[]); ST.exec={};
+  const ops=LS.load(LSK('ops'),null); if(ops&&ops.length) ST.ops=ops;
+  ST.cortes=LS.load(LSK('cortes'),[]); ST.prods=LS.load(LSK('prods'),[]); ST.exec={};
   ST.cortes.forEach(r=>{
     r.conjunto = r.conjunto || r.cj || '';
     r.parte    = r.parte    || r.pr || '—';
@@ -1699,13 +1728,13 @@ let PLAN = {proyecto: PLAN_SEED.proyecto, codigo: PLAN_SEED.codigo, conjuntos: P
 async function cargarPlanDesdeServidor(){
   if(!GAS.configured()){ actualizarTopbarProyecto(); return; }
   try{
-    const conjuntos = await GAS.get('getPlanConjuntos', {proyectoId: PROYECTO_DEFAULT_FRONT});
+    const conjuntos = await GAS.get('getPlanConjuntos', {proyectoId: PROYECTO_ACTUAL});
     if(Array.isArray(conjuntos) && conjuntos.length > 0){
       PLAN.conjuntos = sanearConjuntosPlan(conjuntos);
     } else if(Array.isArray(conjuntos) && conjuntos.length === 0){
       // Primera vez que corre el sistema con esta hoja: migrar la semilla al backend
       // para que quede como fuente de verdad de ahora en adelante.
-      await GAS.post('addPlanConjuntos', {proyectoId: PROYECTO_DEFAULT_FRONT, conjuntos: PLAN_SEED.conjuntos});
+      await GAS.post('addPlanConjuntos', {proyectoId: PROYECTO_ACTUAL, conjuntos: PLAN_SEED.conjuntos});
       // PLAN.conjuntos ya tiene la semilla desde la inicialización de arriba, no hace falta recargar
     }
   }catch(e){
@@ -1735,10 +1764,52 @@ function sanearConjuntosPlan(conjuntos){
     }))
   }));
 }
-function actualizarTopbarProyecto(){
-  const el = document.getElementById('topbar-proyecto');
-  if(el) el.textContent = `${PLAN.proyecto || 'Proyecto sin nombre'} · ${PLAN.codigo || ''}`.trim().replace(/·\s*$/, '');
+async function actualizarTopbarProyecto(){
+  const sel = document.getElementById('topbar-proyecto-select');
+  if(!sel) return;
+  if(!GAS.configured()){
+    sel.innerHTML = `<option value="${PROYECTO_ACTUAL}">${PLAN.proyecto || 'Proyecto sin nombre'}</option>`;
+    return;
+  }
+  try{
+    let proyectos = await GAS.get('getProyectos');
+    if(!Array.isArray(proyectos) || proyectos.length === 0){
+      // No hay ningún proyecto creado todavía en el backend: usar el actual como único
+      proyectos = [{id: PROYECTO_ACTUAL, nombre: PLAN.proyecto || 'Proyecto sin nombre', estado:'activo'}];
+    }
+    const activos = proyectos.filter(p => (p.estado||'activo') !== 'archivado');
+    sel.innerHTML = activos.map(p =>
+      `<option value="${p.id}" ${p.id===PROYECTO_ACTUAL?'selected':''}>${p.nombre}${p.codigo?' · '+p.codigo:''}</option>`
+    ).join('');
+    // Si el proyecto seleccionado ya no existe en la lista (raro, pero por seguridad)
+    if(!activos.some(p=>p.id===PROYECTO_ACTUAL) && activos.length>0){
+      sel.value = activos[0].id;
+    }
+  }catch(e){
+    sel.innerHTML = `<option value="${PROYECTO_ACTUAL}">${PLAN.proyecto || 'Proyecto sin nombre'}</option>`;
+  }
 }
+
+// Cambia de proyecto activo: limpia el estado en memoria, recarga plan y
+// registros filtrados por el nuevo proyecto_id. Nunca mezcla datos de dos
+// proyectos porque ST se resetea por completo antes de volver a cargar.
+async function cambiarProyecto(nuevoId){
+  if(!nuevoId || nuevoId===PROYECTO_ACTUAL) return;
+  setProyectoActual(nuevoId);
+  // Limpiar TODO el estado en memoria del proyecto anterior
+  ST.cortes = []; ST.prods = []; ST.ops = []; ST.exec = {};
+  PLAN.conjuntos = [];
+  const sel = document.getElementById('topbar-proyecto-select');
+  if(sel) sel.disabled = true;
+  try{
+    await cargarPlanDesdeServidor();
+    await loadFromServer();
+    renderDashboard();
+  } finally {
+    if(sel) sel.disabled = false;
+  }
+}
+
 const PROYECTO_DEFAULT_FRONT = 'PRY-0001'; // debe coincidir con PROYECTO_DEFAULT del backend
 
 // ════════════════════════════════════════════════════════════
@@ -1797,6 +1868,69 @@ function _leerArchivoExcel(file){
     reader.onerror=()=>reject(new Error('No se pudo leer '+file.name));
     reader.readAsArrayBuffer(file);
   });
+}
+
+// ════════════════════════════════════════════════════════════
+// NUEVO PROYECTO
+// ════════════════════════════════════════════════════════════
+function abrirModalNuevoProyecto(){
+  document.getElementById('modal-ttl').textContent = '🏗️ Nuevo proyecto';
+  document.getElementById('modal-body').innerHTML = `
+    <div style="font-size:12px;color:#6c757d;margin-bottom:.75rem;">
+      Crea un proyecto nuevo. Después de guardar, te voy a llevar directo a cargar su plan Tekla.
+    </div>
+    <div class="field"><label>Nombre del proyecto *</label>
+      <input type="text" id="np-nombre" placeholder="Ej: Puente Río Verde" style="width:100%;padding:8px;border:1.5px solid #d1d5db;border-radius:8px;font-size:14px;margin-bottom:.625rem"></div>
+    <div class="field"><label>Empresa / Cliente</label>
+      <input type="text" id="np-empresa" placeholder="Ej: Municipio de..." style="width:100%;padding:8px;border:1.5px solid #d1d5db;border-radius:8px;font-size:14px;margin-bottom:.625rem"></div>
+    <div class="field"><label>Código interno</label>
+      <input type="text" id="np-codigo" placeholder="Ej: CPC-DIS-XXX" style="width:100%;padding:8px;border:1.5px solid #d1d5db;border-radius:8px;font-size:14px;margin-bottom:.625rem"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:.75rem">
+      <div class="field"><label>Fecha inicio</label>
+        <input type="date" id="np-fecha-ini" style="width:100%;padding:8px;border:1.5px solid #d1d5db;border-radius:8px;font-size:14px"></div>
+      <div class="field"><label>Fecha fin estimada</label>
+        <input type="date" id="np-fecha-fin" style="width:100%;padding:8px;border:1.5px solid #d1d5db;border-radius:8px;font-size:14px"></div>
+    </div>
+    <div id="np-error" style="display:none;color:#991b1b;font-size:12px;margin-bottom:.5rem;"></div>
+    <div class="act-row">
+      <button class="btn btn-p" id="np-btn-crear" onclick="crearProyecto()">Crear y cargar plan</button>
+    </div>`;
+  document.getElementById('modal-bg').classList.add('open');
+}
+
+async function crearProyecto(){
+  const nombre = document.getElementById('np-nombre').value.trim();
+  const err = document.getElementById('np-error');
+  if(!nombre){
+    err.textContent = '⚠ El nombre del proyecto es obligatorio.';
+    err.style.display = '';
+    return;
+  }
+  const btn = document.getElementById('np-btn-crear');
+  btn.disabled = true; btn.textContent = 'Creando...';
+  try{
+    const resp = await GAS.post('addProyecto', {
+      nombre,
+      empresa: document.getElementById('np-empresa').value.trim(),
+      codigo: document.getElementById('np-codigo').value.trim(),
+      fechaInicio: document.getElementById('np-fecha-ini').value,
+      fechaFin: document.getElementById('np-fecha-fin').value,
+    });
+    if(resp && resp.ok && resp.id){
+      closeModal();
+      await cambiarProyecto(resp.id);
+      alert(`✅ Proyecto "${nombre}" creado. Ahora sube su plan Tekla.`);
+      abrirModalCargaPlan();
+    } else {
+      err.textContent = '❌ No se pudo crear el proyecto. Revisa la conexión e intenta de nuevo.';
+      err.style.display = '';
+      btn.disabled = false; btn.textContent = 'Crear y cargar plan';
+    }
+  }catch(e){
+    err.textContent = '❌ Error: '+e.message;
+    err.style.display = '';
+    btn.disabled = false; btn.textContent = 'Crear y cargar plan';
+  }
 }
 
 function abrirModalCargaPlan(){
@@ -1865,7 +1999,7 @@ async function confirmarCargaPlan(){
   const btn=document.getElementById('plan-btn-confirmar');
   btn.disabled=true; btn.textContent='Guardando...';
   try{
-    const resp=await GAS.post('addPlanConjuntos', {proyectoId:PROYECTO_DEFAULT_FRONT, conjuntos:nuevos});
+    const resp=await GAS.post('addPlanConjuntos', {proyectoId:PROYECTO_ACTUAL, conjuntos:nuevos});
     if(resp && resp.ok){
       await cargarPlanDesdeServidor();
       renderDashboard();
@@ -5495,7 +5629,7 @@ async function sincronizarOperarios(){
     const ops = await GAS.get('getOperarios');
     if(ops && ops.length){
       ST.ops = ops;
-      LS.save('ops', ops);
+      LS.save(LSK('ops'), ops);
       renderOpTable();
       if(st) st.textContent = `✅ ${ops.length} operarios sincronizados · ${new Date().toLocaleTimeString('es-EC',{hour:'2-digit',minute:'2-digit'})}`;
       toast(`✓ ${ops.length} operarios cargados de Google Sheets`);
@@ -5519,7 +5653,7 @@ async function limpiarRegistros(){
     await GAS.post('clearRegistros', {});
     // Limpiar local
     ST.cortes=[]; ST.prods=[]; ST.exec={};
-    LS.save('cortes',[]); LS.save('prods',[]);
+    LS.save(LSK('cortes'),[]); LS.save(LSK('prods'),[]);
     renderDashboard();
     toast('✓ Registros eliminados');
   } catch(e){

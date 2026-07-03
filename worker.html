@@ -130,6 +130,13 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);min-height
 <div class="sc on" id="sc-login">
   <div class="login-title">¿Quién eres?</div>
   <div class="login-sub">Toca tu nombre para comenzar</div>
+  <div style="display:flex;align-items:center;justify-content:center;gap:6px;margin:.5rem 0 1rem">
+    <span style="font-size:11px;color:var(--gr)">🏗️ Proyecto:</span>
+    <select id="login-proyecto-select" onchange="cambiarProyectoW(this.value)"
+      style="font-size:12px;font-weight:700;border:1.5px solid var(--bd);border-radius:8px;padding:4px 8px;background:#fff;color:var(--b);max-width:220px">
+      <option>Cargando...</option>
+    </select>
+  </div>
   <div id="worker-list"></div>
 </div>
 
@@ -416,7 +423,7 @@ const PROYECTO_DEFAULT_FRONT = 'PRY-0001'; // debe coincidir con PROYECTO_DEFAUL
 async function cargarPlanDesdeServidor(){
   if(!GAS.configured()) return;
   try{
-    const conjuntos = await GAS.get('getPlanConjuntos', {proyectoId: PROYECTO_DEFAULT_FRONT});
+    const conjuntos = await GAS.get('getPlanConjuntos', {proyectoId: PROYECTO_ACTUAL});
     if(Array.isArray(conjuntos) && conjuntos.length > 0){
       // Convertir del formato canónico (conjunto/marca/cantidad/partes:[{parte,cantidad,...}])
       // al formato que usa este celular (cj/desc/partes:[{pr,plan,...}])
@@ -496,8 +503,9 @@ document.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('home-date').textContent=todayStr();
   // Cargar el plan actualizado del servidor en segundo plano (no bloquea el arranque)
   cargarPlanDesdeServidor();
+  poblarSelectorProyectosW();
   // Show workers from cache immediately — never blank screen
-  const cachedOps = LS.g(WORKER_OPS_KEY, null);
+  const cachedOps = LS.g(WORKER_OPS_KEY(), null);
   renderWorkers(cachedOps || DEFAULT_WORKERS);
   // Sync dot: solo "conectando" si no hay caché previo
   setSync(false, cachedOps ? 'local' : 'cargando');
@@ -523,8 +531,24 @@ const GAS_URL = 'https://script.google.com/macros/s/AKfycbzAf0Nn8gjzkCtMKD474oGy
 // Ejemplo: 'https://script.google.com/macros/s/AKfycb.../exec'
 // ================================================
 
-const WORKER_OPS_KEY='prod_worker_ops';
-const WORKER_RECS_LS='prod_worker_recs_ls';
+const WORKER_OPS_KEY_BASE='prod_worker_ops';
+const WORKER_RECS_LS_BASE='prod_worker_recs_ls';
+
+// Proyecto activo en este celular. Se recuerda entre sesiones — un operario
+// normalmente trabaja en el mismo proyecto todo su turno (o varios días
+// seguidos), así que no hace falta preguntar cada vez que abre la app.
+let PROYECTO_ACTUAL = (()=>{ try{ return localStorage.getItem('worker_proyecto_actual') || 'PRY-0001'; }catch(e){ return 'PRY-0001'; } })();
+function setProyectoActualW(id){
+  PROYECTO_ACTUAL = id;
+  try{ localStorage.setItem('worker_proyecto_actual', id); }catch(e){}
+}
+// Las claves de caché por proyecto: cada proyecto guarda sus propios
+// operarios y registros locales, para que cambiar de proyecto en este
+// celular nunca mezcle datos de una obra con otra.
+function WORKER_OPS_KEY(){ return WORKER_OPS_KEY_BASE+'_'+PROYECTO_ACTUAL; }
+function WORKER_RECS_LS(){ return WORKER_RECS_LS_BASE+'_'+PROYECTO_ACTUAL; }
+function PENDING_SYNC_KEY(){ return 'prod_pending_sync_'+PROYECTO_ACTUAL; }
+function PENDING_CORR_KEY(){ return 'prod_pending_corr_'+PROYECTO_ACTUAL; }
 
 const DEFAULT_WORKERS=[
   // Operarios reales del proyecto (siempre visibles sin red)
@@ -540,6 +564,10 @@ const DEFAULT_WORKERS=[
   {id:7,nom:'Raúl',   ape:'Mora',    rol:'Operador Grúa',fase:'Soporte',          icon:'🏗'},
 ];
 
+// Acciones que deben filtrarse/etiquetarse por proyecto automáticamente.
+const PROYECTO_SCOPED_GET_W  = ['getOperarios','getRegistros','getCorrecciones','getAlertas','getPlanConjuntos'];
+const PROYECTO_SCOPED_POST_W = ['addRegistro','addOperario','addCorreccion','addAlerta','addPlanConjuntos'];
+
 // == API Google Apps Script ======================
 const GAS = {
   configured: () => GAS_URL && !GAS_URL.includes('PEGA_AQUI'),
@@ -547,6 +575,9 @@ const GAS = {
   // GET: fetch directo primero, JSONP como fallback para iOS
   get: async (action, params={}) => {
     if (!GAS.configured()) throw new Error('no_url');
+    if(PROYECTO_SCOPED_GET_W.includes(action) && params.proyectoId===undefined){
+      params = {...params, proyectoId: PROYECTO_ACTUAL};
+    }
     const q = new URLSearchParams({action, ...params}).toString();
     // Intento 1: fetch directo
     try {
@@ -594,6 +625,10 @@ const GAS = {
   // POST via fetch (funciona en Android/desktop) con fallback JSONP
   post: async (action, data) => {
     if (!GAS.configured()) return null;
+    if(PROYECTO_SCOPED_POST_W.includes(action) && data && typeof data==='object' && !Array.isArray(data)){
+      if(data.proyecto_id===undefined) data.proyecto_id = PROYECTO_ACTUAL;
+      if(data.proyectoId===undefined)  data.proyectoId  = PROYECTO_ACTUAL;
+    }
     // Intento 1: fetch POST directo
     try {
       const ctrl = new AbortController();
@@ -625,35 +660,78 @@ const LS = {
 let _pendingRecs = [];
 
 function saveRecLocal(rec) {
-  const all = LS.g(WORKER_RECS_LS, []);
+  const all = LS.g(WORKER_RECS_LS(), []);
   all.push(rec);
-  LS.s(WORKER_RECS_LS, all);
+  LS.s(WORKER_RECS_LS(), all);
   _cache = all.filter(r => r.opId == (W?.id));
 }
 
 function syncPendingToGAS() {
   if(!GAS.configured()) return;
   // Sync registros pendientes
-  const pending = LS.g('prod_pending_sync', []);
+  const pending = LS.g(PENDING_SYNC_KEY(), []);
   if(pending.length){
     GAS.post('bulkRegistros', {registros: pending})
-      .then(r => { if(r&&r.ok){ LS.s('prod_pending_sync',[]); } })
+      .then(r => { if(r&&r.ok){ LS.s(PENDING_SYNC_KEY(),[]); } })
       .catch(()=>{});
   }
   // Sync correcciones pendientes
-  const pendCorr = LS.g('prod_pending_corr', []);
+  const pendCorr = LS.g(PENDING_CORR_KEY(), []);
   if(pendCorr.length){
     Promise.all(pendCorr.map(c=>GAS.post('addCorreccion',c).catch(()=>null)))
       .then(res=>{
         const fallidos=pendCorr.filter((_,i)=>!res[i]?.ok);
-        LS.s('prod_pending_corr', fallidos);
+        LS.s(PENDING_CORR_KEY(), fallidos);
       });
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// SELECTOR DE PROYECTO (celular)
+// ════════════════════════════════════════════════════════════
+async function poblarSelectorProyectosW(){
+  const sel = document.getElementById('login-proyecto-select');
+  if(!sel) return;
+  if(!GAS.configured()){
+    sel.innerHTML = `<option value="${PROYECTO_ACTUAL}">Proyecto actual</option>`;
+    return;
+  }
+  try{
+    let proyectos = await GAS.get('getProyectos');
+    if(!Array.isArray(proyectos) || proyectos.length === 0){
+      proyectos = [{id: PROYECTO_ACTUAL, nombre:'Proyecto actual', estado:'activo'}];
+    }
+    const activos = proyectos.filter(p => (p.estado||'activo') !== 'archivado');
+    sel.innerHTML = activos.map(p =>
+      `<option value="${p.id}" ${p.id===PROYECTO_ACTUAL?'selected':''}>${p.nombre}</option>`
+    ).join('');
+    if(!activos.some(p=>p.id===PROYECTO_ACTUAL) && activos.length>0){
+      sel.value = activos[0].id;
+    }
+  }catch(e){
+    sel.innerHTML = `<option value="${PROYECTO_ACTUAL}">Proyecto actual</option>`;
+  }
+}
+
+// Cambia de proyecto en este celular: recuerda la elección, limpia el
+// operario seleccionado (si había uno de otro proyecto) y recarga la
+// lista de operarios + el plan del proyecto nuevo.
+async function cambiarProyectoW(nuevoId){
+  if(!nuevoId || nuevoId===PROYECTO_ACTUAL) return;
+  setProyectoActualW(nuevoId);
+  W = null; selFase=null; selCj=null; selParte=null;
+  const sel = document.getElementById('login-proyecto-select');
+  if(sel) sel.disabled = true;
+  try{
+    await Promise.all([loadAndRenderWorkers(), cargarPlanDesdeServidor()]);
+  } finally {
+    if(sel) sel.disabled = false;
   }
 }
 
 async function loadAndRenderWorkers() {
   // 1. Mostrar caché local inmediatamente
-  let ws = LS.g(WORKER_OPS_KEY, null);
+  let ws = LS.g(WORKER_OPS_KEY(), null);
   const tieneCacheLocal = ws && ws.length > 0;
   if (!tieneCacheLocal) ws = DEFAULT_WORKERS;
   renderWorkers(ws);
@@ -705,12 +783,19 @@ async function loadAndRenderWorkers() {
     return ops;
   };
 
-  for(const [nombre, metodo] of [['fetch', tryFetch], ['XHR', tryXHR], ['GAS', tryGAS]]){
+  // El archivo estático operarios.json solo tiene los operarios del proyecto
+  // original (PRY-0001) — para cualquier otro proyecto, mostrarlo sería un
+  // error (operarios de la obra equivocada). Solo se intenta si corresponde.
+  const metodos = PROYECTO_ACTUAL === 'PRY-0001'
+    ? [['fetch', tryFetch], ['XHR', tryXHR], ['GAS', tryGAS]]
+    : [['GAS', tryGAS]];
+
+  for(const [nombre, metodo] of metodos){
     try {
       const ops = await metodo();
       if(ops && ops.length){
         ws = ops;
-        LS.s(WORKER_OPS_KEY, ws);
+        LS.s(WORKER_OPS_KEY(), ws);
         renderWorkers(ws);
         setSync(true, 'online');
         if(dbg) setTimeout(()=>dbg.style.display='none', 5000); // ocultar panel tras 5s
@@ -757,14 +842,14 @@ function selectWorker(w){
 
 async function loadMyRecs(){
   // Cargar registros locales primero
-  _cache = LS.g(WORKER_RECS_LS, []);
+  _cache = LS.g(WORKER_RECS_LS(), []);
   // Cargar TODOS los registros del GAS (todos los operarios) para progreso global
   if (GAS.configured()) {
     try {
       const allRecs = await GAS.get('getRegistros');
       if (allRecs && allRecs.length) {
         const serverIds = new Set(allRecs.map(r => String(r.id)));
-        const localOnly = LS.g(WORKER_RECS_LS, []).filter(r => !serverIds.has(String(r.id)));
+        const localOnly = LS.g(WORKER_RECS_LS(), []).filter(r => !serverIds.has(String(r.id)));
         _cache = [...allRecs, ...localOnly];
       }
     } catch(e) { /* offline */ }
@@ -775,7 +860,7 @@ async function loadMyRecs(){
 function saveRec(rec) {
   // Always save locally first — dato SIEMPRE seguro
   saveRecLocal(rec);
-  _cache = LS.g(WORKER_RECS_LS, []).filter(r => r.opId == W?.id);
+  _cache = LS.g(WORKER_RECS_LS(), []).filter(r => r.opId == W?.id);
   // Try to send to GAS
   if (GAS.configured()) {
     GAS.post('addRegistro', rec)
@@ -784,15 +869,15 @@ function saveRec(rec) {
           setSync(true, 'online');
         } else {
           // Guardado local OK, pendiente de sync — amarillo
-          const pending = LS.g('prod_pending_sync', []);
-          if (!pending.find(p => p.id === rec.id)) { pending.push(rec); LS.s('prod_pending_sync', pending); }
+          const pending = LS.g(PENDING_SYNC_KEY(), []);
+          if (!pending.find(p => p.id === rec.id)) { pending.push(rec); LS.s(PENDING_SYNC_KEY(), pending); }
           setSync(false, 'local');
         }
       })
       .catch(() => {
         // Sin red — dato guardado localmente igual
-        const pending = LS.g('prod_pending_sync', []);
-        if (!pending.find(p => p.id === rec.id)) { pending.push(rec); LS.s('prod_pending_sync', pending); }
+        const pending = LS.g(PENDING_SYNC_KEY(), []);
+        if (!pending.find(p => p.id === rec.id)) { pending.push(rec); LS.s(PENDING_SYNC_KEY(), pending); }
         setSync(false, 'offline');
       });
   }
@@ -801,7 +886,7 @@ function saveRec(rec) {
 function myExec(cj,pr,fase){return _cache.filter(r=>r.cj===cj&&r.pr===pr&&r.fase===fase).reduce((s,r)=>s+r.qty,0);}
 function totalExec(cj,pr,fase){
   // Usar _cache (que incluye datos del GAS) si está disponible
-  const all = _cache.length > 0 ? _cache : LS.g(WORKER_RECS_LS, []);
+  const all = _cache.length > 0 ? _cache : LS.g(WORKER_RECS_LS(), []);
   return all.filter(r=>(r.cj||r.conjunto)===cj&&(r.pr||r.parte)===pr&&r.fase===fase).reduce((s,r)=>s+(Number(r.qty)||0),0);
 }
 
@@ -3708,9 +3793,9 @@ async function enviarCorreccion(recId, btn){
   }
 
   // Guardar localmente aunque no haya red
-  const pendCorr=LS.g('prod_pending_corr',[]);
+  const pendCorr=LS.g(PENDING_CORR_KEY(),[]);
   pendCorr.push(corr);
-  LS.s('prod_pending_corr', pendCorr);
+  LS.s(PENDING_CORR_KEY(), pendCorr);
   // Marcar como solicitada para no mostrar el botón de nuevo
   LS.s('corr_solicitada_'+recId, true);
 
@@ -3778,9 +3863,9 @@ async function checkCorreccionesAprobadas(){
 function mostrarNotificacionCorreccion(c){
   // Remove the corrected record from local cache
   try {
-    const all = LS.g(WORKER_RECS_LS, []);
+    const all = LS.g(WORKER_RECS_LS(), []);
     const updated = all.filter(r => String(r.id) !== String(c.recId));
-    LS.s(WORKER_RECS_LS, updated);
+    LS.s(WORKER_RECS_LS(), updated);
     _cache = _cache.filter(r => String(r.id) !== String(c.recId));
   } catch(e){}
 
@@ -3818,7 +3903,7 @@ function mostrarNotificacionCorreccion(c){
 function exportarMisDatos() {
   if(!W){ alert('Selecciona tu nombre primero'); return; }
   try {
-    const all = LS.g(WORKER_RECS_LS, []);
+    const all = LS.g(WORKER_RECS_LS(), []);
     const mis = all.filter(r => r.opId == W.id);
     if(!mis.length){ alert('No tienes registros aún. Registra tu trabajo primero.'); return; }
     const data = {
