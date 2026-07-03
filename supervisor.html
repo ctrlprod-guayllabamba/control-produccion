@@ -1475,35 +1475,36 @@ async function loadFromServer(){
         // Todo lo que ya está confirmado en el servidor no debe reenviarse nunca
         LS.save(LSK('confirmados'), recs.map(r => String(r.id)));
       } else if(Array.isArray(recs) && recs.length === 0){
-        // GAS vacío — mantener datos locales, intentar re-sincronizar
+        // El servidor respondió correctamente y dice que este proyecto no
+        // tiene registros — hay que confiar en eso. Antes, este código
+        // "rescataba" datos guardados en localStorage cuando el servidor
+        // devolvía vacío, pensado para hipos momentáneos de red. Pero con
+        // varios proyectos, un proyecto nuevo empieza legítimamente en 0,
+        // y esa caché local podía venir contaminada de un proyecto
+        // anterior — mostrando kg/stock que no eran de este proyecto.
+        // Si de verdad hay registros creados aquí mismo que aún no se
+        // confirmaron en el servidor, sí los reintentamos — pero nunca
+        // se usan para "rellenar" lo que se muestra en pantalla.
+        ST.cortes = []; ST.prods = []; ST.exec = {};
         const localCortes = LS.load(LSK('cortes'),[]);
         const localProds  = LS.load(LSK('prods'),[]);
-        if(localCortes.length > 0 || localProds.length > 0){
-          // Hay datos locales — mantenerlos, pero SOLO reenviar los que
-          // no estén ya confirmados como enviados. Reenviar ciegamente
-          // todo cada vez que GAS responde vacío (por ejemplo, un hipo
-          // momentáneo de la API de Sheets) es lo que causaba que los
-          // registros se duplicaran sin control cada 30s de auto-refresh.
-          _loadFromLS();
-          const todosLocal = [...localCortes, ...localProds];
-          const yaConfirmados = new Set(LS.load(LSK('confirmados'), []));
-          const pendientes = todosLocal.filter(r => !yaConfirmados.has(String(r.id)));
-          if(pendientes.length > 0){
-            pendientes.forEach(r => {
-              GAS.post('addRegistro', r)
-                .then(resp => {
-                  if(resp && resp.ok){
-                    yaConfirmados.add(String(r.id));
-                    LS.save(LSK('confirmados'), Array.from(yaConfirmados));
-                  }
-                })
-                .catch(()=>{});
-            });
-            if(si){ si.textContent=`🟡 Re-sincronizando ${pendientes.length} registros...`; si.style.color='var(--warnt)'; }
-          } else {
-            if(si){ si.textContent='🟢 Datos locales ya sincronizados'; si.style.color='var(--gt)'; }
-          }
-          return;
+        const yaConfirmados = new Set(LS.load(LSK('confirmados'), []));
+        const pendientes = [...localCortes, ...localProds].filter(r => !yaConfirmados.has(String(r.id)));
+        if(pendientes.length > 0){
+          pendientes.forEach(r => {
+            GAS.post('addRegistro', r)
+              .then(resp => {
+                if(resp && resp.ok){
+                  yaConfirmados.add(String(r.id));
+                  LS.save(LSK('confirmados'), Array.from(yaConfirmados));
+                }
+              })
+              .catch(()=>{});
+          });
+          if(si){ si.textContent=`🟡 Re-sincronizando ${pendientes.length} registros...`; si.style.color='var(--warnt)'; }
+        } else {
+          LS.save(LSK('cortes'),[]); LS.save(LSK('prods'),[]);
+          if(si){ si.textContent='🟢 Google conectado — 0 registros'; si.style.color='var(--gt)'; }
         }
       }
       const tot=ST.cortes.length+ST.prods.length;
@@ -2318,14 +2319,15 @@ function renderDashboard() {
   const totalDesp = ST.cortes.reduce((s,c)=>s+(c.desperdicio||0),0);
   const totalKgEjec = ST.cortes.reduce((s,c)=>s+Number(c.pesoParts||c.pesoPzas||0),0);
   const pendPartes = allPartes().reduce((s,p)=>s+Math.max(0,p.cantidad-getCortadoQty(p.conjunto,p.parte)),0);
+  const pendKg = Math.max(0, totalKgPlan - totalKgEjec);
   // Avance global por kg
   const pctGlobalKg = totalKgPlan>0?Math.min(100,(totalKgEjec/totalKgPlan*100)):0;
   const pctGlobal = pctGlobalKg;
 
   // == KPIs ==
   document.getElementById('kpi-main').innerHTML = `
-    <div class="kpi k-blue"><div class="kpi-lbl">Partes plan</div><div class="kpi-val">${partesTotal.toLocaleString()}</div><div class="kpi-sub">${PLAN.conjuntos.length} conjuntos</div></div>
-    <div class="kpi k-warn"><div class="kpi-lbl">⚠ Pendientes</div><div class="kpi-val">${pendPartes.toLocaleString()}</div><div class="kpi-sub">por fabricar</div></div>
+    <div class="kpi k-blue"><div class="kpi-lbl">Partes plan</div><div class="kpi-val">${partesTotal.toLocaleString()}</div><div class="kpi-sub">${PLAN.conjuntos.length} conjuntos · ${(totalKgPlan/1000).toFixed(1)}t</div></div>
+    <div class="kpi k-warn"><div class="kpi-lbl">⚠ Pendientes</div><div class="kpi-val">${pendPartes.toLocaleString()}</div><div class="kpi-sub">por fabricar · ${(pendKg/1000).toFixed(1)}t</div></div>
     <div class="kpi k-orange"><div class="kpi-lbl">Avance global</div><div class="kpi-val">${pctGlobal.toFixed(1)}%</div><div class="kpi-sub">${totalKgEjec.toFixed(0)} kg de ${totalKgPlan.toFixed(0)} kg</div></div>
     <div class="kpi k-green"><div class="kpi-lbl">Kg ejecutados</div><div class="kpi-val">${(totalKgEjec/1000).toFixed(1)}t</div><div class="kpi-sub">de ${(totalKgPlan/1000).toFixed(0)}t plan</div></div>
     <div class="kpi"><div class="kpi-lbl">Stock sobrante</div><div class="kpi-val">${totalStock.toFixed(0)}</div><div class="kpi-sub">kg reutilizable</div></div>
