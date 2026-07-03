@@ -6,8 +6,10 @@
 <title>Track Metal V-01 — Supervisor</title>
 <style>
 :root{
-  --sd:#1a2b4a;--sm:#2e4a7a;--sl:#4a7ab5;--sp:#d6e4f7;--su:#eef4fc;
-  --oa:#e8631a;--ol:#fad5be;--yh:#fffde7;
+  /* Identidad "Track Metal" — grafito de acero forjado + naranja de soplete */
+  --sd:#151b26;--sm:#212b3d;--sl:#3d7ab0;--sp:#d6e4f7;--su:#eef1f6;
+  --oa:#ff5a1f;--ol:#ffd9c2;--yh:#fffde7;
+  --ay:#ffc233;--ayd:#a66a00;
   --gk:#d4edda;--gt:#155724;--rd:#f8d7da;--rt:#721c24;
   --wh:#fff;--bg:#f0f2f6;--gl:#dee2e6;--gm:#6c757d;--tx:#1a1a2e;
   --warn:#fff3cd;--warnt:#856404;
@@ -16,8 +18,9 @@
 *{box-sizing:border-box;margin:0;padding:0;}
 body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--tx);font-size:13px;}
 /* ─── TOPBAR ─── */
-.topbar{background:var(--sd);color:#fff;padding:0 1.25rem;display:flex;align-items:center;height:52px;gap:.75rem;position:sticky;top:0;z-index:200;box-shadow:0 2px 10px rgba(0,0,0,.35);}
-.topbar-logo{font-size:10px;font-weight:800;letter-spacing:.1em;color:var(--oa);text-transform:uppercase;white-space:nowrap;}
+.topbar{background:linear-gradient(135deg,var(--sd) 0%,#1c2534 100%);color:#fff;padding:0 1.25rem;display:flex;align-items:center;height:52px;gap:.75rem;position:sticky;top:0;z-index:200;box-shadow:0 2px 10px rgba(0,0,0,.35);border-bottom:2px solid var(--oa);}
+.topbar-logo{font-size:12px;font-weight:800;letter-spacing:.14em;color:#fff;text-transform:uppercase;white-space:nowrap;}
+.topbar-logo b{color:var(--oa);font-weight:800;}
 .topbar-title{font-size:12px;font-weight:600;color:#fff;flex:1;}
 .topbar-badge{background:var(--oa);color:#fff;font-size:9px;font-weight:800;padding:3px 8px;border-radius:20px;white-space:nowrap;letter-spacing:.05em;}
 /* ─── TABS ─── */
@@ -86,7 +89,7 @@ input,select,textarea{padding:6px 9px;border:1px solid var(--gl);border-radius:6
 input:focus,select:focus{outline:none;border-color:var(--sl);box-shadow:0 0 0 3px rgba(74,122,181,.12);}
 input[readonly]{background:var(--su);color:var(--gm);}
 .btn{padding:7px 16px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;border:1px solid transparent;transition:all .12s;letter-spacing:.04em;text-transform:uppercase;}
-.btn-p{background:var(--oa);color:#fff;border-color:var(--oa);}.btn-p:hover{background:#c4521a;}
+.btn-p{background:var(--oa);color:#fff;border-color:var(--oa);}.btn-p:hover{background:#d94815;}
 .btn-s{background:var(--sd);color:#fff;border-color:var(--sd);}.btn-s:hover{background:var(--sm);}
 .btn-g{background:transparent;color:var(--sd);border-color:var(--gl);}.btn-g:hover{background:var(--su);}
 .btn-d{background:var(--rd);color:var(--rt);border-color:#f5c6cb;}.btn-d:hover{background:#f5c6cb;}
@@ -184,9 +187,9 @@ class MiniChart {
     let lx=8;
     datasets.forEach((ds,i)=>{
       if(ds.type==='line'){
-        ctx.strokeStyle=ds.borderColor||'#e8631a'; ctx.lineWidth=2;
+        ctx.strokeStyle=ds.borderColor||'#ff5a1f'; ctx.lineWidth=2;
         ctx.beginPath(); ctx.moveTo(lx+4,10); ctx.lineTo(lx+18,10); ctx.stroke();
-        ctx.fillStyle=ds.borderColor||'#e8631a';
+        ctx.fillStyle=ds.borderColor||'#ff5a1f';
       } else {
         ctx.fillStyle=Array.isArray(ds.backgroundColor)?ds.backgroundColor[0]:ds.backgroundColor||'#4a7ab5';
         ctx.fillRect(lx,4,14,10);
@@ -276,7 +279,7 @@ class MiniChart {
       if(ds.type!=='line') return;
       const pts=ds.data||[];
       const yMax=Math.max(1,...pts)*1.15;
-      ctx.strokeStyle=ds.borderColor||'#e8631a';
+      ctx.strokeStyle=ds.borderColor||'#ff5a1f';
       ctx.lineWidth=2; ctx.setLineDash([]);
       ctx.beginPath();
       pts.forEach((v,i)=>{
@@ -285,7 +288,7 @@ class MiniChart {
         i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
       });
       ctx.stroke();
-      ctx.fillStyle=ds.pointBackgroundColor||ds.borderColor||'#e8631a';
+      ctx.fillStyle=ds.pointBackgroundColor||ds.borderColor||'#ff5a1f';
       pts.forEach((v,i)=>{
         const x=plotX+(i+.5)*(plotW/pts.length);
         const y=plotY+plotH-plotH*(v/yMax);
@@ -306,7 +309,7 @@ class MiniChart {
     // Legend
     let lx=8;
     datasets.forEach(ds=>{
-      ctx.strokeStyle=ds.borderColor||'#1a2b4a'; ctx.lineWidth=2;
+      ctx.strokeStyle=ds.borderColor||'#151b26'; ctx.lineWidth=2;
       if(ds.borderDash) ctx.setLineDash(ds.borderDash); else ctx.setLineDash([]);
       ctx.beginPath(); ctx.moveTo(lx+2,10); ctx.lineTo(lx+18,10); ctx.stroke();
       ctx.setLineDash([]);
@@ -336,7 +339,7 @@ class MiniChart {
     datasets.forEach(ds=>{
       const pts=ds.data||[];
       if(!pts.length) return;
-      const color=ds.borderColor||'#1a2b4a';
+      const color=ds.borderColor||'#151b26';
       ctx.strokeStyle=color; ctx.lineWidth=2;
       if(ds.borderDash) ctx.setLineDash(ds.borderDash); else ctx.setLineDash([]);
       if(ds.fill&&ds.backgroundColor){
@@ -439,7 +442,7 @@ global.Chart = class {
 
   <div id="global-error-banner" style="display:none;position:fixed;top:50px;left:0;right:0;background:#fee2e2;color:#991b1b;font-size:12px;padding:8px 16px;z-index:99999;font-family:monospace;max-height:200px;overflow-y:auto"></div>
 <div class="topbar">
-  <div class="topbar-logo">⚙ TRACK METAL V-01</div>
+  <div class="topbar-logo">⚙ TRACK <b>METAL</b> V-01</div>
   <select id="topbar-proyecto-select" onchange="cambiarProyecto(this.value)"
     style="background:#1e3a5f;color:#fff;border:1px solid rgba(255,255,255,.25);border-radius:6px;padding:6px 10px;font-size:13px;font-weight:700;max-width:280px;cursor:pointer">
     <option>Cargando proyectos...</option>
@@ -656,7 +659,7 @@ global.Chart = class {
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:.625rem">
         <div style="background:#fff;border-radius:8px;padding:6px 10px;border:1px solid #e5e7eb;text-align:center">
           <div style="font-size:9px;font-weight:800;color:#6b7280;text-transform:uppercase;margin-bottom:2px">📐 PLAN PLAN</div>
-          <div id="c-info-plan-qty" style="font-size:18px;font-weight:800;color:#1a2b4a">—</div>
+          <div id="c-info-plan-qty" style="font-size:18px;font-weight:800;color:#151b26">—</div>
           <div id="c-info-plan-kg" style="font-size:11px;color:#6b7280">— kg</div>
         </div>
         <div style="background:#f0fdf4;border-radius:8px;padding:6px 10px;border:1px solid #86efac;text-align:center">
@@ -737,7 +740,7 @@ global.Chart = class {
         ℹ Ingresa la cantidad real de piezas cortadas para cada sub-pieza de forma independiente.
       </div>
       <!-- Panel progreso -->
-      <div id="sup-prog-vigas" style="display:none;background:#1a2b4a;border-radius:10px;padding:.875rem;margin-bottom:.75rem;color:#fff">
+      <div id="sup-prog-vigas" style="display:none;background:#151b26;border-radius:10px;padding:.875rem;margin-bottom:.75rem;color:#fff">
         <div style="font-size:10px;font-weight:700;opacity:.7;text-transform:uppercase;margin-bottom:.625rem">📊 Progreso del plan</div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:.625rem">
           <div style="background:rgba(255,255,255,.08);border-radius:8px;padding:8px;text-align:center">
@@ -771,7 +774,7 @@ global.Chart = class {
     </div>
 
     <!-- Balance -->
-    <div id="sup-balance-box" style="display:none;background:#1a2b4a;color:#fff;border-radius:10px;padding:.875rem;margin-bottom:.75rem">
+    <div id="sup-balance-box" style="display:none;background:#151b26;color:#fff;border-radius:10px;padding:.875rem;margin-bottom:.75rem">
       <div style="font-size:10px;font-weight:700;opacity:.7;margin-bottom:.5rem;text-transform:uppercase">Balance material</div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px" id="sup-balance-grid"></div>
     </div>
@@ -898,7 +901,7 @@ global.Chart = class {
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:.5rem">
         <div style="background:#fff;border-radius:8px;padding:6px;text-align:center;border:1px solid #e5e7eb">
           <div style="font-size:9px;font-weight:800;color:#6b7280">📐 PLAN</div>
-          <div id="p-info-plan" style="font-size:16px;font-weight:800;color:#1a2b4a">—</div>
+          <div id="p-info-plan" style="font-size:16px;font-weight:800;color:#151b26">—</div>
           <div id="p-info-plan-kg" style="font-size:10px;color:#6b7280">— kg</div>
         </div>
         <div style="background:#f0fdf4;border-radius:8px;padding:6px;text-align:center;border:1px solid #86efac">
@@ -929,7 +932,7 @@ global.Chart = class {
       </button>
 
       <!-- Resumen del día -->
-      <div id="p-resumen-dia" style="display:none;background:#1a2b4a;color:#fff;border-radius:10px;padding:.875rem;margin-bottom:.75rem">
+      <div id="p-resumen-dia" style="display:none;background:#151b26;color:#fff;border-radius:10px;padding:.875rem;margin-bottom:.75rem">
         <div style="font-size:10px;font-weight:700;opacity:.7;margin-bottom:.5rem;text-transform:uppercase">Resumen del día</div>
         <div id="p-resumen-grid" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px"></div>
       </div>
@@ -1325,7 +1328,7 @@ global.Chart = class {
 <div id="modal-solicitudes" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;align-items:center;justify-content:center;">
   <div style="background:#fff;border-radius:14px;padding:1.5rem;max-width:600px;width:90%;max-height:80vh;overflow-y:auto;">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
-      <div style="font-size:16px;font-weight:800;color:#1a2b4a;">📋 Solicitudes de Corrección</div>
+      <div style="font-size:16px;font-weight:800;color:#151b26;">📋 Solicitudes de Corrección</div>
       <button onclick="document.getElementById('modal-solicitudes').style.display='none'" style="background:none;border:none;font-size:20px;cursor:pointer;">✕</button>
     </div>
     <div id="solicitudes-list">Cargando...</div>
@@ -2350,7 +2353,7 @@ function renderDashboard() {
     labels: cjLabels,
     datasets:[
       {label:'Plan (100%)', data:cjPlan, backgroundColor:'#d6e4f7', borderColor:'#4a7ab5', borderWidth:1, borderRadius:3},
-      {label:'Ejecutado (%kg)', data:cjEjec, backgroundColor:'#e8631a', borderColor:'#c4521a', borderWidth:1, borderRadius:3},
+      {label:'Ejecutado (%kg)', data:cjEjec, backgroundColor:'#ff5a1f', borderColor:'#d94815', borderWidth:1, borderRadius:3},
     ]
   },{
     indexAxis:'y',
@@ -2382,8 +2385,8 @@ function renderDashboard() {
        backgroundColor:FASES.map(f=>FASE_COLORS_HEX[f]+'cc'), borderColor:FASES.map(f=>FASE_COLORS_HEX[f]),
        borderWidth:1.5, borderRadius:4, yAxisID:'y'},
       {label:'Kg ejecutados', data:faseKg,
-       type:'line', borderColor:'#e8631a', backgroundColor:'rgba(232,99,26,.1)',
-       pointBackgroundColor:'#e8631a', pointRadius:5, tension:.35, fill:true, yAxisID:'y2'},
+       type:'line', borderColor:'#ff5a1f', backgroundColor:'rgba(232,99,26,.1)',
+       pointBackgroundColor:'#ff5a1f', pointRadius:5, tension:.35, fill:true, yAxisID:'y2'},
     ]
   },{
     plugins:{legend:{position:'top'}},
@@ -2425,10 +2428,10 @@ function renderDashboard() {
   mkChart('chart-tendencia','line',{
     labels:days.map(d=>d.slice(5)),  // MM-DD
     datasets:[
-      {label:'Total producción',data:tendData,borderColor:'#1a2b4a',backgroundColor:'rgba(26,43,74,.08)',
-       fill:true,tension:.4,pointRadius:4,pointBackgroundColor:'#1a2b4a'},
-      {label:'Solo corte',data:tendCorte,borderColor:'#e8631a',backgroundColor:'rgba(232,99,26,.08)',
-       fill:true,tension:.4,pointRadius:3,pointBackgroundColor:'#e8631a',borderDash:[4,4]},
+      {label:'Total producción',data:tendData,borderColor:'#151b26',backgroundColor:'rgba(26,43,74,.08)',
+       fill:true,tension:.4,pointRadius:4,pointBackgroundColor:'#151b26'},
+      {label:'Solo corte',data:tendCorte,borderColor:'#ff5a1f',backgroundColor:'rgba(232,99,26,.08)',
+       fill:true,tension:.4,pointRadius:3,pointBackgroundColor:'#ff5a1f',borderDash:[4,4]},
     ]
   },{
     plugins:{legend:{position:'top'}},
@@ -2528,7 +2531,7 @@ function renderPendientes() {
       <td class="r">
         <div style="font-size:10px;color:#6b7280;">${(r.kgEjec||0).toFixed(0)}/${(r.kgPlan||0).toFixed(0)} kg</div>
         <div style="background:#e5e7eb;border-radius:3px;height:4px;overflow:hidden;margin:2px 0">
-          <div style="background:${(r.kgPct||0)>=100?'#166534':'#e8631a'};height:100%;width:${Math.min(100,(r.kgPct||0)).toFixed(0)}%"></div>
+          <div style="background:${(r.kgPct||0)>=100?'#166534':'#ff5a1f'};height:100%;width:${Math.min(100,(r.kgPct||0)).toFixed(0)}%"></div>
         </div>
         <div style="font-size:10px;font-weight:700;color:${(r.kgPct||0)>=100?'#166534':'#b45309'}">${(r.kgPct||0).toFixed(1)}%</div>
       </td>
@@ -2598,7 +2601,7 @@ function renderPlan() {
       <td class="r" style="color:#166534;font-weight:700">${cjAv.kgEjec.toFixed(0)} kg</td>
       <td class="r">
         <div style="background:#e5e7eb;border-radius:3px;height:5px;overflow:hidden;margin-bottom:2px">
-          <div style="background:${cjAv.pct>=100?'#166534':'#e8631a'};height:100%;width:${Math.min(100,cjAv.pct).toFixed(0)}%;border-radius:3px"></div>
+          <div style="background:${cjAv.pct>=100?'#166534':'#ff5a1f'};height:100%;width:${Math.min(100,cjAv.pct).toFixed(0)}%;border-radius:3px"></div>
         </div>
         <span style="font-weight:800;color:${cjAv.pct>=100?'#166534':'#b45309'}">${cjAv.pct.toFixed(1)}%</span>
       </td>
@@ -2638,7 +2641,7 @@ function renderPlan() {
         <td class="r">
           <span style="font-weight:800;color:${pend>0?'#b45309':'#166534'}">${pend} vigas</span>
           <div style="background:#e5e7eb;border-radius:4px;height:4px;margin-top:3px;overflow:hidden">
-            <div style="background:${pct>=100?'#166534':'#e8631a'};height:100%;width:${pct.toFixed(0)}%;border-radius:4px"></div>
+            <div style="background:${pct>=100?'#166534':'#ff5a1f'};height:100%;width:${pct.toFixed(0)}%;border-radius:4px"></div>
           </div>
           <span style="font-size:10px;color:${pend>0?'#b45309':'#166534'}">${pct.toFixed(1)}% kg · faltan ${piezasFaltan} pzas</span>
         </td>
@@ -3503,8 +3506,8 @@ function supRecalc(){
     const pctDesp=totalMat>0?(desp/totalMat*100):0;
     bg.innerHTML+=`<div style="grid-column:1/-1;margin-top:4px">
       <div style="background:${despColor};border-radius:6px;padding:4px 10px;display:flex;justify-content:space-between;align-items:center">
-        <span style="font-size:11px;font-weight:700;color:#1a2b4a">🗑 Desperdicio</span>
-        <span style="font-size:16px;font-weight:800;color:#1a2b4a">${desp.toFixed(2)} kg (${pctDesp.toFixed(1)}%)</span>
+        <span style="font-size:11px;font-weight:700;color:#151b26">🗑 Desperdicio</span>
+        <span style="font-size:16px;font-weight:800;color:#151b26">${desp.toFixed(2)} kg (${pctDesp.toFixed(1)}%)</span>
       </div>
     </div>`;
   } else if(bb) bb.style.display='none';
@@ -4025,7 +4028,7 @@ function renderCorteHist(){
         const colors=['#E6F1FB','#EAF3DE','#FAEEDA','#FBEAF0'];
         const bg=colors[i%colors.length];
         return `<div style="border:1px solid #e5e7eb;border-radius:6px;padding:4px 6px;margin-bottom:3px;background:${bg};font-size:11px">
-          <span style="font-weight:700;color:#1a2b4a">${p.nombre||'Sub-pieza '+(i+1)}</span>
+          <span style="font-weight:700;color:#151b26">${p.nombre||'Sub-pieza '+(i+1)}</span>
           <span style="color:#6b7280;margin-left:4px">${p.esp||'?'}×${p.ancho||'?'}×${p.largo||'?'} mm</span>
           <span style="float:right;font-weight:700;color:#065f46">${p.qty||0} pzas · ${(p.peso||0).toFixed(1)} kg</span>
         </div>`;
@@ -4144,7 +4147,7 @@ function editRegistro(id){
       </button>
 
       <!-- Balance -->
-      <div id="edit-balance" style="background:#1a2b4a;color:white;border-radius:8px;padding:.75rem;margin-bottom:.75rem;font-size:12px">
+      <div id="edit-balance" style="background:#151b26;color:white;border-radius:8px;padding:.75rem;margin-bottom:.75rem;font-size:12px">
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center">
           <div><div style="opacity:.6">Material</div><div style="font-size:16px;font-weight:700">${Number(r.pl_peso||0).toFixed(1)} kg</div></div>
           <div><div style="opacity:.6">Sobrante</div><div id="edit-bal-sob" style="font-size:16px;font-weight:700;color:#86efac">0.0 kg</div></div>
@@ -4381,7 +4384,7 @@ function buildResumenConjuntosSup(fase, selCj){
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-bottom:.35rem">
         <div style="background:rgba(0,0,0,.05);border-radius:6px;padding:4px;text-align:center">
           <div style="font-size:8px;font-weight:700;color:#6b7280">PROG.</div>
-          <div style="font-size:14px;font-weight:800;color:#1a2b4a">${planVigas}</div>
+          <div style="font-size:14px;font-weight:800;color:#151b26">${planVigas}</div>
           <div style="font-size:8px;color:#9ca3af">${pesoPlanKg.toLocaleString()} kg</div>
         </div>
         <div style="background:rgba(0,100,0,.07);border-radius:6px;padding:4px;text-align:center">
@@ -5023,7 +5026,7 @@ function renderFases() {
             </span>
           </div>`).join('');
         cards += `<div style="background:#fff;border:1px solid #e5e7eb;border-radius:7px;padding:8px 10px;cursor:pointer;margin-bottom:6px;" onclick="openModal('${c.conjunto}')">
-          <div style="font-size:11px;font-weight:700;color:#1a2b4a;">${c.conjunto}</div>
+          <div style="font-size:11px;font-weight:700;color:#151b26;">${c.conjunto}</div>
           <div style="font-size:10px;color:#6c757d;margin-bottom:4px;">${c.partes.length} partes · ${kgAv.pct.toFixed(1)}% kg</div>
           <div style="background:#e5e7eb;border-radius:3px;height:5px;overflow:hidden;margin-bottom:4px;">
             <div style="height:100%;border-radius:3px;background:${barColor};width:${pct.toFixed(0)}%"></div>
@@ -5051,7 +5054,7 @@ function renderFases() {
         const textColor = pct>=100 ? '#166534' : pct>0 ? '#92400e' : '#6b7280';
         const faltanVigas = Math.max(0, vigasPlan - vigasEj);
         cards += `<div style="background:#fff;border:1px solid #e5e7eb;border-radius:7px;padding:8px 10px;cursor:pointer;margin-bottom:6px;" onclick="openModalFase('${c.conjunto}','${c.partes[0]?.parte||''}','${f}')">
-          <div style="font-size:11px;font-weight:700;color:#1a2b4a;">${c.conjunto}</div>
+          <div style="font-size:11px;font-weight:700;color:#151b26;">${c.conjunto}</div>
           <div style="font-size:10px;color:#6c757d;margin-bottom:4px;">${c.partes.length} partes</div>
           <div style="background:#e5e7eb;border-radius:3px;height:5px;overflow:hidden;margin-bottom:4px;">
             <div style="height:100%;border-radius:3px;background:${barColor};width:${pct.toFixed(0)}%"></div>
@@ -5100,7 +5103,7 @@ function openModalFase(cj, parte, fase) {
     ${esCorte ? `<div style="font-size:11px;color:#6c757d;margin-bottom:.75rem;">
       <strong>Perfil:</strong> ${p.perfil} &nbsp;·&nbsp; <strong>Long:</strong> ${p.longitud||'—'} mm &nbsp;·&nbsp; <strong>Peso unit:</strong> ${p.peso_unit} kg &nbsp;·&nbsp; <strong>Material:</strong> ${p.material}
     </div>` : ''}
-    <div style="font-size:11px;font-weight:800;color:#1a2b4a;margin-bottom:.5rem;">Registros de ejecución</div>
+    <div style="font-size:11px;font-weight:800;color:#151b26;margin-bottom:.5rem;">Registros de ejecución</div>
     ${recs.length ? `<div class="tw"><table><thead><tr><th>Fecha</th><th>Operario</th><th class="r">Qty</th>${fase==='Corte'?'<th class="r">Kg partes</th><th class="r">Sobrante</th><th class="r">Desp.</th>':'<th class="r">Kg</th>'}<th>Obs.</th></tr></thead>
     <tbody>${recs.map(r=>fase==='Corte'
       ? `<tr><td>${r.fecha||'—'}</td><td>${r.opNom||'—'}</td><td class="r">${r.qty||0}</td><td class="r">${Number(r.pesoParts||r.pesoPzas||0).toFixed(1)}</td><td class="r"><span class="stock-tag">${Number(r.sobPeso||r.sob_peso||0).toFixed(1)}</span></td><td class="r" style="color:#991b1b;">${Number(r.desperdicio||0).toFixed(1)}</td><td style="font-size:10px;">${r.obs||'—'}</td></tr>`
@@ -6062,14 +6065,14 @@ function renderInformeAvanceProceso(refFecha){
   // Table rows
   const rows=weekData.map((w,i)=>{
     const cols=FASES.map(f=>`<td class="r" style="color:${w.byFase[f]>0?FASE_COLORS[f]:'#d1d5db'};font-weight:${w.byFase[f]>0?'700':'400'}">${w.byFase[f]||'—'}</td>`).join('');
-    return`<tr><td style="font-weight:700;white-space:nowrap">${w.label}</td>${cols}<td class="r" style="font-weight:800;color:#1a2b4a">${w.total}</td><td class="r" style="color:#1e40af">${w.kgCorte.toFixed(0)} kg</td></tr>`;
+    return`<tr><td style="font-weight:700;white-space:nowrap">${w.label}</td>${cols}<td class="r" style="font-weight:800;color:#151b26">${w.total}</td><td class="r" style="color:#1e40af">${w.kgCorte.toFixed(0)} kg</td></tr>`;
   }).join('');
 
   // Totals row
   const totFase=FASES.map(f=>weekData.reduce((s,w)=>s+w.byFase[f],0));
   const totAll=totFase.reduce((a,b)=>a+b,0);
   const totKg=weekData.reduce((s,w)=>s+w.kgCorte,0);
-  const totRow=`<tr style="background:#1a2b4a;color:#fff;font-weight:800"><td>TOTAL</td>${totFase.map(v=>`<td class="r">${v}</td>`).join('')}<td class="r">${totAll}</td><td class="r">${totKg.toFixed(0)} kg</td></tr>`;
+  const totRow=`<tr style="background:#151b26;color:#fff;font-weight:800"><td>TOTAL</td>${totFase.map(v=>`<td class="r">${v}</td>`).join('')}<td class="r">${totAll}</td><td class="r">${totKg.toFixed(0)} kg</td></tr>`;
 
   document.getElementById('informe-area').innerHTML=`
   <div class="card">
@@ -6422,7 +6425,7 @@ async function verSolicitudes(){
       <div style="border:1px solid #e5e7eb;border-radius:10px;padding:1rem;margin-bottom:.75rem;">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:.5rem;">
           <div>
-            <div style="font-size:14px;font-weight:700;color:#1a2b4a;">${c.opNom}</div>
+            <div style="font-size:14px;font-weight:700;color:#151b26;">${c.opNom}</div>
             <div style="font-size:12px;color:#6b7280;">${c.fecha} ${c.hora}</div>
           </div>
           <span style="background:#fef3c7;color:#92400e;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;">PENDIENTE</span>
