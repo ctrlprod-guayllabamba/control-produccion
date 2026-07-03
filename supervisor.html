@@ -2456,10 +2456,50 @@ let supPiezas     = [];
 let supSobrantes  = [];
 
 // ── Helpers de cálculo de peso ─────────────────────
+// Campos de dimensión según la forma, para materia prima de forma irregular
+// (plancha o remanente que NO es rectangular estándar) — espejo de FORMAS_IRREG_MAT en worker.html
+const FORMAS_IRREG_SUP = {
+  triangulo:    [{k:'db',lbl:'Base (mm)',ph:'400'},{k:'dh',lbl:'Altura (mm)',ph:'300'}],
+  trapecio:     [{k:'db1',lbl:'Base mayor (mm)',ph:'500'},{k:'db2',lbl:'Base menor (mm)',ph:'200'},{k:'dh',lbl:'Altura (mm)',ph:'300'}],
+  rombo:        [{k:'dd1',lbl:'Diagonal mayor (mm)',ph:'600'},{k:'dd2',lbl:'Diagonal menor (mm)',ph:'300'}],
+  circulo:      [{k:'dd',lbl:'Diámetro (mm)',ph:'400'}],
+  arco:         [{k:'dr',lbl:'Radio (mm)',ph:'300'},{k:'dang',lbl:'Ángulo (°)',ph:'90'},{k:'dri',lbl:'Radio interior (mm, 0 si es sólido)',ph:'0'}],
+  forma_l:      [{k:'da1',lbl:'Largo brazo 1 (mm)',ph:'500'},{k:'da2',lbl:'Largo brazo 2 (mm)',ph:'300'},{k:'dw1',lbl:'Ancho brazo 1 (mm)',ph:'100'},{k:'dw2',lbl:'Ancho brazo 2 (mm)',ph:'80'}],
+  forma_t:      [{k:'dbt',lbl:'Ancho ala (mm)',ph:'300'},{k:'dhw',lbl:'Alto alma (mm)',ph:'200'},{k:'dwt',lbl:'Espesor ala (mm)',ph:'20'},{k:'dww',lbl:'Espesor alma (mm)',ph:'15'}],
+  rect_agujeros:[{k:'db',lbl:'Ancho rect. (mm)',ph:'400'},{k:'dh',lbl:'Alto rect. (mm)',ph:'300'},{k:'dda',lbl:'Diám. agujero (mm)',ph:'22'},{k:'dna',lbl:'N° agujeros',ph:'4'}],
+  irreg_libre:  [{k:'db',lbl:'Ancho envolvente (mm)',ph:'500'},{k:'dh',lbl:'Alto envolvente (mm)',ph:'400'},{k:'daprov',lbl:'% aprovechamiento',ph:'70'}],
+};
+
+function calcAreaIrregSup(m){
+  const g=k=>Number(m[k])||0;
+  let area=0, desc='';
+  switch(m.forma){
+    case 'triangulo':   { const b=g('db'),h=g('dh'); area=0.5*b*h; desc=`△ base=${b} h=${h} mm`; break; }
+    case 'trapecio':    { const b1=g('db1'),b2=g('db2'),h=g('dh'); area=0.5*(b1+b2)*h; desc=`⬟ b1=${b1} b2=${b2} h=${h} mm`; break; }
+    case 'rombo':       { const d1=g('dd1'),d2=g('dd2'); area=0.5*d1*d2; desc=`◆ d1=${d1} d2=${d2} mm`; break; }
+    case 'circulo':     { const d=g('dd'); area=Math.PI*(d/2)**2; desc=`⬤ D=${d} mm`; break; }
+    case 'arco':        { const r=g('dr'),ang=g('dang'),ri=g('dri'); area=(ang/360)*Math.PI*(r**2-ri**2); desc=`🌙 R=${r} ri=${ri} ${ang}°`; break; }
+    case 'forma_l':     { const a1=g('da1'),a2=g('da2'),w1=g('dw1'),w2=g('dw2'); area=a1*w1+(a2-w1)*w2; desc=`⌐ L: ${a1}×${w1} + ${a2}×${w2} mm`; break; }
+    case 'forma_t':     { const bt=g('dbt'),hw=g('dhw'),wt=g('dwt'),ww=g('dww'); area=bt*wt+hw*ww; desc=`⊤ T: ala=${bt}×${wt} alma=${hw}×${ww} mm`; break; }
+    case 'rect_agujeros':{ const b=g('db'),h=g('dh'),da=g('dda'),na=g('dna'); area=b*h - na*Math.PI*(da/2)**2; desc=`▣ ${b}×${h} - ${na} ag.D${da} mm`; break; }
+    case 'irreg_libre': { const b=g('db'),h=g('dh'),aprov=g('daprov')||100; area=b*h*(aprov/100); desc=`✏️ env.${b}×${h} × ${aprov}% aprovech.`; break; }
+  }
+  return {area, desc};
+}
+
 function supCalcPesoMat(m){
   const t=m.tipo||'plancha', q=m.qty||1;
   let pu=0;
   if(t==='desde_stock') return m.peso||0;
+  if(t==='figura_irreg'){
+    const irQty = m.irQty||1;
+    if(m.irPesadaOn && m.irPesoReal>0) return parseFloat(Number(m.irPesoReal).toFixed(3));
+    if(m.irregSrc==='plan') return parseFloat(((m.irPesoUnit||0)*irQty).toFixed(3));
+    const {area} = calcAreaIrregSup(m);
+    const esp = m.irEsp||0;
+    if(area>0 && esp>0) return parseFloat((area*esp*D_SUP*irQty).toFixed(3));
+    return 0;
+  }
   if(t==='plancha'){ if(m.esp&&m.ancho&&m.largo) pu=m.esp*m.ancho*m.largo*D_SUP; }
   else if(t==='angulo'){ if(m.a1&&m.esp&&m.largo) pu=(m.a1+(m.a2||m.a1)-m.esp)*m.esp*D_SUP*1000; }
   else if(['ipe','upn','heb'].includes(t)){
@@ -2588,6 +2628,56 @@ function supMatHTML(m,i){
       <div class="fg"><label>Descripción</label><input type="text" id="sm-desc-${i}" value="${m.desc||''}" placeholder="Ej: Platina 80×8 mm"></div>
       <div class="fg fix"><label>Peso total (kg)</label><input type="number" id="sm-pm-${i}" value="${m.pesoManual||''}" placeholder="0.0" oninput="supUpdMat(${i})"></div>
     </div>`,
+    figura_irreg: (()=>{
+      const src = m.irregSrc || 'formula';
+      const forma = m.forma || '';
+      const camposForma = FORMAS_IRREG_SUP[forma] || [];
+      return `<div style="margin-top:.375rem;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:10px;padding:.625rem">
+        <div style="font-size:11px;font-weight:700;color:#5b21b6;margin-bottom:.5rem">Fuente del peso</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:.5rem">
+          <button type="button" onclick="supIrregSetSrc(${i},'plan')"
+            style="padding:.5rem;border-radius:8px;border:2px solid ${src==='plan'?'#7c3aed':'#d1d5db'};background:${src==='plan'?'#ede9fe':'#fff'};font-size:12px;font-weight:700;color:${src==='plan'?'#5b21b6':'#6b7280'};cursor:pointer">📐 Dato del plan</button>
+          <button type="button" onclick="supIrregSetSrc(${i},'formula')"
+            style="padding:.5rem;border-radius:8px;border:2px solid ${src==='formula'?'#7c3aed':'#d1d5db'};background:${src==='formula'?'#ede9fe':'#fff'};font-size:12px;font-weight:700;color:${src==='formula'?'#5b21b6':'#6b7280'};cursor:pointer">📏 Calcular por forma</button>
+        </div>
+        ${src==='plan' ? `
+          <div class="frow">
+            <div class="fg fix"><label>Peso unit. según plan (kg/pieza)</label><input type="number" id="sm-irpu-${i}" value="${m.irPesoUnit||''}" placeholder="4.5" oninput="supUpdMat(${i})"></div>
+            <div class="fg fix" style="min-width:60px"><label>Cant.</label><input type="number" id="sm-irqty-${i}" value="${m.irQty||1}" min="1" oninput="supUpdMat(${i})"></div>
+          </div>` : `
+          <div style="margin-bottom:.5rem">
+            <label style="font-size:11px;color:#6b7280">Tipo de figura</label>
+            <select id="sm-irforma-${i}" onchange="supIrregChgForma(${i})" style="width:100%;padding:7px;border:1.5px solid #ddd6fe;border-radius:8px;font-size:13px">
+              <option value="">— Selecciona la forma —</option>
+              <option value="triangulo" ${forma==='triangulo'?'selected':''}>🔺 Triángulo / Cuña</option>
+              <option value="trapecio" ${forma==='trapecio'?'selected':''}>⬟ Trapecio / Rigidizador diagonal</option>
+              <option value="rombo" ${forma==='rombo'?'selected':''}>◆ Rombo / Paralelogramo</option>
+              <option value="circulo" ${forma==='circulo'?'selected':''}>⬤ Círculo / Disco</option>
+              <option value="arco" ${forma==='arco'?'selected':''}>🌙 Sector circular / Arco</option>
+              <option value="forma_l" ${forma==='forma_l'?'selected':''}>⌐ Forma en L</option>
+              <option value="forma_t" ${forma==='forma_t'?'selected':''}>⊤ Forma en T</option>
+              <option value="rect_agujeros" ${forma==='rect_agujeros'?'selected':''}>▣ Rectángulo con agujeros</option>
+              <option value="irreg_libre" ${forma==='irreg_libre'?'selected':''}>✏️ Área libre (rectángulo envolvente)</option>
+            </select>
+          </div>
+          <div class="frow">
+            ${camposForma.map(f=>`<div class="fg fix"><label>${f.lbl}</label><input type="number" id="sm-ir${f.k}-${i}" value="${m[f.k]||''}" placeholder="${f.ph}" oninput="supUpdMat(${i})"></div>`).join('')}
+          </div>
+          <div class="frow">
+            <div class="fg fix"><label>Espesor (mm)</label><input type="number" id="sm-iresp-${i}" value="${m.irEsp||''}" placeholder="12" oninput="supUpdMat(${i})"></div>
+            <div class="fg fix" style="min-width:60px"><label>Cant.</label><input type="number" id="sm-irqty-${i}" value="${m.irQty||1}" min="1" oninput="supUpdMat(${i})"></div>
+          </div>`}
+        <div style="margin-top:.5rem">
+          <label style="font-size:11px;color:#6b7280;display:flex;align-items:center;gap:6px;cursor:pointer">
+            <input type="checkbox" id="sm-irpesada-${i}" ${m.irPesadaOn?'checked':''} onchange="supUpdMat(${i});supRenderMateriales()">
+            Corregir con peso real de balanza
+          </label>
+          ${m.irPesadaOn ? `<input type="number" id="sm-irpesoreal-${i}" value="${m.irPesoReal||''}"
+            placeholder="Peso real en balanza (kg total)"
+            style="width:100%;margin-top:.375rem;padding:7px;border:1.5px solid #f59e0b;border-radius:8px;font-size:14px;font-weight:700" oninput="supUpdMat(${i})">` : ''}
+        </div>
+      </div>`;
+    })(),
     desde_stock: `<div style="margin-top:.375rem">
       <label style="font-size:11px;color:#065f46;font-weight:700">Selecciona sobrante del stock</label>
       <select id="sm-stock-${i}" style="width:100%;padding:8px;border:1.5px solid #86efac;border-radius:8px;font-size:13px;margin-bottom:6px" onchange="supSelStock(${i})">
@@ -2604,7 +2694,7 @@ function supMatHTML(m,i){
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <span style="font-size:12px;font-weight:700;color:#1e40af">📋 Material ${i+1}</span>
         <select id="sm-tipo-${i}" style="font-size:12px;border:1px solid #bfdbfe;border-radius:6px;padding:2px 6px" onchange="supChgMatTipo(${i})">
-          ${Object.entries({plancha:'Plancha',desde_stock:'⟳ Desde stock',angulo:'Ángulo L',ipe:'Viga I/HEB/HI',upn:'Canal U',tubo_rect:'Tubo rect.',tubo_cuad:'Tubo cuad.',tubo_circ:'Tubo circ.',barra_red:'Barra red.',barra_cuad:'Barra cuad.',correa_g:'Correa G/Z',manual:'Peso manual'}).map(([v,l])=>`<option value="${v}" ${m.tipo===v?'selected':''}>${l}</option>`).join('')}
+          ${Object.entries({plancha:'Plancha',desde_stock:'⟳ Desde stock',angulo:'Ángulo L',ipe:'Viga I/HEB/HI',upn:'Canal U',tubo_rect:'Tubo rect.',tubo_cuad:'Tubo cuad.',tubo_circ:'Tubo circ.',barra_red:'Barra red.',barra_cuad:'Barra cuad.',correa_g:'Correa G/Z',manual:'Peso manual',figura_irreg:'✏️ Figura irregular'}).map(([v,l])=>`<option value="${v}" ${m.tipo===v?'selected':''}>${l}</option>`).join('')}
         </select>
         <input type="text" id="sm-colada-${i}" value="${m.colada||''}" placeholder="N° Colada" style="font-size:11px;border:1px solid #d1d5db;border-radius:6px;padding:2px 8px;width:120px" oninput="supUpdMat(${i})">
         <input type="text" id="sm-grado-${i}" value="${m.grado||'A588-50'}" placeholder="Grado acero" style="font-size:11px;border:1px solid #d1d5db;border-radius:6px;padding:2px 8px;width:90px" oninput="supUpdMat(${i})">
@@ -2719,6 +2809,15 @@ function supSelStock(i){
   supRenderMateriales();
 }
 
+function supIrregSetSrc(i, src){
+  supMateriales[i].irregSrc = src;
+  supRenderMateriales();
+}
+function supIrregChgForma(i){
+  const forma = document.getElementById(`sm-irforma-${i}`)?.value || '';
+  supMateriales[i].forma = forma;
+  supRenderMateriales();
+}
 function supAddMaterial(){
   supMateriales.push({tipo:'plancha',qty:1,grado:'A588-50'});
   supRenderMateriales();
@@ -2751,6 +2850,15 @@ function supUpdMat(i){
   }
   m.pesoManual=g(`sm-pm-${i}`);
   m.desc=s(`sm-desc-${i}`);
+  if(m.tipo==='figura_irreg'){
+    m.irregSrc = m.irregSrc || 'formula';
+    m.irPesoUnit = g(`sm-irpu-${i}`);
+    m.irQty = g(`sm-irqty-${i}`)||1;
+    m.irEsp = g(`sm-iresp-${i}`);
+    m.irPesadaOn = document.getElementById(`sm-irpesada-${i}`)?.checked || false;
+    m.irPesoReal = g(`sm-irpesoreal-${i}`);
+    (FORMAS_IRREG_SUP[m.forma]||[]).forEach(f=>{ m[f.k] = g(`sm-ir${f.k}-${i}`); });
+  }
   const peso=supCalcPesoMat(m);
   m.peso=peso;
   const lbl=document.getElementById(`sm-peso-lbl-${i}`);
