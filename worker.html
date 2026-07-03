@@ -494,8 +494,6 @@ document.addEventListener('DOMContentLoaded',()=>{
   const d=new Date();
   document.getElementById('top-date').textContent=d.toLocaleDateString('es-EC',{day:'numeric',month:'short'});
   document.getElementById('home-date').textContent=todayStr();
-  // Init plancha rows
-  initPlanchasWk();
   // Cargar el plan actualizado del servidor en segundo plano (no bloquea el arranque)
   cargarPlanDesdeServidor();
   // Show workers from cache immediately — never blank screen
@@ -1300,8 +1298,10 @@ function calcIrreg(){
 }
 
 function initPlanchasWk(){
+  const cont = document.getElementById('wk-planchas-list');
+  if(!cont) return; // pantalla legada ya no existe en el DOM, no hacer nada
   planchasData = [];
-  document.getElementById('wk-planchas-list').innerHTML = '';
+  cont.innerHTML = '';
   addPlanchaRow();
 }
 
