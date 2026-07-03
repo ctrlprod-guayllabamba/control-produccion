@@ -1970,7 +1970,7 @@ function wkMatHTML(m,i){
 function wkStockDisponible(){
   // Lee sobrantes del cache del servidor
   const recs = _cache.concat(
-    (()=>{try{return JSON.parse(localStorage.getItem('prod_server_cortes')||'[]');}catch(e){return[];}})()
+    (()=>{try{return JSON.parse(localStorage.getItem('prod_server_cortes_'+PROYECTO_ACTUAL)||'[]');}catch(e){return[];}})()
   );
   const items=[];
   const seen=new Set();
@@ -3550,9 +3550,9 @@ async function enviarAlertaSobrepaso(qtyIntentada, yaHecho, plan, tipo){
     };
     if(GAS.configured()) await GAS.post('addAlerta', alerta).catch(()=>{});
     // Guardar local también
-    const alertasLocal = JSON.parse(localStorage.getItem('alertas_sobrepaso')||'[]');
+    const alertasLocal = JSON.parse(localStorage.getItem('alertas_sobrepaso_'+PROYECTO_ACTUAL)||'[]');
     alertasLocal.push(alerta);
-    localStorage.setItem('alertas_sobrepaso', JSON.stringify(alertasLocal));
+    localStorage.setItem('alertas_sobrepaso_'+PROYECTO_ACTUAL, JSON.stringify(alertasLocal));
   } catch(e){}
 }
 
