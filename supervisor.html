@@ -440,6 +440,20 @@ global.Chart = class {
 </head>
 <body>
 
+<div id="login-gate" style="position:fixed;inset:0;background:linear-gradient(135deg,#151b26 0%,#1c2534 100%);z-index:99999;display:flex;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:14px;padding:2.5rem 2rem;width:340px;max-width:90vw;box-shadow:0 20px 60px rgba(0,0,0,.4);">
+    <div style="text-align:center;margin-bottom:1.5rem;">
+      <div style="font-size:14px;font-weight:800;letter-spacing:.14em;color:#151b26;text-transform:uppercase;">⚙ TRACK <span style="color:#ff5a1f;">METAL</span> V-01</div>
+      <div style="font-size:12px;color:#6c757d;margin-top:.5rem;">Ingresa tu contraseña para continuar</div>
+    </div>
+    <input type="password" id="login-pass" placeholder="Contraseña" autocomplete="current-password"
+      style="width:100%;padding:11px;border:1.5px solid #d1d5db;border-radius:8px;font-size:15px;margin-bottom:.75rem;box-sizing:border-box;"
+      onkeydown="if(event.key==='Enter')intentarLogin()">
+    <div id="login-error" style="display:none;color:#991b1b;font-size:12px;margin-bottom:.75rem;text-align:center;"></div>
+    <button id="login-btn" onclick="intentarLogin()" style="width:100%;padding:11px;background:#ff5a1f;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;">Entrar</button>
+  </div>
+</div>
+
   <div id="global-error-banner" style="display:none;position:fixed;top:50px;left:0;right:0;background:#fee2e2;color:#991b1b;font-size:12px;padding:8px 16px;z-index:99999;font-family:monospace;max-height:200px;overflow-y:auto"></div>
 <div class="topbar">
   <div class="topbar-logo">⚙ TRACK <b>METAL</b> V-01</div>
@@ -460,6 +474,7 @@ global.Chart = class {
   <button class="tab-btn" id="tab-fases" onclick="goTab('fases',this)">Fases Kanban</button>
   <button class="tab-btn" id="tab-stock" onclick="goTab('stock',this)">📦 Stock</button>
   <button class="tab-btn" id="tab-operarios" onclick="goTab('operarios',this)">Operarios</button>
+  <button class="tab-btn" id="tab-usuarios" onclick="goTab('usuarios',this)" style="display:none">🔑 Usuarios</button>
   <button class="tab-btn" id="tab-informes" onclick="goTab('informes',this)">Informes</button>
   <button class="tab-btn" id="tab-links" onclick="goTab('links',this)">🔗 Links Operarios</button>
   <button class="tab-btn" id="tab-alertas" onclick="goTab('alertas',this)">🚨 Alertas <span id="badge-alertas" style="background:#dc2626;color:#fff;border-radius:10px;padding:1px 6px;font-size:10px;display:none;margin-left:2px">0</span></button>
@@ -1194,6 +1209,42 @@ global.Chart = class {
 </div>
 
 <!-- ═══════════════════════════════════════════════════
+     USUARIOS (gestión de acceso: admin / visor)
+════════════════════════════════════════════════════ -->
+<div id="panel-usuarios" class="panel">
+<div class="container">
+  <div class="g2">
+    <div class="card">
+      <div class="card-hdr">🔑 Registrar usuario</div>
+      <div class="field"><label>Nombre completo</label><input type="text" id="us-nombre" placeholder="Ej: Ana Torres"></div>
+      <div class="field"><label>Cédula (será su contraseña inicial)</label><input type="text" id="us-cedula" placeholder="Ej: 1234567890"></div>
+      <div class="field"><label>Función</label>
+        <select id="us-rol">
+          <option value="viewer">👁 Visor — solo puede ver, no puede modificar nada</option>
+          <option value="admin">👤 Administrador — control total del sistema</option>
+        </select>
+      </div>
+      <div id="us-error" style="display:none;color:#991b1b;font-size:12px;margin:.5rem 0;"></div>
+      <button class="btn btn-p" onclick="crearUsuario()" style="margin-top:.5rem;width:100%">+ Registrar usuario</button>
+      <div style="font-size:11px;color:var(--gm);margin-top:.75rem;">
+        La contraseña inicial es la cédula de la persona. Puedes restablecerla a la cédula original en cualquier momento con el botón "Reiniciar clave", o desactivar su acceso sin borrar el registro.
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-hdr" style="display:flex;justify-content:space-between;align-items:center;">
+        <span>Usuarios registrados</span>
+        <button class="btn btn-g btn-sm" onclick="cargarUsuarios()">🔄 Actualizar</button>
+      </div>
+      <div class="tw"><table>
+        <thead><tr><th>Nombre</th><th>Cédula</th><th>Función</th><th>Estado</th><th>Último acceso</th><th class="c">Acc.</th></tr></thead>
+        <tbody id="us-tbody"><tr><td colspan="6" style="text-align:center;color:var(--gm);padding:1rem;">Cargando...</td></tr></tbody>
+      </table></div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════
      INFORMES
 ════════════════════════════════════════════════════ -->
 <div id="panel-informes" class="panel">
@@ -1375,12 +1426,37 @@ function LSK(key){ return `${key}_${PROYECTO_ACTUAL}`; }
 const PROYECTO_SCOPED_GET  = ['getOperarios','getRegistros','getCorrecciones','getAlertas','getPlanConjuntos'];
 const PROYECTO_SCOPED_POST = ['addRegistro','addOperario','addCorreccion','addAlerta','addPlanConjuntos','clearRegistros'];
 
+// ── Acceso: admin (control total) vs viewer (solo lectura) ──────────
+// addRegistro/addCorreccion/addAlerta/bulkRegistros NO están protegidas:
+// esas las usan los operarios desde worker.html y deben seguir
+// funcionando sin contraseña de administrador.
+const ACCIONES_SOLO_ADMIN = new Set([
+  'addOperario','bulkOperarios','aprobarCorreccion','rechazarCorreccion',
+  'clearRegistros','addProyecto','archivarProyecto','addPlanConjuntos'
+]);
+let ROL_ACTUAL  = (()=>{ try{ return localStorage.getItem('sup_rol') || ''; }catch(e){ return ''; } })();
+let AUTH_TOKEN  = (()=>{ try{ return localStorage.getItem('sup_auth_token') || ''; }catch(e){ return ''; } })();
+let NOMBRE_USUARIO = (()=>{ try{ return localStorage.getItem('sup_nombre') || ''; }catch(e){ return ''; } })();
+function guardarSesion(rol, token, nombre){
+  ROL_ACTUAL = rol; AUTH_TOKEN = token; NOMBRE_USUARIO = nombre || (rol==='admin'?'Administrador':'Visor');
+  try{ localStorage.setItem('sup_rol', rol); localStorage.setItem('sup_auth_token', token); localStorage.setItem('sup_nombre', NOMBRE_USUARIO); }catch(e){}
+}
+function cerrarSesion(){
+  ROL_ACTUAL=''; AUTH_TOKEN=''; NOMBRE_USUARIO='';
+  try{ localStorage.removeItem('sup_rol'); localStorage.removeItem('sup_auth_token'); localStorage.removeItem('sup_nombre'); }catch(e){}
+  location.reload();
+}
+
 const GAS = {
   configured:()=> GAS_URL && GAS_URL!=='PEGA_AQUI_TU_URL_DE_GOOGLE_APPS_SCRIPT',
 
   get: async(action, params={})=>{
     if(PROYECTO_SCOPED_GET.includes(action) && params.proyectoId===undefined){
       params = {...params, proyectoId: PROYECTO_ACTUAL};
+    }
+    if(ACCIONES_SOLO_ADMIN.has(action)){
+      if(ROL_ACTUAL!=='admin') throw new Error('Esta acción requiere acceso de administrador.');
+      if(params.authToken===undefined) params = {...params, authToken: AUTH_TOKEN};
     }
     const q=new URLSearchParams({action,...params}).toString();
     // Intento 1: fetch con redirect y timeout
@@ -1411,6 +1487,14 @@ const GAS = {
   },
 
   post: async(action,data)=>{
+    if(ACCIONES_SOLO_ADMIN.has(action)){
+      if(ROL_ACTUAL!=='admin'){
+        toast('🔒 Esta acción requiere acceso de administrador');
+        return {ok:false, error:'No autorizado'};
+      }
+      data = data || {};
+      if(data.authToken===undefined) data.authToken = AUTH_TOKEN;
+    }
     if(PROYECTO_SCOPED_POST.includes(action) && data && typeof data==='object' && !Array.isArray(data)){
       if(data.proyecto_id===undefined) data.proyecto_id = PROYECTO_ACTUAL;
       if(data.proyectoId===undefined)  data.proyectoId  = PROYECTO_ACTUAL;
@@ -1836,7 +1920,7 @@ async function cambiarProyecto(nuevoId){
       corte:()=>{initCorteSelects();renderCorteHist();},
       produccion:()=>{initProdSelects();renderProd();},
       fases:renderFases,
-      stock:renderStock,operarios:renderOps,
+      stock:renderStock,operarios:renderOps,usuarios:cargarUsuarios,
       informes:()=>{setRptDate();renderInforme();},
       links:renderLinks,
       alertas:()=>loadAlertas()};
@@ -2278,7 +2362,7 @@ function goTab(id, btn) {
     corte:()=>{initCorteSelects();renderCorteHist();},
     produccion:()=>{initProdSelects();renderProd();},
     fases:renderFases,
-    stock:renderStock,operarios:renderOps,
+    stock:renderStock,operarios:renderOps,usuarios:cargarUsuarios,
     informes:()=>{setRptDate();renderInforme();},
     links:renderLinks,
     alertas:()=>loadAlertas()};
@@ -5712,6 +5796,78 @@ async function limpiarRegistros(){
     alert('Para eliminar manualmente: abre Google Sheets → hoja Registros → selecciona filas 2 en adelante → Eliminar filas');
   }
 }
+// ════════════════════════════════════════════════════════════
+// USUARIOS (gestión de acceso: admin / visor)
+// ════════════════════════════════════════════════════════════
+async function cargarUsuarios(){
+  const tbody = document.getElementById('us-tbody');
+  if(!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--gm);padding:1rem;">Cargando...</td></tr>';
+  try{
+    const usuarios = await GAS.get('getUsuarios');
+    if(!Array.isArray(usuarios) || usuarios.length===0){
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--gm);padding:1rem;">Sin usuarios registrados todavía.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = usuarios.map(u=>`
+      <tr style="${u.estado==='inactivo'?'opacity:.5':''}">
+        <td>${u.nombre}</td>
+        <td>${u.cedula}</td>
+        <td>${u.rol==='admin'?'👤 Admin':'👁 Visor'}</td>
+        <td>${u.estado==='inactivo'?'⛔ Inactivo':'✅ Activo'}</td>
+        <td style="font-size:11px;color:var(--gm)">${u.ultimo_acceso ? new Date(u.ultimo_acceso).toLocaleString('es-EC') : 'Nunca'}</td>
+        <td class="c">
+          <button class="btn btn-g btn-sm" onclick="reiniciarClaveUsuario('${u.id}','${u.nombre}')" title="Volver la clave a la cédula original">🔁</button>
+          ${u.estado!=='inactivo' ? `<button class="btn btn-g btn-sm" onclick="desactivarUsuarioUI('${u.id}','${u.nombre}')" title="Desactivar acceso" style="color:#991b1b">⛔</button>` : ''}
+        </td>
+      </tr>`).join('');
+  }catch(e){
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:#991b1b;padding:1rem;">Error: ${e.message}</td></tr>`;
+  }
+}
+
+async function crearUsuario(){
+  const nombre = document.getElementById('us-nombre').value.trim();
+  const cedula = document.getElementById('us-cedula').value.trim();
+  const rol = document.getElementById('us-rol').value;
+  const err = document.getElementById('us-error');
+  err.style.display='none';
+  if(!nombre || !cedula){
+    err.textContent = '⚠ Nombre y cédula son obligatorios.';
+    err.style.display='';
+    return;
+  }
+  try{
+    const resp = await GAS.post('addUsuario', {nombre, cedula, rol});
+    if(resp && resp.ok){
+      document.getElementById('us-nombre').value='';
+      document.getElementById('us-cedula').value='';
+      cargarUsuarios();
+      alert(`✅ Usuario "${nombre}" registrado. Su contraseña inicial es su cédula.`);
+    } else {
+      err.textContent = '❌ ' + ((resp&&resp.msg)||'No se pudo registrar el usuario.');
+      err.style.display='';
+    }
+  }catch(e){
+    err.textContent = '❌ Error: '+e.message;
+    err.style.display='';
+  }
+}
+
+async function reiniciarClaveUsuario(id, nombre){
+  if(!confirm(`¿Volver la contraseña de "${nombre}" a su cédula original?`)) return;
+  const resp = await GAS.post('resetPasswordUsuario', {id});
+  if(resp && resp.ok){ alert('✅ Contraseña reiniciada a la cédula original.'); }
+  else{ alert('❌ No se pudo reiniciar la contraseña.'); }
+}
+
+async function desactivarUsuarioUI(id, nombre){
+  if(!confirm(`¿Desactivar el acceso de "${nombre}"? Ya no podrá entrar al sistema hasta que lo reactives.`)) return;
+  const resp = await GAS.post('desactivarUsuario', {id});
+  if(resp && resp.ok){ cargarUsuarios(); }
+  else{ alert('❌ No se pudo desactivar el usuario.'); }
+}
+
 function renderOps(){
   const q   = (document.getElementById('op-q')?.value||'').toLowerCase();
   const frol= document.getElementById('op-fil-rol')?.value||'';
@@ -5725,7 +5881,9 @@ function renderOps(){
     <td style="font-size:11px;">${o.emp||'—'}</td>
     <td><span class="badge ${o.est==='activo'?'b-done':'b-pend'}">${o.est||'activo'}</span></td>
     <td class="c no-print">
-      <button class="btn btn-d btn-sm" onclick="ST.ops=ST.ops.filter(x=>x.id!==${o.id});saveAll();renderOps();toast('Operario eliminado')">✕</button>
+      ${o.est==='inactivo'
+        ? `<button class="btn btn-g btn-sm" onclick="reactivarOp(${o.id},'${o.nom} ${o.ape}')" title="Reactivar acceso" style="color:#166534">✅ Reactivar</button>`
+        : `<button class="btn btn-d btn-sm" onclick="desactivarOp(${o.id},'${o.nom} ${o.ape}')" title="Quitar acceso (ej. si ya no trabaja aquí)">⛔ Quitar acceso</button>`}
     </td>
   </tr>`;
   const html = list.length ? list.map(row).join('') : '<tr><td colspan="9" style="text-align:center;padding:1.5rem;color:var(--gm)">Sin operarios registrados</td></tr>';
@@ -5739,6 +5897,33 @@ function renderOps(){
   if(cnt1) cnt1.textContent = cnt;
   if(cnt2) cnt2.textContent = cnt;
 }
+async function desactivarOp(id, nombre){
+  if(!confirm(`¿Quitarle el acceso a "${nombre}"?\n\nYa no va a poder ingresar registros nuevos desde su celular — ni con el PIN que ya tenía guardado. Su historial de trabajo se mantiene intacto, solo se le corta el acceso hacia adelante.`)) return;
+  try{
+    const resp = await GAS.post('desactivarOperario', {id});
+    if(resp && resp.ok){
+      const op = ST.ops.find(o=>o.id===id); if(op) op.est='inactivo';
+      saveAll(); renderOps();
+      toast(`🔒 Acceso de ${nombre} desactivado`);
+    } else {
+      alert('❌ No se pudo desactivar: '+((resp&&resp.msg)||'error desconocido'));
+    }
+  }catch(e){ alert('❌ Error: '+e.message); }
+}
+
+async function reactivarOp(id, nombre){
+  try{
+    const resp = await GAS.post('reactivarOperario', {id});
+    if(resp && resp.ok){
+      const op = ST.ops.find(o=>o.id===id); if(op) op.est='activo';
+      saveAll(); renderOps();
+      toast(`✅ Acceso de ${nombre} reactivado`);
+    } else {
+      alert('❌ No se pudo reactivar: '+((resp&&resp.msg)||'error desconocido'));
+    }
+  }catch(e){ alert('❌ Error: '+e.message); }
+}
+
 function addOp(){
   const nom=document.getElementById('op-nom').value.trim();
   const ape=document.getElementById('op-ape').value.trim();
@@ -6695,7 +6880,57 @@ window.addEventListener('unhandledrejection', e=>{
   const div = document.getElementById('global-error-banner');
   if(div){ div.style.display=''; div.innerHTML += `<div>❌ Promise: ${e.reason}</div>`; }
 });
-document.addEventListener('DOMContentLoaded', async ()=>{
+async function intentarLogin(){
+  const pass = document.getElementById('login-pass').value;
+  const btn = document.getElementById('login-btn');
+  const err = document.getElementById('login-error');
+  err.style.display='none';
+  btn.disabled=true; btn.textContent='Verificando...';
+  try{
+    const resp = await GAS.post('login', {password: pass});
+    if(resp && resp.ok){
+      guardarSesion(resp.role, pass, resp.nombre);
+      document.getElementById('login-gate').style.display='none';
+      iniciarApp();
+    } else {
+      err.textContent = (resp && resp.msg) || 'Contraseña incorrecta';
+      err.style.display='';
+      btn.disabled=false; btn.textContent='Entrar';
+    }
+  }catch(e){
+    err.textContent = 'Error de conexión: '+e.message;
+    err.style.display='';
+    btn.disabled=false; btn.textContent='Entrar';
+  }
+}
+
+async function iniciarApp(){
+  // Insignia de rol + nombre + botón de salir en el topbar
+  const topbar = document.querySelector('.topbar');
+  if(topbar && !document.getElementById('rol-badge')){
+    const badge = document.createElement('div');
+    badge.id = 'rol-badge';
+    badge.style.cssText = 'margin-left:auto;display:flex;align-items:center;gap:8px;';
+    badge.innerHTML = `
+      <span style="font-size:11px;color:rgba(255,255,255,.85);">${NOMBRE_USUARIO}</span>
+      <span style="font-size:10px;font-weight:700;padding:4px 9px;border-radius:12px;background:${ROL_ACTUAL==='admin'?'#166534':'#92400e'};color:#fff;letter-spacing:.04em;">
+        ${ROL_ACTUAL==='admin'?'👤 ADMIN':'👁 SOLO LECTURA'}
+      </span>
+      <button onclick="cerrarSesion()" style="background:none;border:1px solid rgba(255,255,255,.3);color:#fff;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;">Salir</button>`;
+    topbar.appendChild(badge);
+  }
+  // Si es solo-lectura, ocultar los botones de acción del topbar (crear
+  // proyecto / cargar plan) — el backend igual los bloquearía, pero así
+  // no aparecen botones que no van a funcionar. La pestaña "Usuarios"
+  // también es exclusiva de administrador.
+  const tabUsuarios = document.getElementById('tab-usuarios');
+  if(ROL_ACTUAL === 'admin'){
+    if(tabUsuarios) tabUsuarios.style.display = '';
+  } else {
+    document.querySelectorAll('.topbar button[onclick*="abrirModalNuevoProyecto"], .topbar button[onclick*="abrirModalCargaPlan"]')
+      .forEach(b=>b.style.display='none');
+  }
+
   await cargarPlanDesdeServidor();
   await loadFromServer();
   renderDashboard();
@@ -6740,6 +6975,22 @@ document.addEventListener('DOMContentLoaded', async ()=>{
     } catch(e) {}
     _refreshBusy = false;
   }, 30000);
+}
+
+document.addEventListener('DOMContentLoaded', async ()=>{
+  if(!GAS.configured()){
+    // Sin backend configurado: no tiene sentido pedir contraseña (no hay cómo verificarla)
+    document.getElementById('login-gate').style.display='none';
+    iniciarApp();
+    return;
+  }
+  if(ROL_ACTUAL && AUTH_TOKEN){
+    document.getElementById('login-gate').style.display='none';
+    iniciarApp();
+  } else {
+    document.getElementById('login-gate').style.display='flex';
+    document.getElementById('login-pass')?.focus();
+  }
 });
 </script>
 </body>

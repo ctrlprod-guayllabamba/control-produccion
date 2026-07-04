@@ -140,6 +140,21 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);min-height
   <div id="worker-list"></div>
 </div>
 
+<!-- PIN — confirmación rápida de identidad, una vez al día por operario -->
+<div class="sc" id="sc-pin">
+  <button class="btn-back" onclick="go('sc-login')">← Cambiar de nombre</button>
+  <div style="text-align:center;margin-top:2rem">
+    <div style="font-size:44px" id="pin-icon">👷</div>
+    <div style="font-size:17px;font-weight:700;color:var(--b);margin:.5rem 0 .125rem" id="pin-nombre">—</div>
+    <div style="font-size:12px;color:var(--gr);margin-bottom:1.25rem">Ingresa tu PIN de 4 dígitos para empezar tu turno</div>
+    <input type="tel" inputmode="numeric" maxlength="4" id="pin-input" placeholder="••••" autocomplete="off"
+      style="width:160px;text-align:center;font-size:28px;letter-spacing:.4em;padding:12px 0;border:2px solid var(--bd);border-radius:12px;margin:0 auto;display:block"
+      onkeydown="if(event.key==='Enter')confirmarPin()">
+    <div id="pin-error" style="display:none;color:#dc2626;font-size:12px;margin-top:.75rem"></div>
+    <button class="btn-main" id="pin-btn" onclick="confirmarPin()" style="margin-top:1.25rem;max-width:200px">Confirmar</button>
+  </div>
+</div>
+
 <!-- HOME -->
 <div class="sc" id="sc-home">
   <div class="home-card">
@@ -826,9 +841,55 @@ function renderWorkers(ws){
     : '<div class="loading">Sin operarios. El supervisor debe agregarlos.</div>';
 }
 
+function _pinKeyHoy(opId){ return `pin_ok_${opId}_${new Date().toISOString().slice(0,10)}`; }
+
 function selectWorker(w){
   if(typeof w==='string')w=JSON.parse(w);
   W=w;
+  // Si ya confirmó su PIN hoy, entrar directo — no pedirlo de nuevo hasta
+  // el día siguiente. Así no estorba en cada registro, solo al empezar
+  // el turno (o la primera vez que usa este celular en el día).
+  let yaVerificado = false;
+  try{ yaVerificado = localStorage.getItem(_pinKeyHoy(w.id)) === '1'; }catch(e){}
+  if(yaVerificado){ _entrarAHome(w); return; }
+  document.getElementById('pin-icon').textContent = w.icon||'👷';
+  document.getElementById('pin-nombre').textContent = `${w.nom} ${w.ape}`;
+  document.getElementById('pin-input').value = '';
+  document.getElementById('pin-error').style.display = 'none';
+  go('sc-pin');
+  setTimeout(()=>document.getElementById('pin-input')?.focus(), 200);
+}
+
+async function confirmarPin(){
+  const pin = document.getElementById('pin-input').value.trim();
+  const err = document.getElementById('pin-error');
+  const btn = document.getElementById('pin-btn');
+  err.style.display = 'none';
+  if(pin.length !== 4){
+    err.textContent = 'El PIN debe tener 4 dígitos.';
+    err.style.display = '';
+    return;
+  }
+  btn.disabled = true; btn.textContent = 'Verificando...';
+  try{
+    const resp = await GAS.post('verificarPin', {opId: W.id, pin, proyectoId: PROYECTO_ACTUAL});
+    if(resp && resp.ok){
+      try{ localStorage.setItem(_pinKeyHoy(W.id), '1'); }catch(e){}
+      _entrarAHome(W);
+    } else {
+      err.textContent = (resp && resp.msg) || 'PIN incorrecto.';
+      err.style.display = '';
+      document.getElementById('pin-input').value = '';
+      document.getElementById('pin-input').focus();
+    }
+  }catch(e){
+    err.textContent = 'Sin conexión — intenta de nuevo en un momento.';
+    err.style.display = '';
+  }
+  btn.disabled = false; btn.textContent = 'Confirmar';
+}
+
+function _entrarAHome(w){
   document.getElementById('top-name').textContent=`${w.nom} ${w.ape}`;
   document.getElementById('top-role').textContent=`${w.rol} · ${w.fase}`;
   document.getElementById('top-icon').textContent=w.icon||'👷';
@@ -867,6 +928,13 @@ function saveRec(rec) {
       .then(r => {
         if (r && r.ok) {
           setSync(true, 'online');
+        } else if (r && r.error && /desactivado/i.test(r.error)) {
+          // Rechazo real (no un problema de red): el acceso de este
+          // operario fue desactivado. No tiene sentido reintentar —
+          // avisar claramente y volver a la pantalla de selección.
+          alert('🔒 Tu acceso fue desactivado. Contacta a tu supervisor.\n\nEste registro se guardó en tu celular pero no se puede enviar.');
+          W = null;
+          go('sc-login');
         } else {
           // Guardado local OK, pendiente de sync — amarillo
           const pending = LS.g(PENDING_SYNC_KEY(), []);
