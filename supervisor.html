@@ -1432,7 +1432,9 @@ const PROYECTO_SCOPED_POST = ['addRegistro','addOperario','addCorreccion','addAl
 // funcionando sin contraseña de administrador.
 const ACCIONES_SOLO_ADMIN = new Set([
   'addOperario','bulkOperarios','aprobarCorreccion','rechazarCorreccion',
-  'clearRegistros','addProyecto','archivarProyecto','addPlanConjuntos'
+  'clearRegistros','addProyecto','archivarProyecto','addPlanConjuntos',
+  'getUsuarios','addUsuario','desactivarUsuario','resetPasswordUsuario',
+  'desactivarOperario','reactivarOperario'
 ]);
 let ROL_ACTUAL  = (()=>{ try{ return localStorage.getItem('sup_rol') || ''; }catch(e){ return ''; } })();
 let AUTH_TOKEN  = (()=>{ try{ return localStorage.getItem('sup_auth_token') || ''; }catch(e){ return ''; } })();
