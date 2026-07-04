@@ -437,6 +437,7 @@ global.Chart = class {
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 <body>
 
@@ -5819,6 +5820,7 @@ async function cargarUsuarios(){
         <td>${u.estado==='inactivo'?'⛔ Inactivo':'✅ Activo'}</td>
         <td style="font-size:11px;color:var(--gm)">${u.ultimo_acceso ? new Date(u.ultimo_acceso).toLocaleString('es-EC') : 'Nunca'}</td>
         <td class="c">
+          <button class="btn btn-g btn-sm" onclick="compartirAccesoUsuario('${u.nombre}')" title="Compartir acceso (link + QR)">🔗</button>
           <button class="btn btn-g btn-sm" onclick="reiniciarClaveUsuario('${u.id}','${u.nombre}')" title="Volver la clave a la cédula original">🔁</button>
           ${u.estado!=='inactivo' ? `<button class="btn btn-g btn-sm" onclick="desactivarUsuarioUI('${u.id}','${u.nombre}')" title="Desactivar acceso" style="color:#991b1b">⛔</button>` : ''}
         </td>
@@ -5826,6 +5828,53 @@ async function cargarUsuarios(){
   }catch(e){
     tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:#991b1b;padding:1rem;">Error: ${e.message}</td></tr>`;
   }
+}
+
+// El nombre es la única forma que tenemos de identificar la fila desde el
+// botón (no guardamos la cédula sin enmascarar en el listado, por
+// seguridad) — por eso se pide la cédula real aquí, una sola vez, antes
+// de armar el mensaje para compartir.
+function compartirAccesoUsuario(nombre){
+  const url = window.location.origin + window.location.pathname;
+  document.getElementById('modal-ttl').textContent = `🔗 Compartir acceso — ${nombre}`;
+  document.getElementById('modal-body').innerHTML = `
+    <div style="font-size:12px;color:#6c757d;margin-bottom:.75rem;">
+      Este QR solo abre el link — <strong>no incluye ninguna contraseña</strong>. Es seguro reenviarlo por cualquier medio.
+    </div>
+    <div id="qr-share" style="display:flex;justify-content:center;padding:1rem;background:#f8faff;border-radius:10px;margin-bottom:.875rem;"></div>
+    <div style="font-size:11px;color:#6c757d;margin-bottom:.375rem;">Link directo:</div>
+    <div style="display:flex;gap:6px;margin-bottom:1rem;">
+      <input type="text" id="share-url" readonly value="${url}" style="flex:1;padding:8px;border:1.5px solid #d1d5db;border-radius:8px;font-size:12px;background:#f8faff;">
+      <button class="btn btn-g btn-sm" onclick="navigator.clipboard.writeText('${url}');toast('📋 Link copiado')">Copiar</button>
+    </div>
+    <hr style="border:none;border-top:1px solid #e5e7eb;margin:1rem 0;">
+    <div style="font-size:12px;font-weight:700;color:#92400e;margin-bottom:.5rem;">⚠ Opcional — menos seguro, más rápido</div>
+    <div style="font-size:11px;color:#6c757d;margin-bottom:.625rem;">
+      Este mensaje incluye el link Y la contraseña juntos, para pegarlo directo en WhatsApp. Recuerda: quien reciba este mensaje completo puede entrar de inmediato — solo úsalo si confías en el canal por el que lo envías.
+    </div>
+    <label style="font-size:11px;color:#6c757d;">Cédula de ${nombre} (para armar el mensaje):</label>
+    <div style="display:flex;gap:6px;">
+      <input type="text" id="share-cedula" placeholder="Ej: 1234567890" style="flex:1;padding:8px;border:1.5px solid #d1d5db;border-radius:8px;font-size:13px;">
+      <button class="btn btn-p btn-sm" onclick="armarMensajeCompartir('${nombre}','${url}')">Armar mensaje</button>
+    </div>
+    <textarea id="share-mensaje" readonly style="display:none;width:100%;margin-top:.625rem;padding:8px;border:1.5px solid #d1d5db;border-radius:8px;font-size:12px;height:90px;box-sizing:border-box;"></textarea>
+    <button class="btn btn-g btn-sm" id="share-copiar-msg" style="display:none;margin-top:.5rem;width:100%" onclick="navigator.clipboard.writeText(document.getElementById('share-mensaje').value);toast('📋 Mensaje copiado')">📋 Copiar mensaje completo</button>
+  `;
+  document.getElementById('modal-bg').classList.add('open');
+  try{
+    new QRCode(document.getElementById('qr-share'), {text:url, width:180, height:180, colorDark:'#151b26', colorLight:'#ffffff'});
+  }catch(e){
+    document.getElementById('qr-share').innerHTML = '<div style="font-size:12px;color:#6c757d;text-align:center;">No se pudo generar el QR (revisa tu conexión). Usa el link de abajo mientras tanto.</div>';
+  }
+}
+
+function armarMensajeCompartir(nombre, url){
+  const cedula = document.getElementById('share-cedula').value.trim();
+  if(!cedula){ alert('Ingresa la cédula para armar el mensaje.'); return; }
+  const msg = `Hola ${nombre}, aquí tienes acceso a Track Metal V-01:\n${url}\n\nTu contraseña es tu cédula: ${cedula}`;
+  const ta = document.getElementById('share-mensaje');
+  ta.value = msg; ta.style.display = '';
+  document.getElementById('share-copiar-msg').style.display = '';
 }
 
 async function crearUsuario(){
