@@ -1222,7 +1222,8 @@ global.Chart = class {
       <div class="field"><label>Función</label>
         <select id="us-rol">
           <option value="viewer">👁 Visor — solo puede ver, no puede modificar nada</option>
-          <option value="admin">👤 Administrador — control total del sistema</option>
+          <option value="supervisor">🏭 Supervisor de planta — aprueba correcciones (solo hasta 3 días) y gestiona operarios</option>
+          <option value="admin">👤 Administrador — control total del sistema, sin límite de tiempo</option>
         </select>
       </div>
       <div id="us-error" style="display:none;color:#991b1b;font-size:12px;margin:.5rem 0;"></div>
@@ -1427,21 +1428,23 @@ function LSK(key){ return `${key}_${PROYECTO_ACTUAL}`; }
 const PROYECTO_SCOPED_GET  = ['getOperarios','getRegistros','getCorrecciones','getAlertas','getPlanConjuntos'];
 const PROYECTO_SCOPED_POST = ['addRegistro','addOperario','addCorreccion','addAlerta','addPlanConjuntos','clearRegistros'];
 
-// ── Acceso: admin (control total) vs viewer (solo lectura) ──────────
+// ── Acceso: admin (control total) / supervisor (operativo, 3 días) / viewer (solo lectura) ──
 // addRegistro/addCorreccion/addAlerta/bulkRegistros NO están protegidas:
 // esas las usan los operarios desde worker.html y deben seguir
 // funcionando sin contraseña de administrador.
 const ACCIONES_SOLO_ADMIN = new Set([
-  'addOperario','bulkOperarios','aprobarCorreccion','rechazarCorreccion',
   'clearRegistros','addProyecto','archivarProyecto','addPlanConjuntos',
-  'getUsuarios','addUsuario','desactivarUsuario','resetPasswordUsuario',
-  'desactivarOperario','reactivarOperario'
+  'getUsuarios','addUsuario','desactivarUsuario','resetPasswordUsuario'
 ]);
+const ACCIONES_ADMIN_O_SUPERVISOR = new Set([
+  'addOperario','bulkOperarios','desactivarOperario','reactivarOperario'
+]);
+const DIAS_LIMITE_CORRECCION = 3;
 let ROL_ACTUAL  = (()=>{ try{ return localStorage.getItem('sup_rol') || ''; }catch(e){ return ''; } })();
 let AUTH_TOKEN  = (()=>{ try{ return localStorage.getItem('sup_auth_token') || ''; }catch(e){ return ''; } })();
 let NOMBRE_USUARIO = (()=>{ try{ return localStorage.getItem('sup_nombre') || ''; }catch(e){ return ''; } })();
 function guardarSesion(rol, token, nombre){
-  ROL_ACTUAL = rol; AUTH_TOKEN = token; NOMBRE_USUARIO = nombre || (rol==='admin'?'Administrador':'Visor');
+  ROL_ACTUAL = rol; AUTH_TOKEN = token; NOMBRE_USUARIO = nombre || (rol==='admin'?'Administrador':rol==='supervisor'?'Supervisor':'Visor');
   try{ localStorage.setItem('sup_rol', rol); localStorage.setItem('sup_auth_token', token); localStorage.setItem('sup_nombre', NOMBRE_USUARIO); }catch(e){}
 }
 function cerrarSesion(){
@@ -1459,6 +1462,10 @@ const GAS = {
     }
     if(ACCIONES_SOLO_ADMIN.has(action)){
       if(ROL_ACTUAL!=='admin') throw new Error('Esta acción requiere acceso de administrador.');
+      if(params.authToken===undefined) params = {...params, authToken: AUTH_TOKEN};
+    }
+    if(ACCIONES_ADMIN_O_SUPERVISOR.has(action)){
+      if(ROL_ACTUAL!=='admin' && ROL_ACTUAL!=='supervisor') throw new Error('Esta acción requiere acceso de administrador o supervisor.');
       if(params.authToken===undefined) params = {...params, authToken: AUTH_TOKEN};
     }
     const q=new URLSearchParams({action,...params}).toString();
@@ -1497,6 +1504,35 @@ const GAS = {
       }
       data = data || {};
       if(data.authToken===undefined) data.authToken = AUTH_TOKEN;
+    }
+    if(ACCIONES_ADMIN_O_SUPERVISOR.has(action)){
+      if(ROL_ACTUAL!=='admin' && ROL_ACTUAL!=='supervisor'){
+        toast('🔒 Esta acción requiere acceso de administrador o supervisor');
+        return {ok:false, error:'No autorizado'};
+      }
+      data = data || {};
+      if(data.authToken===undefined) data.authToken = AUTH_TOKEN;
+    }
+    if(action==='aprobarCorreccion' || action==='rechazarCorreccion'){
+      if(ROL_ACTUAL!=='admin' && ROL_ACTUAL!=='supervisor'){
+        toast('🔒 Esta acción requiere acceso de administrador o supervisor');
+        return {ok:false, error:'No autorizado'};
+      }
+      data = data || {};
+      if(data.authToken===undefined) data.authToken = AUTH_TOKEN;
+      // Aviso rápido en el cliente (el backend es quien de verdad lo hace
+      // cumplir) — si es supervisor y el registro ya pasó el plazo, ni
+      // intentamos la petición.
+      if(ROL_ACTUAL==='supervisor' && data.recId){
+        const rec = [...ST.cortes, ...ST.prods].find(r=>String(r.id)===String(data.recId));
+        if(rec && rec.serverTs){
+          const dias = (Date.now() - Number(rec.serverTs)) / (1000*60*60*24);
+          if(dias > DIAS_LIMITE_CORRECCION){
+            toast(`🔒 Ya pasaron más de ${DIAS_LIMITE_CORRECCION} días — solo el administrador puede corregir este registro`);
+            return {ok:false, error:'Fuera de plazo'};
+          }
+        }
+      }
     }
     if(PROYECTO_SCOPED_POST.includes(action) && data && typeof data==='object' && !Array.isArray(data)){
       if(data.proyecto_id===undefined) data.proyecto_id = PROYECTO_ACTUAL;
@@ -4695,7 +4731,6 @@ function pCalcResumenDia(){
   })).length;
   const vigasIncompletas = pVigasData.length - vigasCompletas;
 
-  document.getElementById('p-qty').value = pVigasData.length;
   document.getElementById('p-peso').value = pesoTotal.toFixed(2);
 
   resumen.style.display = pVigasData.length>0?'':'none';
@@ -4728,7 +4763,7 @@ function pUpdatePartes(){
 function pUpdateInfo(){
   const cj=document.getElementById('p-cj')?.value;
   const fase=document.getElementById('p-fase')?.value||'Armado';
-  const qty=parseFloat(document.getElementById('p-qty')?.value)||0;
+  const qty=pVigasData.length;
   if(!cj){ document.getElementById('p-cj-info').style.display='none'; return; }
   const c=PLAN.conjuntos.find(x=>x.conjunto===cj);
   if(!c) return;
@@ -4897,7 +4932,7 @@ function addProd(){
   toast(`✓ ${fase}: ${cj} — ${vigasCompletas} vigas completas + ${qty-vigasCompletas} incompletas · ${pesoTotal.toFixed(1)} kg`);
 }
 function clearProd(){
-  ['p-cj','p-fase','p-op','p-qty','p-peso','p-cal','p-obs'].forEach(id=>{
+  ['p-cj','p-fase','p-op','p-peso','p-cal','p-obs'].forEach(id=>{
     const el=document.getElementById(id);
     if(el)el.value=el.tagName==='SELECT'?el.options[0]?.value||'':'';
   });
@@ -5816,7 +5851,7 @@ async function cargarUsuarios(){
       <tr style="${u.estado==='inactivo'?'opacity:.5':''}">
         <td>${u.nombre}</td>
         <td>${u.cedula}</td>
-        <td>${u.rol==='admin'?'👤 Admin':'👁 Visor'}</td>
+        <td>${u.rol==='admin'?'👤 Admin':u.rol==='supervisor'?'🏭 Supervisor':'👁 Visor'}</td>
         <td>${u.estado==='inactivo'?'⛔ Inactivo':'✅ Activo'}</td>
         <td style="font-size:11px;color:var(--gm)">${u.ultimo_acceso ? new Date(u.ultimo_acceso).toLocaleString('es-EC') : 'Nunca'}</td>
         <td class="c">
@@ -6964,8 +6999,8 @@ async function iniciarApp(){
     badge.style.cssText = 'margin-left:auto;display:flex;align-items:center;gap:8px;';
     badge.innerHTML = `
       <span style="font-size:11px;color:rgba(255,255,255,.85);">${NOMBRE_USUARIO}</span>
-      <span style="font-size:10px;font-weight:700;padding:4px 9px;border-radius:12px;background:${ROL_ACTUAL==='admin'?'#166534':'#92400e'};color:#fff;letter-spacing:.04em;">
-        ${ROL_ACTUAL==='admin'?'👤 ADMIN':'👁 SOLO LECTURA'}
+      <span style="font-size:10px;font-weight:700;padding:4px 9px;border-radius:12px;background:${ROL_ACTUAL==='admin'?'#166534':ROL_ACTUAL==='supervisor'?'#1e40af':'#92400e'};color:#fff;letter-spacing:.04em;">
+        ${ROL_ACTUAL==='admin'?'👤 ADMIN':ROL_ACTUAL==='supervisor'?'🏭 SUPERVISOR':'👁 SOLO LECTURA'}
       </span>
       <button onclick="cerrarSesion()" style="background:none;border:1px solid rgba(255,255,255,.3);color:#fff;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;">Salir</button>`;
     topbar.appendChild(badge);
