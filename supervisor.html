@@ -5338,6 +5338,97 @@ function getCronoData(){
 function saveCronoData(){localStorage.setItem(LSK('crono_config'),JSON.stringify(_cronoData));}
 function resetCrono(){_cronoData=JSON.parse(JSON.stringify(CRONO_DEFAULT));saveCronoData();renderCronograma();}
 
+// ════════════════════════════════════════════════════════════
+// EVIDENCIA DE RENDIMIENTOS — para no dejar los kg/día como una
+// cifra sin respaldo. Cada proceso guarda su propia nota de dónde
+// salió el número (fuente, periodo, muestra, fecha de cálculo).
+// ════════════════════════════════════════════════════════════
+function abrirEvidenciaRend(i){
+  const r = _cronoData[i];
+  document.getElementById('modal-ttl').textContent = `📎 Evidencia del rendimiento — ${r.icon} ${r.fase}`;
+  document.getElementById('modal-body').innerHTML = `
+    <div style="font-size:12px;color:#6c757d;margin-bottom:.75rem;">
+      Registra de dónde sale este número: qué archivo/fuente se usó, qué periodo cubre, cuántas semanas o registros de muestra, y cualquier detalle que ayude a alguien más (o a ti mismo en el futuro) a confiar o revisar este valor.
+    </div>
+    <div style="background:#f8faff;border-radius:8px;padding:.625rem;margin-bottom:.75rem;font-size:12px;">
+      <strong>Rendimiento actual:</strong> ${r.rend} kg/día/cuadrilla
+      ${r.evidenciaFecha?`<br><span style="color:#6c757d;font-size:11px">Última evidencia registrada: ${new Date(r.evidenciaFecha).toLocaleDateString('es-EC',{day:'numeric',month:'long',year:'numeric'})}</span>`:''}
+    </div>
+    <textarea id="evidencia-texto" rows="8" placeholder="Ej: Calculado cruzando horas reales de Tareo_Planta.xlsx (mar-jun 2026) con kg reales del cronograma para Guayllabamba+Monay. 550 horas / 135,290 kg = 246 kg/hora. Muestra: 4 meses, 2 proyectos activos."
+      style="width:100%;padding:.625rem;border:1.5px solid #d1d5db;border-radius:8px;font-size:13px;box-sizing:border-box;font-family:inherit;">${r.evidencia||''}</textarea>
+    <div class="act-row" style="margin-top:.75rem">
+      <button class="btn btn-p" onclick="guardarEvidenciaRend(${i})">Guardar evidencia</button>
+    </div>
+  `;
+  document.getElementById('modal-bg').classList.add('open');
+}
+
+function guardarEvidenciaRend(i){
+  const texto = document.getElementById('evidencia-texto').value.trim();
+  _cronoData[i].evidencia = texto;
+  _cronoData[i].evidenciaFecha = texto ? new Date().toISOString() : null;
+  saveCronoData();
+  renderCronograma();
+  closeModal();
+  toast(texto ? '📎 Evidencia guardada' : 'Evidencia borrada');
+}
+
+// ════════════════════════════════════════════════════════════
+// TIPO DE ESTRUCTURA — 3 niveles de rendimiento real verificado,
+// según qué tan pesada/compleja es la estructura del proyecto.
+// ════════════════════════════════════════════════════════════
+const TIPOS_ESTRUCTURA = {
+  pesada: {
+    label: '🌉 Pesada (puentes, vigas grandes)',
+    valores: { 'Corte': 2868, 'Armado': 1080, 'Soldadura': 1182, 'Limpieza Mecánica': 3237, 'Pintura': 3237 },
+    evidencias: {
+      'Corte': 'Solución Vial 4 (puente), 15 abr–5 nov 2024: 969,816 kg / 2,704.8 horas = 358.5 kg/hora → 2,868 kg/día/persona (8h).',
+      'Armado': 'Solución Vial 4 (puente), 15 abr–5 nov 2024: 1,015,091 kg / 7,516.3 horas = 135.1 kg/hora → 1,080 kg/día/persona.',
+      'Soldadura': 'Solución Vial 4 (puente), 15 abr–5 nov 2024: 1,123,650 kg / 7,604.4 horas = 147.8 kg/hora → 1,182 kg/día/persona.',
+      'Limpieza Mecánica': 'Solución Vial 4 (puente), partida combinada "LIMPIEZA ABRASIVA Y PINTURA" del cronograma, 15 abr–5 nov 2024: 1,216,263 kg / 3,005.8 horas (2,741h limpieza + 264h pintura) = 404.6 kg/hora → 3,237 kg/día/persona. Nota: viene mezclado con pintura en el cronograma (no se pudo separar el kg) — mismo valor usado para ambas fases.',
+      'Pintura': 'Misma partida combinada "LIMPIEZA ABRASIVA Y PINTURA" de Solución Vial 4 (ver evidencia de Limpieza Mecánica) — no se pudo separar el kg entre limpieza y pintura, así que se usa el mismo ritmo de 3,237 kg/día/persona para ambas mientras no haya un dato que las distinga.',
+    }
+  },
+  media: {
+    label: '🏭 Media (galpones, naves industriales)',
+    valores: { 'Corte': 2902, 'Armado': 1078, 'Soldadura': 1423, 'Limpieza Mecánica': 1814, 'Pintura': 1814 },
+    evidencias: {
+      'Corte': 'Galpón Durán Deprati, 2 sep–5 nov 2024: 451,234 kg / 1,244.1 horas = 362.7 kg/hora → 2,902 kg/día/persona (8h).',
+      'Armado': 'Galpón Durán Deprati, 2 sep–5 nov 2024: 433,942 kg / 3,220.8 horas = 134.7 kg/hora → 1,078 kg/día/persona.',
+      'Soldadura': 'Galpón Durán Deprati, 2 sep–5 nov 2024: 389,498 kg / 2,189.0 horas = 177.9 kg/hora → 1,423 kg/día/persona.',
+      'Limpieza Mecánica': 'Galpón Durán Deprati, partida combinada "LIMPIEZA ABRASIVA Y PINTURA" del cronograma, 2 sep–5 nov 2024: 323,037 kg / 1,424.5 horas (1,345h limpieza + 79h pintura) = 226.8 kg/hora → 1,814 kg/día/persona. Nota: viene mezclado con pintura en el cronograma — mismo valor usado para ambas fases.',
+      'Pintura': 'Misma partida combinada "LIMPIEZA ABRASIVA Y PINTURA" de Galpón Durán Deprati (ver evidencia de Limpieza Mecánica) — no se pudo separar el kg entre limpieza y pintura, así que se usa el mismo ritmo de 1,814 kg/día/persona para ambas mientras no haya un dato que las distinga.',
+    }
+  },
+  liviana: {
+    label: '📦 Liviana (estructuras menores/mixtas)',
+    valores: { 'Corte': 1301, 'Armado': 424, 'Soldadura': 480 },
+    evidencias: {
+      'Corte': 'Promedio histórico de TODA la empresa GEOFORCE, jul-nov 2024: 1,056,164 kg / personal promedio = 1,301 kg/día/persona.',
+      'Armado': 'Promedio histórico GEOFORCE, jul-nov 2024: 843,486 kg / personal promedio = 424 kg/día/persona.',
+      'Soldadura': 'Promedio histórico GEOFORCE, jul-nov 2024: 856,780 kg / personal promedio = 480 kg/día/persona.',
+    }
+  }
+};
+
+function aplicarTipoEstructura(tipo){
+  if(!tipo || !TIPOS_ESTRUCTURA[tipo]) return;
+  const preset = TIPOS_ESTRUCTURA[tipo];
+  let cambios = 0;
+  _cronoData.forEach(r => {
+    if(preset.valores[r.fase] !== undefined){
+      r.rend = preset.valores[r.fase];
+      r.evidencia = preset.evidencias[r.fase] || '';
+      r.evidenciaFecha = new Date().toISOString();
+      cambios++;
+    }
+  });
+  try{ localStorage.setItem(LSK('tipo_estructura'), tipo); }catch(e){}
+  saveCronoData();
+  renderCronograma();
+  toast(`✅ Rendimientos actualizados a "${preset.label}" (${cambios} procesos, con evidencia)`);
+}
+
 function renderCronograma(){
   const data=getCronoData();
   const pesoTotal=PLAN.conjuntos.reduce((s,c)=>s+(c.peso_total||0),0);
@@ -5427,6 +5518,23 @@ function renderCronograma(){
       </div>
     </div>
 
+    <!-- Selector de tipo de estructura -->
+    <div style="background:#f0f4ff;border:1.5px solid #93c5fd;border-radius:10px;padding:.875rem 1rem;margin-bottom:1rem">
+      <div style="font-size:12px;font-weight:700;color:#1e40af;margin-bottom:.5rem">
+        🏗️ Tipo de estructura de este proyecto — aplica rendimientos reales verificados (Corte/Armado/Soldadura)
+      </div>
+      <select id="tipo-estructura-select" onchange="aplicarTipoEstructura(this.value)"
+        style="width:100%;padding:8px;border:1.5px solid #93c5fd;border-radius:8px;font-size:13px;font-weight:600;background:#fff">
+        <option value="">— Selecciona (o deja los valores actuales) —</option>
+        <option value="pesada">🌉 Pesada — puentes, vigas grandes (ref.: Solución Vial 4, 7 meses reales)</option>
+        <option value="media">🏭 Media — galpones, naves industriales (ref.: Galpón Durán Deprati, real)</option>
+        <option value="liviana">📦 Liviana — estructuras menores/mixtas (ref.: promedio histórico GEOFORCE)</option>
+      </select>
+      <div style="font-size:11px;color:#64748b;margin-top:.5rem">
+        Al elegir, se actualizan los rendimientos con datos reales de proyectos verificados, y queda la evidencia guardada automáticamente. Corte, Armado y Soldadura tienen evidencia propia en los 3 niveles. Limpieza Mecánica y Pintura comparten el mismo valor en "Pesada" y "Media" (salen de una sola partida combinada del cronograma que no se pudo separar entre las dos). Perforaciones todavía no tiene evidencia propia — no cambia con el selector.
+      </div>
+    </div>
+
     <!-- Tabla cuadrillas -->
     <div style="font-size:13px;font-weight:700;color:#0f172a;margin-bottom:.5rem">
       👷 Cuadrillas y Rendimientos
@@ -5469,6 +5577,13 @@ function renderCronograma(){
               <input type="number" value="${r.rend}" min="1" max="9999"
                 onchange="_cronoData[${i}].rend=+this.value;saveCronoData();renderCronograma()"
                 style="width:68px;border:2px solid ${r.color};border-radius:4px;padding:4px;font-size:13px;font-weight:700;text-align:center">
+              <div style="margin-top:3px">
+                <button onclick="abrirEvidenciaRend(${i})" title="${r.evidencia?'Ver/editar evidencia registrada':'Sin evidencia registrada — click para agregar'}"
+                  style="font-size:10px;padding:2px 6px;border-radius:10px;border:none;cursor:pointer;font-weight:700;
+                  background:${r.evidencia?'#166534':'#f3f4f6'};color:${r.evidencia?'#fff':'#9ca3af'}">
+                  ${r.evidencia?'📎 Evidencia':'➕ Sin evidencia'}
+                </button>
+              </div>
             </td>
             <td style="padding:4px 6px;text-align:center">
               <div style="display:flex;flex-direction:column;gap:3px;align-items:center">
@@ -5594,10 +5709,15 @@ function renderCronograma(){
       </table>
     </div>
     <div style="font-size:10px;color:#94a3b8;margin-top:1rem;padding-top:.5rem;border-top:1px solid #e2e8f0">
-      📚 Rendimientos de referencia: CAMICON Ecuador · Literatura metalmecánica latinoamericana · AWS D1.1 · Jornada 8h/día.
+      📎 Cada rendimiento tiene su propia evidencia (botón junto al número) — revísala antes de confiar en el valor.
       ✅ = cuadrillas actuales suficientes para el plazo · ⚠️ = necesitas más cuadrillas
     </div>
   </div>`;
+
+  const selTipo = document.getElementById('tipo-estructura-select');
+  if(selTipo){
+    try{ selTipo.value = localStorage.getItem(LSK('tipo_estructura')) || ''; }catch(e){}
+  }
 }
 
 // ======================= STOCK =======================
