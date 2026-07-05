@@ -943,8 +943,22 @@ global.Chart = class {
         <span style="font-size:9px;font-weight:400;color:#6b7280;text-transform:none"> — marca las partes completadas en cada viga</span>
       </div>
       <div id="p-vigas-list"></div>
+
+      <!-- Registro rápido de vigas completas idénticas -->
+      <div style="display:flex;gap:8px;align-items:center;background:#f0fdf4;border:1.5px solid #86efac;border-radius:8px;padding:.5rem .625rem;margin-bottom:.5rem">
+        <span style="font-size:11px;font-weight:700;color:#065f46;white-space:nowrap">✅ Vigas 100% completas:</span>
+        <input type="number" id="p-vigas-completas-n" min="1" placeholder="Ej: 5" inputmode="numeric"
+          style="width:70px;text-align:center;font-size:14px;font-weight:700;border:1.5px solid #86efac;border-radius:6px;padding:4px;">
+        <button onclick="pAddVigasCompletas()" style="flex:1;padding:.4rem;background:#166534;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer">
+          Agregar todas de una vez
+        </button>
+      </div>
+      <div style="font-size:10px;color:#6b7280;margin-bottom:.75rem;margin-top:-.25rem">
+        Para las que quedaron a medias, sigue usando "+ Agregar viga" y llena solo lo que se avanzó.
+      </div>
+
       <button onclick="pAddViga()" style="width:100%;padding:.5rem;background:#eef4ff;color:#1e40af;border:1.5px dashed #93c5fd;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:.75rem">
-        + Agregar viga
+        + Agregar viga (parcial / individual)
       </button>
 
       <!-- Resumen del día -->
@@ -4539,6 +4553,58 @@ function pBuildVigas(){
   pUpdateInfo();
 }
 
+// Arma una "viga completa" con las cantidades máximas de cada parte (según
+// el plan), para no tener que escribir los mismos números una y otra vez
+// cuando se trabajaron varias vigas idénticas y completas en el día.
+function _vigaCompletaTemplate(c){
+  const v = {qty:{}, subQty:{}};
+  const planVigas = c.cantidad||1;
+  c.partes.forEach(p=>{
+    const piezasHI = PIEZAS_HI_SUP[p.perfil];
+    if(piezasHI){
+      v.subQty[p.parte] = {};
+      piezasHI.forEach(sp=>{ v.subQty[p.parte][sp.tipo] = sp.qty; });
+    } else {
+      v.qty[p.parte] = Math.round((p.cantidad||0)/planVigas);
+    }
+  });
+  return v;
+}
+
+// Duplica una viga ya llenada (completa o parcial, no importa) las veces
+// que haga falta — para el caso de varias vigas con el MISMO avance parcial,
+// sin tener que volver a escribir los mismos números cada vez.
+function pDuplicarViga(i){
+  const original = pVigasData[i];
+  const tieneAlgo = Object.values(original.qty||{}).some(q=>Number(q)>0)
+    || Object.values(original.subQty||{}).some(sub=>Object.values(sub).some(q=>Number(q)>0));
+  if(!tieneAlgo){ toast('⚠ Llena al menos una cantidad en esta viga antes de duplicarla'); return; }
+  const n = parseInt(prompt('¿Cuántas copias iguales a esta viga quieres agregar?','1'));
+  if(!n || n<=0) return;
+  const copias = Array.from({length:n}, ()=>JSON.parse(JSON.stringify(original)));
+  pVigasData.splice(i+1, 0, ...copias);
+  pRenderVigas();
+  pUpdateInfo();
+  toast(`⧉ ${n} copia${n>1?'s':''} agregada${n>1?'s':''}`);
+}
+
+function pAddVigasCompletas(){
+  const cj = document.getElementById('p-cj')?.value;
+  const c = PLAN.conjuntos.find(x=>x.conjunto===cj);
+  if(!c){ toast('⚠ Selecciona un conjunto primero'); return; }
+  const n = parseInt(document.getElementById('p-vigas-completas-n')?.value)||0;
+  if(n<=0){ toast('⚠ Ingresa cuántas vigas completas trabajaste'); return; }
+  // Si la única viga que hay todavía está vacía (recién abierto el
+  // formulario), la reemplazamos en vez de dejarla como una viga extra sin usar.
+  const vacia = pVigasData.length===1 && Object.keys(pVigasData[0].qty||{}).length===0 && Object.keys(pVigasData[0].subQty||{}).length===0;
+  const nuevas = Array.from({length:n}, ()=>_vigaCompletaTemplate(c));
+  pVigasData = vacia ? nuevas : [...pVigasData, ...nuevas];
+  document.getElementById('p-vigas-completas-n').value = '';
+  pRenderVigas();
+  pUpdateInfo();
+  toast(`✅ ${n} viga${n>1?'s':''} completa${n>1?'s':''} agregada${n>1?'s':''}`);
+}
+
 function pAddViga(){
   pVigasData.push({qty:{}, subQty:{}});
   pRenderVigas();
@@ -4588,6 +4654,7 @@ function pRenderVigas(){
         </span>
         <div style="display:flex;gap:6px;align-items:center">
           ${pesoViga>0?`<span data-viga-peso="${i}" style="font-size:12px;font-weight:700;color:#065f46">⚖ ${pesoViga.toFixed(1)} kg</span>`:`<span data-viga-peso="${i}"></span>`}
+          <button onclick="pDuplicarViga(${i})" title="Duplicar esta misma viga varias veces" style="background:#eef4ff;color:#1e40af;border:none;border-radius:6px;padding:2px 8px;font-size:12px;cursor:pointer">⧉</button>
           ${pVigasData.length>1?`<button onclick="pRemoveViga(${i})" style="background:#fee2e2;color:#991b1b;border:none;border-radius:6px;padding:2px 8px;font-size:12px;cursor:pointer">✕</button>`:''}
         </div>
       </div>
