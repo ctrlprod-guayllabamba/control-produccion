@@ -5418,6 +5418,36 @@ function renderHistogramaPersonal(rows, maxSem, plazo){
   const wrap = document.getElementById('chart-personal-wrap');
   if(wrap) wrap.style.height = '360px';
 
+  // Plugin liviano que escribe el número dentro de cada segmento de la
+  // barra (Chart.js no trae esto de fábrica sin un plugin externo).
+  // Se registra una sola vez y solo dibuja sobre ESTE gráfico específico.
+  if(!window._pluginNumerosPersonal){
+    window._pluginNumerosPersonal = {
+      id: 'numerosPersonal',
+      afterDatasetsDraw(chart){
+        if(chart.canvas.id !== 'chart-personal-semana') return;
+        const {ctx} = chart;
+        ctx.save();
+        ctx.font = 'bold 10px Arial';
+        ctx.fillStyle = '#fff';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        chart.data.datasets.forEach((ds, dsIdx) => {
+          const meta = chart.getDatasetMeta(dsIdx);
+          meta.data.forEach((bar, i) => {
+            const val = ds.data[i];
+            if(val > 0){
+              const centroY = (bar.y + (bar.base!==undefined?bar.base:bar.y)) / 2;
+              ctx.fillText(val, bar.x, centroY);
+            }
+          });
+        });
+        ctx.restore();
+      }
+    };
+    try{ Chart.register(window._pluginNumerosPersonal); }catch(e){}
+  }
+
   mkChart('chart-personal-semana','bar',{labels, datasets},{
     maintainAspectRatio:false,
     plugins:{
