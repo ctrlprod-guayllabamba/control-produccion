@@ -3240,6 +3240,20 @@ function _buildFormVigas(){
       🔧 Vigas trabajadas hoy
     </div>
     <div id="wk-vigas-list"></div>
+
+    <!-- Registro rápido de vigas completas idénticas (igual que supervisor.html) -->
+    <div style="display:flex;gap:8px;align-items:center;background:#f0fdf4;border:1.5px solid #86efac;border-radius:10px;padding:.625rem;margin-bottom:.625rem">
+      <span style="font-size:12px;font-weight:700;color:#065f46;white-space:nowrap">✅ Vigas 100% completas:</span>
+      <input type="number" id="wk-vigas-completas-n" min="1" placeholder="Ej: 5" inputmode="numeric"
+        style="width:64px;text-align:center;font-size:15px;font-weight:700;border:1.5px solid #86efac;border-radius:8px;padding:6px;">
+      <button onclick="wkAddVigasCompletas()" style="flex:1;padding:.5rem;background:#166534;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">
+        Agregar todas
+      </button>
+    </div>
+    <div style="font-size:10px;color:#6b7280;margin-bottom:.625rem;margin-top:-.25rem">
+      Para las que quedaron a medias, sigue con "+ Agregar viga" y llena solo lo que se avanzó.
+    </div>
+
     <button onclick="wkAddViga()" style="width:100%;padding:.625rem;background:#eef4ff;color:#1e40af;border:1.5px dashed #93c5fd;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:.75rem">
       + Agregar viga
     </button>
@@ -3352,6 +3366,38 @@ function wkRenderVigas(){
 
 function wkAddViga(){ wkVigasData.push({qty:{},subQty:{}}); wkRenderVigas(); }
 function wkRmViga(i){ wkVigasData.splice(i,1); wkRenderVigas(); }
+
+// Arma una "viga completa" con las cantidades máximas de cada parte (según el plan),
+// igual que _vigaCompletaTemplate() en supervisor.html — para no escribir los mismos
+// números viga por viga cuando se trabajaron varias idénticas y completas en el día.
+function _wkVigaCompletaTemplate(c){
+  const v = {qty:{}, subQty:{}};
+  const planVigas = c.partes.reduce((s,p)=>Math.min(s,p.plan),999) || 1;
+  c.partes.forEach(p=>{
+    const piezasHI = PIEZAS_HI[p.perfil];
+    if(piezasHI){
+      v.subQty[p.pr] = {};
+      piezasHI.forEach(sp=>{ v.subQty[p.pr][sp.tipo] = sp.qty; });
+    } else {
+      v.qty[p.pr] = Math.round((p.plan||0)/planVigas);
+    }
+  });
+  return v;
+}
+
+function wkAddVigasCompletas(){
+  const c = selCj;
+  if(!c){ alert('⚠ Selecciona un conjunto primero'); return; }
+  const n = parseInt(document.getElementById('wk-vigas-completas-n')?.value)||0;
+  if(n<=0){ alert('⚠ Ingresa cuántas vigas completas trabajaste'); return; }
+  // Si la única viga que hay todavía está vacía (recién abierto el formulario),
+  // la reemplazamos en vez de dejarla como una viga extra sin usar.
+  const vacia = wkVigasData.length===1 && Object.keys(wkVigasData[0].qty||{}).length===0 && Object.keys(wkVigasData[0].subQty||{}).length===0;
+  const nuevas = Array.from({length:n}, ()=>_wkVigaCompletaTemplate(c));
+  wkVigasData = vacia ? nuevas : [...wkVigasData, ...nuevas];
+  document.getElementById('wk-vigas-completas-n').value = '';
+  wkRenderVigas();
+}
 
 function wkSetSubQty(vi,pr,tipo,val){
   if(!wkVigasData[vi]) return;
