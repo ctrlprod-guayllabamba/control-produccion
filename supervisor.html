@@ -2347,6 +2347,43 @@ window.debugSubpiezas = function(cj='E-T-1', pr='pr64'){
 };
 // ─────────────────────────────────────────────────────────────────────────
 
+// Avance real de una PARTE individual en una fase de producción (Armado, Soldadura, etc.)
+// Los registros de producción se guardan por CONJUNTO completo (parte:"pr64+pr65+pr98"),
+// con el detalle real por parte adentro de cada viga en r.detalle_vigas (JSON).
+// Comparar r.parte===parte directamente nunca coincide (bug corregido 6 jul 2026: ver
+// también el mismo problema ya resuelto para el Kanban de Fases, líneas ~5231).
+function getProdQtyParte(conjunto, parte, fase) {
+  const c = PLAN.conjuntos.find(x=>x.conjunto===conjunto);
+  const p = c?.partes.find(pp=>pp.parte===parte);
+  const piezasHI = p ? PIEZAS_HI_SUP[p.perfil] : null;
+  const recs = ST.prods.filter(r=>(r.conjunto||r.cj)===conjunto && r.fase===fase);
+
+  if (piezasHI) {
+    // Parte HI descompuesta (Alma+Patín): sumar piezas colocadas de cada sub-tipo
+    // en todas las vigas registradas, y tomar el mínimo de "vigas equivalentes"
+    // (misma lógica que getVigasCompletas, pero aplicada a lo ya producido).
+    const totales = {};
+    piezasHI.forEach(sp=>totales[sp.tipo]=0);
+    recs.forEach(r=>{
+      let vigas=[];
+      try{ vigas = JSON.parse(r.detalle_vigas||'[]'); }catch(e){ vigas=[]; }
+      vigas.forEach(v=>{
+        piezasHI.forEach(sp=>{ totales[sp.tipo] += Number(v.subQty?.[parte]?.[sp.tipo]||0); });
+      });
+    });
+    return Math.max(0, Math.min(...piezasHI.map(sp=>Math.floor(totales[sp.tipo]/(sp.qty||1)))));
+  }
+
+  // Parte normal: sumar piezas colocadas de esa parte en cada viga registrada
+  let total = 0;
+  recs.forEach(r=>{
+    let vigas=[];
+    try{ vigas = JSON.parse(r.detalle_vigas||'[]'); }catch(e){ vigas=[]; }
+    vigas.forEach(v=>{ total += Number(v.qty?.[parte]||0); });
+  });
+  return total;
+}
+
 function getCortadoKg(conjunto, parte) {
   return ST.cortes.filter(c=>c.conjunto===conjunto&&c.parte===parte)
     .reduce((s,c)=>s+Number(c.pesoParts||c.pesoPzas||0),0);
@@ -4556,16 +4593,25 @@ function pBuildVigas(){
 // Arma una "viga completa" con las cantidades máximas de cada parte (según
 // el plan), para no tener que escribir los mismos números una y otra vez
 // cuando se trabajaron varias vigas idénticas y completas en el día.
-function _vigaCompletaTemplate(c){
+// idx = posición (0-based) de esta viga DENTRO DEL LOTE que se está agregando ahora.
+// Repartir por diferencia acumulada (en vez de redondear cada viga por separado)
+// evita que, cuando la cantidad no divide exacto entre vigas, el lote termine
+// sumando más piezas de las que hay en el plan (p.ej. 7 piezas / 2 vigas ya no
+// da 4+4=8, da 4+3=7).
+function _vigaCompletaTemplate(c, idx=0){
   const v = {qty:{}, subQty:{}};
   const planVigas = c.cantidad||1;
   c.partes.forEach(p=>{
     const piezasHI = PIEZAS_HI_SUP[p.perfil];
+    const cant = p.cantidad||0;
+    const hastaAqui  = Math.round((idx+1) * cant / planVigas);
+    const hastaAntes = Math.round(idx * cant / planVigas);
+    const unidadesPorViga = Math.max(0, hastaAqui - hastaAntes);
     if(piezasHI){
       v.subQty[p.parte] = {};
-      piezasHI.forEach(sp=>{ v.subQty[p.parte][sp.tipo] = sp.qty; });
+      piezasHI.forEach(sp=>{ v.subQty[p.parte][sp.tipo] = sp.qty * unidadesPorViga; });
     } else {
-      v.qty[p.parte] = Math.round((p.cantidad||0)/planVigas);
+      v.qty[p.parte] = unidadesPorViga;
     }
   });
   return v;
@@ -4597,7 +4643,10 @@ function pAddVigasCompletas(){
   // Si la única viga que hay todavía está vacía (recién abierto el
   // formulario), la reemplazamos en vez de dejarla como una viga extra sin usar.
   const vacia = pVigasData.length===1 && Object.keys(pVigasData[0].qty||{}).length===0 && Object.keys(pVigasData[0].subQty||{}).length===0;
-  const nuevas = Array.from({length:n}, ()=>_vigaCompletaTemplate(c));
+  // Índice de arranque: si vamos a reemplazar la viga vacía, empieza en 0;
+  // si se agrega a lo que ya había en el formulario, sigue después de esas.
+  const idxInicio = vacia ? 0 : pVigasData.length;
+  const nuevas = Array.from({length:n}, (_,i)=>_vigaCompletaTemplate(c, idxInicio+i));
   pVigasData = vacia ? nuevas : [...pVigasData, ...nuevas];
   document.getElementById('p-vigas-completas-n').value = '';
   pRenderVigas();
@@ -4891,10 +4940,9 @@ function pRenderRef(){
   let totalPlan=0, totalCortado=0, totalFase=0;
   const rows = c.partes.map(p=>{
     const cortado = getCortadoQty(cj, p.parte);
-    const armado  = ST.prods.filter(r=>r.conjunto===cj&&r.parte===p.parte&&r.fase==='Armado').reduce((s,r)=>s+r.qty,0);
-    const soldado = ST.prods.filter(r=>r.conjunto===cj&&r.parte===p.parte&&r.fase==='Soldadura').reduce((s,r)=>s+r.qty,0);
-    const ejFase  = fase==='Armado'?armado:fase==='Soldadura'?soldado:
-                    ST.prods.filter(r=>r.conjunto===cj&&r.parte===p.parte&&r.fase===fase).reduce((s,r)=>s+r.qty,0);
+    const armado  = getProdQtyParte(cj, p.parte, 'Armado');
+    const soldado = getProdQtyParte(cj, p.parte, 'Soldadura');
+    const ejFase  = fase==='Armado'?armado:fase==='Soldadura'?soldado:getProdQtyParte(cj, p.parte, fase);
     const pend    = Math.max(0, p.cantidad - ejFase);
     const pct     = p.cantidad>0 ? Math.min(100, ejFase/p.cantidad*100) : 0;
     totalPlan+=p.cantidad; totalCortado+=cortado; totalFase+=ejFase;
