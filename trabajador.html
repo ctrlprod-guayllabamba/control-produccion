@@ -155,6 +155,36 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);min-height
   </div>
 </div>
 
+<!-- BODEGA: entrega de consumibles a operarios de producción -->
+<div class="sc" id="sc-bodega">
+  <button class="btn-back" onclick="go('sc-home')">← Inicio</button>
+  <div style="font-size:17px;font-weight:700;color:var(--b);margin-bottom:.875rem">📦 Entrega de consumibles</div>
+
+  <div class="card" style="margin-bottom:.875rem">
+    <label style="font-size:12px;font-weight:700;color:var(--gr);display:block;margin-bottom:.25rem">¿A quién le entregas?</label>
+    <select id="bod-op-destino" onchange="bodOnDestinoChange()"
+      style="width:100%;padding:.625rem;border:1.5px solid var(--bd);border-radius:10px;font-size:14px;margin-bottom:.75rem">
+      <option value="">Selecciona un operario...</option>
+    </select>
+
+    <label style="font-size:12px;font-weight:700;color:var(--gr);display:block;margin-bottom:.25rem">¿Qué le entregas?</label>
+    <select id="bod-item" style="width:100%;padding:.625rem;border:1.5px solid var(--bd);border-radius:10px;font-size:14px;margin-bottom:.75rem">
+      <option value="">Primero selecciona el operario...</option>
+    </select>
+
+    <label style="font-size:12px;font-weight:700;color:var(--gr);display:block;margin-bottom:.25rem">Cantidad</label>
+    <input type="number" id="bod-cantidad" min="0" step="0.01" placeholder="Ej: 5"
+      style="width:100%;padding:.625rem;border:1.5px solid var(--bd);border-radius:10px;font-size:16px;font-weight:700;text-align:center;margin-bottom:.875rem">
+
+    <button class="btn-main" onclick="wkRegistrarConsumible()">✔ Registrar entrega</button>
+  </div>
+
+  <div class="card">
+    <div class="card-t">📋 Entregas de hoy</div>
+    <div id="bod-hist"><div style="text-align:center;color:var(--gr);font-size:13px;padding:.75rem">Nada aún hoy.</div></div>
+  </div>
+</div>
+
 <!-- HOME -->
 <div class="sc" id="sc-home">
   <div class="home-card">
@@ -163,9 +193,9 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);min-height
     <div style="font-size:12px;color:var(--gr)" id="home-role">—</div>
     <div style="font-size:13px;color:var(--gr);margin-top:.625rem" id="home-date">—</div>
   </div>
-  <button class="btn-big" onclick="go('sc-fase')">✚  Registrar mi trabajo</button>
+  <button class="btn-big" id="home-btn-principal" onclick="go('sc-fase')">✚  Registrar mi trabajo</button>
   <div class="card">
-    <div class="card-t">📋 Mis registros de hoy</div>
+    <div class="card-t" id="home-hist-title">📋 Mis registros de hoy</div>
     <div id="home-hist"><div style="text-align:center;color:var(--gr);font-size:13px;padding:.75rem">Nada aún hoy.</div></div>
     <div style="margin-top:.75rem;padding-top:.75rem;border-top:1px solid var(--bd)">
       <button onclick="exportarMisDatos()" style="width:100%;padding:.75rem;background:var(--b);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;">
@@ -427,7 +457,45 @@ const PIEZAS_HI = {
     {tipo:'Patín', esp:12, ancho:180, desc:'Patín PL12×180', qty:2},
   ],
 };
-const PLAN_SEED=[{"cj":"E-T-1","desc":"VIGA — 113 uds","partes":[{"pr":"pr64","perfil":"HI300-10-12*300","long":3000.0,"plan":113.0,"pu":234.56},{"pr":"pr65","perfil":"PL12*300","long":300.0,"plan":226.0,"pu":8.48},{"pr":"pr98","perfil":"PL8*100","long":100.0,"plan":452.0,"pu":0.61}]},{"cj":"E-T-2","desc":"VIGA — 2 uds","partes":[{"pr":"pr65","perfil":"PL12*300","long":300.0,"plan":4.0,"pu":8.48},{"pr":"pr73","perfil":"HI300-10-12*300","long":3000.0,"plan":2.0,"pu":234.56},{"pr":"pr86","perfil":"PL10*205","long":800.0,"plan":2.0,"pu":12.43}]},{"cj":"E-T-3","desc":"VIGA — 111 uds","partes":[{"pr":"pr65","perfil":"PL12*300","long":300.0,"plan":222.0,"pu":8.48},{"pr":"pr73","perfil":"HI300-10-12*300","long":3000.0,"plan":111.0,"pu":234.56},{"pr":"pr115","perfil":"PL10*205","long":800.0,"plan":111.0,"pu":12.43}]},{"cj":"E-T-4","desc":"VIGA — 1 uds","partes":[{"pr":"pr65","perfil":"PL12*300","long":300.0,"plan":6.0,"pu":8.48},{"pr":"pr68","perfil":"HI250-10-20*300","long":7827.0,"plan":1.0,"pu":865.9},{"pr":"pr72","perfil":"HI300-10-12*300","long":349.0,"plan":6.0,"pu":27.29},{"pr":"pr76","perfil":"K60*3","long":150.0,"plan":3.0,"pu":0.81},{"pr":"pr80","perfil":"PL20*235","long":520.0,"plan":3.0,"pu":16.92},{"pr":"pr84","perfil":"PL10*145","long":206.0,"plan":18.0,"pu":2.27},{"pr":"pr85","perfil":"PL10*206","long":350.0,"plan":6.0,"pu":4.41},{"pr":"pr110","perfil":"HI234-8-12*180","long":3151.0,"plan":1.0,"pu":137.32},{"pr":"pr111","perfil":"HI234-8-12*180","long":401.0,"plan":1.0,"pu":13.32},{"pr":"pr112","perfil":"PL10*220","long":254.0,"plan":1.0,"pu":4.39},{"pr":"pr116","perfil":"PL10*175","long":255.0,"plan":2.0,"pu":3.48},{"pr":"pr117","perfil":"PL12*230","long":250.0,"plan":3.0,"pu":5.39},{"pr":"pr118","perfil":"PL12*230","long":250.0,"plan":5.0,"pu":5.39},{"pr":"pr119","perfil":"HI250-10-20*250","long":1686.0,"plan":2.0,"pu":137.15},{"pr":"pr121","perfil":"HI250-10-20*300","long":2239.0,"plan":1.0,"pu":241.53},{"pr":"pr122","perfil":"HI250-10-20*300","long":4632.0,"plan":1.0,"pu":509.42},{"pr":"pr123","perfil":"PL10*175","long":255.0,"plan":1.0,"pu":3.48},{"pr":"pr124","perfil":"HI250-10-20*250","long":845.0,"plan":1.0,"pu":57.17},{"pr":"pr126","perfil":"HI250-10-20*300","long":1251.0,"plan":1.0,"pu":135.44}]},{"cj":"E-T-5","desc":"PLACA — 1 uds","partes":[{"pr":"pr65","perfil":"PL12*300","long":300.0,"plan":6.0,"pu":8.48},{"pr":"pr69","perfil":"HI250-10-20*300","long":7827.0,"plan":1.0,"pu":865.9},{"pr":"pr72","perfil":"HI300-10-12*300","long":349.0,"plan":6.0,"pu":27.29},{"pr":"pr76","perfil":"K60*3","long":150.0,"plan":3.0,"pu":0.81},{"pr":"pr80","perfil":"PL20*235","long":520.0,"plan":3.0,"pu":16.92},{"pr":"pr84","perfil":"PL10*145","long":206.0,"plan":18.0,"pu":2.27},{"pr":"pr85","perfil":"PL10*206","long":350.0,"plan":6.0,"pu":4.41},{"pr":"pr110","perfil":"HI234-8-12*180","long":3151.0,"plan":1.0,"pu":137.32},{"pr":"pr111","perfil":"HI234-8-12*180","long":401.0,"plan":1.0,"pu":13.32},{"pr":"pr112","perfil":"PL10*220","long":254.0,"plan":1.0,"pu":4.39},{"pr":"pr116","perfil":"PL10*175","long":255.0,"plan":2.0,"pu":3.48},{"pr":"pr117","perfil":"PL12*230","long":250.0,"plan":3.0,"pu":5.39},{"pr":"pr118","perfil":"PL12*230","long":250.0,"plan":5.0,"pu":5.39},{"pr":"pr119","perfil":"HI250-10-20*250","long":1686.0,"plan":2.0,"pu":137.15},{"pr":"pr121","perfil":"HI250-10-20*300","long":2239.0,"plan":1.0,"pu":241.53},{"pr":"pr122","perfil":"HI250-10-20*300","long":4632.0,"plan":1.0,"pu":509.42},{"pr":"pr123","perfil":"PL10*175","long":255.0,"plan":1.0,"pu":3.48},{"pr":"pr124","perfil":"HI250-10-20*250","long":845.0,"plan":1.0,"pu":57.17},{"pr":"pr126","perfil":"HI250-10-20*300","long":1251.0,"plan":1.0,"pu":135.44}]},{"cj":"E-T-6","desc":"VIGA — 54 uds","partes":[{"pr":"pr63","perfil":"HI250-10-20*300","long":6000.0,"plan":54.0,"pu":664.11},{"pr":"pr65","perfil":"PL12*300","long":300.0,"plan":216.0,"pu":8.48},{"pr":"pr67","perfil":"HI250-10-20*300","long":6000.0,"plan":54.0,"pu":664.11},{"pr":"pr72","perfil":"HI300-10-12*300","long":349.0,"plan":216.0,"pu":27.29},{"pr":"pr76","perfil":"K60*3","long":150.0,"plan":108.0,"pu":0.81},{"pr":"pr80","perfil":"PL20*235","long":520.0,"plan":108.0,"pu":16.92},{"pr":"pr84","perfil":"PL10*145","long":206.0,"plan":648.0,"pu":2.27},{"pr":"pr85","perfil":"PL10*206","long":350.0,"plan":216.0,"pu":4.41},{"pr":"pr110","perfil":"HI234-8-12*180","long":3151.0,"plan":54.0,"pu":137.32},{"pr":"pr111","perfil":"HI234-8-12*180","long":401.0,"plan":108.0,"pu":13.32},{"pr":"pr112","perfil":"PL10*220","long":254.0,"plan":108.0,"pu":4.39},{"pr":"pr116","perfil":"PL10*175","long":255.0,"plan":108.0,"pu":3.48},{"pr":"pr117","perfil":"PL12*230","long":250.0,"plan":216.0,"pu":5.39},{"pr":"pr118","perfil":"PL12*230","long":250.0,"plan":216.0,"pu":5.39},{"pr":"pr119","perfil":"HI250-10-20*250","long":1686.0,"plan":108.0,"pu":137.15}]},{"cj":"E-T-7","desc":"VIGA — 54 uds","partes":[{"pr":"pr63","perfil":"HI250-10-20*300","long":6000.0,"plan":54.0,"pu":664.11},{"pr":"pr65","perfil":"PL12*300","long":300.0,"plan":216.0,"pu":8.48},{"pr":"pr67","perfil":"HI250-10-20*300","long":6000.0,"plan":54.0,"pu":664.11},{"pr":"pr72","perfil":"HI300-10-12*300","long":349.0,"plan":216.0,"pu":27.29},{"pr":"pr76","perfil":"K60*3","long":150.0,"plan":108.0,"pu":0.81},{"pr":"pr80","perfil":"PL20*235","long":520.0,"plan":108.0,"pu":16.92},{"pr":"pr84","perfil":"PL10*145","long":206.0,"plan":648.0,"pu":2.27},{"pr":"pr85","perfil":"PL10*206","long":350.0,"plan":216.0,"pu":4.41},{"pr":"pr110","perfil":"HI234-8-12*180","long":3151.0,"plan":54.0,"pu":137.32},{"pr":"pr111","perfil":"HI234-8-12*180","long":401.0,"plan":108.0,"pu":13.32},{"pr":"pr112","perfil":"PL10*220","long":254.0,"plan":108.0,"pu":4.39},{"pr":"pr116","perfil":"PL10*175","long":255.0,"plan":108.0,"pu":3.48},{"pr":"pr117","perfil":"PL12*230","long":250.0,"plan":216.0,"pu":5.39},{"pr":"pr118","perfil":"PL12*230","long":250.0,"plan":216.0,"pu":5.39},{"pr":"pr119","perfil":"HI250-10-20*250","long":1686.0,"plan":108.0,"pu":137.15}]},{"cj":"E-T-8","desc":"VIGA — 1 uds","partes":[{"pr":"pr65","perfil":"PL12*300","long":300.0,"plan":4.0,"pu":8.48},{"pr":"pr70","perfil":"HI250-10-20*300","long":4081.0,"plan":1.0,"pu":451.39},{"pr":"pr72","perfil":"HI300-10-12*300","long":349.0,"plan":4.0,"pu":27.29},{"pr":"pr76","perfil":"K60*3","long":150.0,"plan":2.0,"pu":0.81},{"pr":"pr80","perfil":"PL20*235","long":520.0,"plan":1.0,"pu":16.92},{"pr":"pr84","perfil":"PL10*145","long":206.0,"plan":14.0,"pu":2.27},{"pr":"pr85","perfil":"PL10*206","long":350.0,"plan":2.0,"pu":4.41},{"pr":"pr88","perfil":"HI250-10-20*300","long":1260.0,"plan":1.0,"pu":134.25},{"pr":"pr90","perfil":"HI250-10-20*250","long":835.0,"plan":1.0,"pu":56.25},{"pr":"pr91","perfil":"PL10*179","long":255.0,"plan":1.0,"pu":3.56},{"pr":"pr99","perfil":"HI250-10-20*300","long":1791.0,"plan":1.0,"pu":192.8},{"pr":"pr111","perfil":"HI234-8-12*180","long":401.0,"plan":1.0,"pu":13.32},{"pr":"pr112","perfil":"PL10*220","long":254.0,"plan":1.0,"pu":4.39},{"pr":"pr113","perfil":"PL12*230","long":250.0,"plan":2.0,"pu":5.39},{"pr":"pr114","perfil":"HI250-10-20*300","long":1508.0,"plan":1.0,"pu":156.32},{"pr":"pr116","perfil":"PL10*175","long":255.0,"plan":1.0,"pu":3.48},{"pr":"pr117","perfil":"PL12*230","long":250.0,"plan":1.0,"pu":5.39},{"pr":"pr118","perfil":"PL12*230","long":250.0,"plan":1.0,"pu":5.39},{"pr":"pr119","perfil":"HI250-10-20*250","long":1686.0,"plan":1.0,"pu":137.15}]},{"cj":"E-T-9","desc":"VIGA — 1 uds","partes":[{"pr":"pr65","perfil":"PL12*300","long":300.0,"plan":4.0,"pu":8.48},{"pr":"pr71","perfil":"HI250-10-20*300","long":4081.0,"plan":1.0,"pu":451.39},{"pr":"pr72","perfil":"HI300-10-12*300","long":349.0,"plan":4.0,"pu":27.29},{"pr":"pr76","perfil":"K60*3","long":150.0,"plan":2.0,"pu":0.81},{"pr":"pr80","perfil":"PL20*235","long":520.0,"plan":1.0,"pu":16.92},{"pr":"pr84","perfil":"PL10*145","long":206.0,"plan":14.0,"pu":2.27},{"pr":"pr85","perfil":"PL10*206","long":350.0,"plan":2.0,"pu":4.41},{"pr":"pr88","perfil":"HI250-10-20*300","long":1260.0,"plan":1.0,"pu":134.25},{"pr":"pr90","perfil":"HI250-10-20*250","long":835.0,"plan":1.0,"pu":56.25},{"pr":"pr91","perfil":"PL10*179","long":255.0,"plan":1.0,"pu":3.56},{"pr":"pr99","perfil":"HI250-10-20*300","long":1791.0,"plan":1.0,"pu":192.8},{"pr":"pr111","perfil":"HI234-8-12*180","long":401.0,"plan":1.0,"pu":13.32},{"pr":"pr112","perfil":"PL10*220","long":254.0,"plan":1.0,"pu":4.39},{"pr":"pr113","perfil":"PL12*230","long":250.0,"plan":2.0,"pu":5.39},{"pr":"pr114","perfil":"HI250-10-20*300","long":1508.0,"plan":1.0,"pu":156.32},{"pr":"pr116","perfil":"PL10*175","long":255.0,"plan":1.0,"pu":3.48},{"pr":"pr117","perfil":"PL12*230","long":250.0,"plan":1.0,"pu":5.39},{"pr":"pr118","perfil":"PL12*230","long":250.0,"plan":1.0,"pu":5.39},{"pr":"pr119","perfil":"HI250-10-20*250","long":1686.0,"plan":1.0,"pu":137.15}]},{"cj":"E-T-10","desc":"ANGULO — 112 uds","partes":[{"pr":"pr105","perfil":"L80*8","long":4400.0,"plan":112.0,"pu":42.0}]},{"cj":"E-T-11","desc":"ANGULO — 224 uds","partes":[{"pr":"pr106","perfil":"L80*8","long":2050.0,"plan":224.0,"pu":19.57}]},{"cj":"E-T-12","desc":"PLACA — 111 uds","partes":[{"pr":"pr104","perfil":"PL12*200","long":600.0,"plan":111.0,"pu":11.3}]},{"cj":"E-T-13","desc":"ANGULO — 110 uds","partes":[{"pr":"pr102","perfil":"L75*8","long":4400.0,"plan":110.0,"pu":39.24}]},{"cj":"E-T-14","desc":"ANGULO — 220 uds","partes":[{"pr":"pr103","perfil":"L75*8","long":2050.0,"plan":220.0,"pu":18.28}]},{"cj":"E-T-15","desc":"PLACA — 110 uds","partes":[{"pr":"pr66","perfil":"PL12*200","long":600.0,"plan":110.0,"pu":11.3}]},{"cj":"E-T-16","desc":"ANGULO — 2 uds","partes":[{"pr":"pr107","perfil":"L80*8","long":4043.0,"plan":2.0,"pu":38.59}]},{"cj":"E-T-17","desc":"ANGULO — 4 uds","partes":[{"pr":"pr125","perfil":"L80*8","long":1850.0,"plan":4.0,"pu":17.66}]},{"cj":"E-T-18","desc":"PLACA — 1 uds","partes":[{"pr":"pr83","perfil":"PL12*200","long":643.0,"plan":1.0,"pu":12.11}]},{"cj":"E-T-19","desc":"ANGULO — 4 uds","partes":[{"pr":"pr74","perfil":"L75*8","long":1650.0,"plan":4.0,"pu":14.71}]},{"cj":"E-T-20","desc":"ANGULO — 4 uds","partes":[{"pr":"pr130","perfil":"L75*8","long":1650.0,"plan":4.0,"pu":14.71}]},{"cj":"E-T-21","desc":"ANGULO — 444 uds","partes":[{"pr":"pr100","perfil":"L75*8","long":1980.0,"plan":444.0,"pu":17.66}]},{"cj":"E-T-22","desc":"VIGA — 2 uds","partes":[{"pr":"pr109","perfil":"HI234-8-12*180","long":2109.0,"plan":2.0,"pu":98.86},{"pr":"pr112","perfil":"PL10*220","long":254.0,"plan":4.0,"pu":4.39}]},{"cj":"E-T-23","desc":"VIGA — 106 uds","partes":[{"pr":"pr101","perfil":"HI234-8-12*180","long":2310.0,"plan":106.0,"pu":108.81},{"pr":"pr112","perfil":"PL10*220","long":254.0,"plan":212.0,"pu":4.39}]},{"cj":"E-T-24","desc":"VIGA — 2 uds","partes":[{"pr":"pr87","perfil":"HI234-8-12*180","long":2349.0,"plan":2.0,"pu":110.57},{"pr":"pr112","perfil":"PL10*220","long":254.0,"plan":4.0,"pu":4.39}]},{"cj":"E-T-25","desc":"ANGULO — 2 uds","partes":[{"pr":"pr141","perfil":"L75*8","long":4265.0,"plan":2.0,"pu":38.03}]},{"cj":"E-T-26","desc":"ANGULO — 2 uds","partes":[{"pr":"pr139","perfil":"L75*8","long":1980.0,"plan":2.0,"pu":17.66}]},{"cj":"E-T-27","desc":"ANGULO — 2 uds","partes":[{"pr":"pr140","perfil":"L75*8","long":1985.0,"plan":2.0,"pu":17.7}]},{"cj":"E-T-28","desc":"ANGULO — 2 uds","partes":[{"pr":"pr156","perfil":"L80*8","long":2065.0,"plan":2.0,"pu":19.71}]},{"cj":"E-T-30","desc":"ANGULO — 2 uds","partes":[{"pr":"pr149","perfil":"L80*8","long":4266.0,"plan":2.0,"pu":40.72}]},{"cj":"E-T-31","desc":"ANGULO — 2 uds","partes":[{"pr":"pr146","perfil":"L80*8","long":1981.0,"plan":2.0,"pu":18.91}]},{"cj":"E-T-32","desc":"ANGULO — 2 uds","partes":[{"pr":"pr145","perfil":"L80*8","long":1985.0,"plan":2.0,"pu":18.95}]},{"cj":"E-T-33","desc":"ANGULO — 106 uds","partes":[{"pr":"pr136","perfil":"L75*8","long":4402.0,"plan":106.0,"pu":39.26}]},{"cj":"E-T-34","desc":"ANGULO — 212 uds","partes":[{"pr":"pr135","perfil":"L75*8","long":2051.0,"plan":212.0,"pu":18.29}]},{"cj":"E-T-35","desc":"ANGULO — 106 uds","partes":[{"pr":"pr147","perfil":"L80*8","long":4403.0,"plan":106.0,"pu":42.03}]},{"cj":"E-T-36","desc":"ANGULO — 212 uds","partes":[{"pr":"pr144","perfil":"L80*8","long":2052.0,"plan":212.0,"pu":19.58}]},{"cj":"E-T-37","desc":"ANGULO — 2 uds","partes":[{"pr":"pr134","perfil":"L75*8","long":4427.0,"plan":2.0,"pu":39.48}]},{"cj":"E-T-38","desc":"ANGULO — 4 uds","partes":[{"pr":"pr133","perfil":"L75*8","long":2064.0,"plan":4.0,"pu":18.4}]},{"cj":"E-T-39","desc":"ANGULO — 2 uds","partes":[{"pr":"pr148","perfil":"L80*8","long":4428.0,"plan":2.0,"pu":42.27}]},{"cj":"E-T-40","desc":"ANGULO — 2 uds","partes":[{"pr":"pr143","perfil":"L80*8","long":2064.0,"plan":2.0,"pu":19.7}]},{"cj":"PC-1","desc":"PLACA — 440 uds","partes":[{"pr":"pr155","perfil":"PL15*135","long":506.0,"plan":440.0,"pu":8.04}]},{"cj":"PC-2","desc":"PLACA — 220 uds","partes":[{"pr":"pr154","perfil":"PL15*300","long":506.0,"plan":220.0,"pu":17.87}]},{"cj":"PC-3","desc":"PLACA — 220 uds","partes":[{"pr":"pr151","perfil":"PL12*160","long":456.0,"plan":220.0,"pu":6.87}]},{"cj":"PC-4","desc":"PLACA — 220 uds","partes":[{"pr":"pr152","perfil":"PL15*300","long":504.0,"plan":220.0,"pu":17.81}]},{"cj":"PC-5","desc":"PLACA — 440 uds","partes":[{"pr":"pr153","perfil":"PL15*135","long":504.0,"plan":440.0,"pu":8.01}]},{"cj":"PC-6","desc":"PLACA — 220 uds","partes":[{"pr":"pr150","perfil":"PL12*160","long":454.0,"plan":220.0,"pu":6.84}]},{"cj":"E-C-1","desc":"TUBO-4\"X6 — 113 uds","partes":[{"pr":"pr78","perfil":"O100*6","long":1000.0,"plan":113.0,"pu":13.68},{"pr":"pr96","perfil":"PL8*150","long":200.0,"plan":226.0,"pu":1.88},{"pr":"pr97","perfil":"UPN160","long":997.0,"plan":226.0,"pu":18.57}]},{"cj":"E-PM-1","desc":"TC-75X3 — 2 uds","partes":[{"pr":"pr77","perfil":"K75*3","long":1099.0,"plan":6.0,"pu":7.45},{"pr":"pr92","perfil":"PL4*73","long":73.0,"plan":6.0,"pu":0.17},{"pr":"pr94","perfil":"PL4*48","long":48.0,"plan":6.0,"pu":0.07},{"pr":"pr108","perfil":"K50*3","long":2925.0,"plan":12.0,"pu":12.95},{"pr":"pr120","perfil":"K50*3","long":433.0,"plan":6.0,"pu":1.92}]},{"cj":"E-PM-2","desc":"TC-75X3 — 108 uds","partes":[{"pr":"pr77","perfil":"K75*3","long":1099.0,"plan":216.0,"pu":7.45},{"pr":"pr92","perfil":"PL4*73","long":73.0,"plan":216.0,"pu":0.17},{"pr":"pr108","perfil":"K50*3","long":2925.0,"plan":324.0,"pu":12.95}]},{"cj":"E-PM-3","desc":"TC-75X3 — 2 uds","partes":[{"pr":"pr77","perfil":"K75*3","long":1099.0,"plan":4.0,"pu":7.45},{"pr":"pr92","perfil":"PL4*73","long":73.0,"plan":4.0,"pu":0.17},{"pr":"pr94","perfil":"PL4*48","long":48.0,"plan":6.0,"pu":0.07},{"pr":"pr95","perfil":"K50*3","long":108.0,"plan":6.0,"pu":0.48},{"pr":"pr127","perfil":"K50*3","long":2204.0,"plan":6.0,"pu":9.76}]},{"cj":"E-PM-4","desc":"TC-50X3 — 318 uds","partes":[{"pr":"pr173","perfil":"K50*3","long":2931.0,"plan":318.0,"pu":12.98}]},{"cj":"E-PM-5","desc":"TC-50X3 — 6 uds","partes":[{"pr":"pr174","perfil":"K50*3","long":2974.0,"plan":6.0,"pu":13.17}]},{"cj":"E-PM-6","desc":"TC-50X3 — 6 uds","partes":[{"pr":"pr172","perfil":"K50*3","long":2684.0,"plan":6.0,"pu":11.89}]},{"cj":"ANC-1","desc":"BARRA DE ANCLAJE — 24 uds","partes":[{"pr":"pr193","perfil":"PL25*210","long":210.0,"plan":48.0,"pu":6.69},{"pr":"pr194","perfil":"PL25*106","long":120.0,"plan":96.0,"pu":1.21},{"pr":"pr195","perfil":"UPN100","long":100.0,"plan":288.0,"pu":1.04},{"pr":"pr196","perfil":"PL38*245","long":2244.0,"plan":24.0,"pu":161.96},{"pr":"pr197","perfil":"PL38*250","long":285.0,"plan":24.0,"pu":21.25}]}];
+
+// ── Catálogo de consumibles (Bodega → Operarios) ──────────────
+// Precios reales de referencia (STOCK_EGRESOS_VIVANTINO.XLSX, ago 2026).
+// Actualizar aquí si cambian los precios; no depende del backend.
+const CONSUMIBLES_CATALOGO = {
+  "Corte": [
+    {nombre:"DISCO DE CORTE - METAL  4 1/2\" X 1/8\" X 7/8\"", unidad:"und", precio:1.16},
+    {nombre:"DISCO DE CORTE - METAL  7\" X 1/8\" X 7/8\"", unidad:"und", precio:1.83},
+    {nombre:"DISCO DE CORTE - METAL 14\" X 3/32\" X 1\"", unidad:"und", precio:3.52},
+    {nombre:"DISCO DE CORTE - METAL  7\" X 1/16\" X 7/8\"", unidad:"und", precio:1.62},
+    {nombre:"OXIGENO", unidad:"m3", precio:2.67},
+    {nombre:"RECARGA DE OXIGENO PERMACYL", unidad:"m3", precio:1.63},
+    {nombre:"ACETILENO", unidad:"kg", precio:12.39},
+  ],
+  "Armado": [],
+  "Soldadura": [
+    {nombre:"ELECTRODO 7018 X 1/8\"", unidad:"kg", precio:3.03},
+    {nombre:"ELECTRODO 6011 X 1/8\"", unidad:"kg", precio:3.5},
+    {nombre:"ALAMBRE TUBULAR E71T1 DE 1,20MM", unidad:"kg", precio:1.3},
+    {nombre:"ALAMBRE TUBULAR E81T1 DE 1,20MM", unidad:"kg", precio:3.1},
+    {nombre:"ALAMBRE SOLIDO MIG 1.20mm", unidad:"kg", precio:1.45},
+    {nombre:"CO2", unidad:"kg", precio:1.43},
+  ],
+  "Perforaciones": [],
+  "Limpieza Mecánica": [
+    {nombre:"DISCO DE DESBASTE - METAL 4 1/2\" X 1/4\" X 7/8\"", unidad:"und", precio:0.96},
+    {nombre:"DISCO DE DESBASTE - METAL 7\" X 1/4\" X 7/8\"", unidad:"und", precio:1.74},
+    {nombre:"GRATA TIPO COPA ALAMBRE TRENZADO 4\" X 0.25 X5/8", unidad:"und", precio:15.25},
+    {nombre:"GRATA CIRCULAR TRENZADA 6\"", unidad:"und", precio:19.19},
+    {nombre:"DISCO POLIFAN 7\"", unidad:"und", precio:5.6},
+    {nombre:"LIJAS PARA HIERRRO 80", unidad:"und", precio:0.6},
+    {nombre:"LIJAS PARA HIERRRO 100", unidad:"und", precio:0.53},
+  ],
+  "Pintura": [
+    {nombre:"PINTURA ANTICORROSIVA  RAL 7035", unidad:"gal", precio:14.54},
+    {nombre:"PINTURA - DISOLVENTE - DILUYENTE", unidad:"gal", precio:8.8},
+  ],
+};
+[{"cj":"E-T-1","desc":"VIGA — 113 uds","partes":[{"pr":"pr64","perfil":"HI300-10-12*300","long":3000.0,"plan":113.0,"pu":234.56},{"pr":"pr65","perfil":"PL12*300","long":300.0,"plan":226.0,"pu":8.48},{"pr":"pr98","perfil":"PL8*100","long":100.0,"plan":452.0,"pu":0.61}]},{"cj":"E-T-2","desc":"VIGA — 2 uds","partes":[{"pr":"pr65","perfil":"PL12*300","long":300.0,"plan":4.0,"pu":8.48},{"pr":"pr73","perfil":"HI300-10-12*300","long":3000.0,"plan":2.0,"pu":234.56},{"pr":"pr86","perfil":"PL10*205","long":800.0,"plan":2.0,"pu":12.43}]},{"cj":"E-T-3","desc":"VIGA — 111 uds","partes":[{"pr":"pr65","perfil":"PL12*300","long":300.0,"plan":222.0,"pu":8.48},{"pr":"pr73","perfil":"HI300-10-12*300","long":3000.0,"plan":111.0,"pu":234.56},{"pr":"pr115","perfil":"PL10*205","long":800.0,"plan":111.0,"pu":12.43}]},{"cj":"E-T-4","desc":"VIGA — 1 uds","partes":[{"pr":"pr65","perfil":"PL12*300","long":300.0,"plan":6.0,"pu":8.48},{"pr":"pr68","perfil":"HI250-10-20*300","long":7827.0,"plan":1.0,"pu":865.9},{"pr":"pr72","perfil":"HI300-10-12*300","long":349.0,"plan":6.0,"pu":27.29},{"pr":"pr76","perfil":"K60*3","long":150.0,"plan":3.0,"pu":0.81},{"pr":"pr80","perfil":"PL20*235","long":520.0,"plan":3.0,"pu":16.92},{"pr":"pr84","perfil":"PL10*145","long":206.0,"plan":18.0,"pu":2.27},{"pr":"pr85","perfil":"PL10*206","long":350.0,"plan":6.0,"pu":4.41},{"pr":"pr110","perfil":"HI234-8-12*180","long":3151.0,"plan":1.0,"pu":137.32},{"pr":"pr111","perfil":"HI234-8-12*180","long":401.0,"plan":1.0,"pu":13.32},{"pr":"pr112","perfil":"PL10*220","long":254.0,"plan":1.0,"pu":4.39},{"pr":"pr116","perfil":"PL10*175","long":255.0,"plan":2.0,"pu":3.48},{"pr":"pr117","perfil":"PL12*230","long":250.0,"plan":3.0,"pu":5.39},{"pr":"pr118","perfil":"PL12*230","long":250.0,"plan":5.0,"pu":5.39},{"pr":"pr119","perfil":"HI250-10-20*250","long":1686.0,"plan":2.0,"pu":137.15},{"pr":"pr121","perfil":"HI250-10-20*300","long":2239.0,"plan":1.0,"pu":241.53},{"pr":"pr122","perfil":"HI250-10-20*300","long":4632.0,"plan":1.0,"pu":509.42},{"pr":"pr123","perfil":"PL10*175","long":255.0,"plan":1.0,"pu":3.48},{"pr":"pr124","perfil":"HI250-10-20*250","long":845.0,"plan":1.0,"pu":57.17},{"pr":"pr126","perfil":"HI250-10-20*300","long":1251.0,"plan":1.0,"pu":135.44}]},{"cj":"E-T-5","desc":"PLACA — 1 uds","partes":[{"pr":"pr65","perfil":"PL12*300","long":300.0,"plan":6.0,"pu":8.48},{"pr":"pr69","perfil":"HI250-10-20*300","long":7827.0,"plan":1.0,"pu":865.9},{"pr":"pr72","perfil":"HI300-10-12*300","long":349.0,"plan":6.0,"pu":27.29},{"pr":"pr76","perfil":"K60*3","long":150.0,"plan":3.0,"pu":0.81},{"pr":"pr80","perfil":"PL20*235","long":520.0,"plan":3.0,"pu":16.92},{"pr":"pr84","perfil":"PL10*145","long":206.0,"plan":18.0,"pu":2.27},{"pr":"pr85","perfil":"PL10*206","long":350.0,"plan":6.0,"pu":4.41},{"pr":"pr110","perfil":"HI234-8-12*180","long":3151.0,"plan":1.0,"pu":137.32},{"pr":"pr111","perfil":"HI234-8-12*180","long":401.0,"plan":1.0,"pu":13.32},{"pr":"pr112","perfil":"PL10*220","long":254.0,"plan":1.0,"pu":4.39},{"pr":"pr116","perfil":"PL10*175","long":255.0,"plan":2.0,"pu":3.48},{"pr":"pr117","perfil":"PL12*230","long":250.0,"plan":3.0,"pu":5.39},{"pr":"pr118","perfil":"PL12*230","long":250.0,"plan":5.0,"pu":5.39},{"pr":"pr119","perfil":"HI250-10-20*250","long":1686.0,"plan":2.0,"pu":137.15},{"pr":"pr121","perfil":"HI250-10-20*300","long":2239.0,"plan":1.0,"pu":241.53},{"pr":"pr122","perfil":"HI250-10-20*300","long":4632.0,"plan":1.0,"pu":509.42},{"pr":"pr123","perfil":"PL10*175","long":255.0,"plan":1.0,"pu":3.48},{"pr":"pr124","perfil":"HI250-10-20*250","long":845.0,"plan":1.0,"pu":57.17},{"pr":"pr126","perfil":"HI250-10-20*300","long":1251.0,"plan":1.0,"pu":135.44}]},{"cj":"E-T-6","desc":"VIGA — 54 uds","partes":[{"pr":"pr63","perfil":"HI250-10-20*300","long":6000.0,"plan":54.0,"pu":664.11},{"pr":"pr65","perfil":"PL12*300","long":300.0,"plan":216.0,"pu":8.48},{"pr":"pr67","perfil":"HI250-10-20*300","long":6000.0,"plan":54.0,"pu":664.11},{"pr":"pr72","perfil":"HI300-10-12*300","long":349.0,"plan":216.0,"pu":27.29},{"pr":"pr76","perfil":"K60*3","long":150.0,"plan":108.0,"pu":0.81},{"pr":"pr80","perfil":"PL20*235","long":520.0,"plan":108.0,"pu":16.92},{"pr":"pr84","perfil":"PL10*145","long":206.0,"plan":648.0,"pu":2.27},{"pr":"pr85","perfil":"PL10*206","long":350.0,"plan":216.0,"pu":4.41},{"pr":"pr110","perfil":"HI234-8-12*180","long":3151.0,"plan":54.0,"pu":137.32},{"pr":"pr111","perfil":"HI234-8-12*180","long":401.0,"plan":108.0,"pu":13.32},{"pr":"pr112","perfil":"PL10*220","long":254.0,"plan":108.0,"pu":4.39},{"pr":"pr116","perfil":"PL10*175","long":255.0,"plan":108.0,"pu":3.48},{"pr":"pr117","perfil":"PL12*230","long":250.0,"plan":216.0,"pu":5.39},{"pr":"pr118","perfil":"PL12*230","long":250.0,"plan":216.0,"pu":5.39},{"pr":"pr119","perfil":"HI250-10-20*250","long":1686.0,"plan":108.0,"pu":137.15}]},{"cj":"E-T-7","desc":"VIGA — 54 uds","partes":[{"pr":"pr63","perfil":"HI250-10-20*300","long":6000.0,"plan":54.0,"pu":664.11},{"pr":"pr65","perfil":"PL12*300","long":300.0,"plan":216.0,"pu":8.48},{"pr":"pr67","perfil":"HI250-10-20*300","long":6000.0,"plan":54.0,"pu":664.11},{"pr":"pr72","perfil":"HI300-10-12*300","long":349.0,"plan":216.0,"pu":27.29},{"pr":"pr76","perfil":"K60*3","long":150.0,"plan":108.0,"pu":0.81},{"pr":"pr80","perfil":"PL20*235","long":520.0,"plan":108.0,"pu":16.92},{"pr":"pr84","perfil":"PL10*145","long":206.0,"plan":648.0,"pu":2.27},{"pr":"pr85","perfil":"PL10*206","long":350.0,"plan":216.0,"pu":4.41},{"pr":"pr110","perfil":"HI234-8-12*180","long":3151.0,"plan":54.0,"pu":137.32},{"pr":"pr111","perfil":"HI234-8-12*180","long":401.0,"plan":108.0,"pu":13.32},{"pr":"pr112","perfil":"PL10*220","long":254.0,"plan":108.0,"pu":4.39},{"pr":"pr116","perfil":"PL10*175","long":255.0,"plan":108.0,"pu":3.48},{"pr":"pr117","perfil":"PL12*230","long":250.0,"plan":216.0,"pu":5.39},{"pr":"pr118","perfil":"PL12*230","long":250.0,"plan":216.0,"pu":5.39},{"pr":"pr119","perfil":"HI250-10-20*250","long":1686.0,"plan":108.0,"pu":137.15}]},{"cj":"E-T-8","desc":"VIGA — 1 uds","partes":[{"pr":"pr65","perfil":"PL12*300","long":300.0,"plan":4.0,"pu":8.48},{"pr":"pr70","perfil":"HI250-10-20*300","long":4081.0,"plan":1.0,"pu":451.39},{"pr":"pr72","perfil":"HI300-10-12*300","long":349.0,"plan":4.0,"pu":27.29},{"pr":"pr76","perfil":"K60*3","long":150.0,"plan":2.0,"pu":0.81},{"pr":"pr80","perfil":"PL20*235","long":520.0,"plan":1.0,"pu":16.92},{"pr":"pr84","perfil":"PL10*145","long":206.0,"plan":14.0,"pu":2.27},{"pr":"pr85","perfil":"PL10*206","long":350.0,"plan":2.0,"pu":4.41},{"pr":"pr88","perfil":"HI250-10-20*300","long":1260.0,"plan":1.0,"pu":134.25},{"pr":"pr90","perfil":"HI250-10-20*250","long":835.0,"plan":1.0,"pu":56.25},{"pr":"pr91","perfil":"PL10*179","long":255.0,"plan":1.0,"pu":3.56},{"pr":"pr99","perfil":"HI250-10-20*300","long":1791.0,"plan":1.0,"pu":192.8},{"pr":"pr111","perfil":"HI234-8-12*180","long":401.0,"plan":1.0,"pu":13.32},{"pr":"pr112","perfil":"PL10*220","long":254.0,"plan":1.0,"pu":4.39},{"pr":"pr113","perfil":"PL12*230","long":250.0,"plan":2.0,"pu":5.39},{"pr":"pr114","perfil":"HI250-10-20*300","long":1508.0,"plan":1.0,"pu":156.32},{"pr":"pr116","perfil":"PL10*175","long":255.0,"plan":1.0,"pu":3.48},{"pr":"pr117","perfil":"PL12*230","long":250.0,"plan":1.0,"pu":5.39},{"pr":"pr118","perfil":"PL12*230","long":250.0,"plan":1.0,"pu":5.39},{"pr":"pr119","perfil":"HI250-10-20*250","long":1686.0,"plan":1.0,"pu":137.15}]},{"cj":"E-T-9","desc":"VIGA — 1 uds","partes":[{"pr":"pr65","perfil":"PL12*300","long":300.0,"plan":4.0,"pu":8.48},{"pr":"pr71","perfil":"HI250-10-20*300","long":4081.0,"plan":1.0,"pu":451.39},{"pr":"pr72","perfil":"HI300-10-12*300","long":349.0,"plan":4.0,"pu":27.29},{"pr":"pr76","perfil":"K60*3","long":150.0,"plan":2.0,"pu":0.81},{"pr":"pr80","perfil":"PL20*235","long":520.0,"plan":1.0,"pu":16.92},{"pr":"pr84","perfil":"PL10*145","long":206.0,"plan":14.0,"pu":2.27},{"pr":"pr85","perfil":"PL10*206","long":350.0,"plan":2.0,"pu":4.41},{"pr":"pr88","perfil":"HI250-10-20*300","long":1260.0,"plan":1.0,"pu":134.25},{"pr":"pr90","perfil":"HI250-10-20*250","long":835.0,"plan":1.0,"pu":56.25},{"pr":"pr91","perfil":"PL10*179","long":255.0,"plan":1.0,"pu":3.56},{"pr":"pr99","perfil":"HI250-10-20*300","long":1791.0,"plan":1.0,"pu":192.8},{"pr":"pr111","perfil":"HI234-8-12*180","long":401.0,"plan":1.0,"pu":13.32},{"pr":"pr112","perfil":"PL10*220","long":254.0,"plan":1.0,"pu":4.39},{"pr":"pr113","perfil":"PL12*230","long":250.0,"plan":2.0,"pu":5.39},{"pr":"pr114","perfil":"HI250-10-20*300","long":1508.0,"plan":1.0,"pu":156.32},{"pr":"pr116","perfil":"PL10*175","long":255.0,"plan":1.0,"pu":3.48},{"pr":"pr117","perfil":"PL12*230","long":250.0,"plan":1.0,"pu":5.39},{"pr":"pr118","perfil":"PL12*230","long":250.0,"plan":1.0,"pu":5.39},{"pr":"pr119","perfil":"HI250-10-20*250","long":1686.0,"plan":1.0,"pu":137.15}]},{"cj":"E-T-10","desc":"ANGULO — 112 uds","partes":[{"pr":"pr105","perfil":"L80*8","long":4400.0,"plan":112.0,"pu":42.0}]},{"cj":"E-T-11","desc":"ANGULO — 224 uds","partes":[{"pr":"pr106","perfil":"L80*8","long":2050.0,"plan":224.0,"pu":19.57}]},{"cj":"E-T-12","desc":"PLACA — 111 uds","partes":[{"pr":"pr104","perfil":"PL12*200","long":600.0,"plan":111.0,"pu":11.3}]},{"cj":"E-T-13","desc":"ANGULO — 110 uds","partes":[{"pr":"pr102","perfil":"L75*8","long":4400.0,"plan":110.0,"pu":39.24}]},{"cj":"E-T-14","desc":"ANGULO — 220 uds","partes":[{"pr":"pr103","perfil":"L75*8","long":2050.0,"plan":220.0,"pu":18.28}]},{"cj":"E-T-15","desc":"PLACA — 110 uds","partes":[{"pr":"pr66","perfil":"PL12*200","long":600.0,"plan":110.0,"pu":11.3}]},{"cj":"E-T-16","desc":"ANGULO — 2 uds","partes":[{"pr":"pr107","perfil":"L80*8","long":4043.0,"plan":2.0,"pu":38.59}]},{"cj":"E-T-17","desc":"ANGULO — 4 uds","partes":[{"pr":"pr125","perfil":"L80*8","long":1850.0,"plan":4.0,"pu":17.66}]},{"cj":"E-T-18","desc":"PLACA — 1 uds","partes":[{"pr":"pr83","perfil":"PL12*200","long":643.0,"plan":1.0,"pu":12.11}]},{"cj":"E-T-19","desc":"ANGULO — 4 uds","partes":[{"pr":"pr74","perfil":"L75*8","long":1650.0,"plan":4.0,"pu":14.71}]},{"cj":"E-T-20","desc":"ANGULO — 4 uds","partes":[{"pr":"pr130","perfil":"L75*8","long":1650.0,"plan":4.0,"pu":14.71}]},{"cj":"E-T-21","desc":"ANGULO — 444 uds","partes":[{"pr":"pr100","perfil":"L75*8","long":1980.0,"plan":444.0,"pu":17.66}]},{"cj":"E-T-22","desc":"VIGA — 2 uds","partes":[{"pr":"pr109","perfil":"HI234-8-12*180","long":2109.0,"plan":2.0,"pu":98.86},{"pr":"pr112","perfil":"PL10*220","long":254.0,"plan":4.0,"pu":4.39}]},{"cj":"E-T-23","desc":"VIGA — 106 uds","partes":[{"pr":"pr101","perfil":"HI234-8-12*180","long":2310.0,"plan":106.0,"pu":108.81},{"pr":"pr112","perfil":"PL10*220","long":254.0,"plan":212.0,"pu":4.39}]},{"cj":"E-T-24","desc":"VIGA — 2 uds","partes":[{"pr":"pr87","perfil":"HI234-8-12*180","long":2349.0,"plan":2.0,"pu":110.57},{"pr":"pr112","perfil":"PL10*220","long":254.0,"plan":4.0,"pu":4.39}]},{"cj":"E-T-25","desc":"ANGULO — 2 uds","partes":[{"pr":"pr141","perfil":"L75*8","long":4265.0,"plan":2.0,"pu":38.03}]},{"cj":"E-T-26","desc":"ANGULO — 2 uds","partes":[{"pr":"pr139","perfil":"L75*8","long":1980.0,"plan":2.0,"pu":17.66}]},{"cj":"E-T-27","desc":"ANGULO — 2 uds","partes":[{"pr":"pr140","perfil":"L75*8","long":1985.0,"plan":2.0,"pu":17.7}]},{"cj":"E-T-28","desc":"ANGULO — 2 uds","partes":[{"pr":"pr156","perfil":"L80*8","long":2065.0,"plan":2.0,"pu":19.71}]},{"cj":"E-T-30","desc":"ANGULO — 2 uds","partes":[{"pr":"pr149","perfil":"L80*8","long":4266.0,"plan":2.0,"pu":40.72}]},{"cj":"E-T-31","desc":"ANGULO — 2 uds","partes":[{"pr":"pr146","perfil":"L80*8","long":1981.0,"plan":2.0,"pu":18.91}]},{"cj":"E-T-32","desc":"ANGULO — 2 uds","partes":[{"pr":"pr145","perfil":"L80*8","long":1985.0,"plan":2.0,"pu":18.95}]},{"cj":"E-T-33","desc":"ANGULO — 106 uds","partes":[{"pr":"pr136","perfil":"L75*8","long":4402.0,"plan":106.0,"pu":39.26}]},{"cj":"E-T-34","desc":"ANGULO — 212 uds","partes":[{"pr":"pr135","perfil":"L75*8","long":2051.0,"plan":212.0,"pu":18.29}]},{"cj":"E-T-35","desc":"ANGULO — 106 uds","partes":[{"pr":"pr147","perfil":"L80*8","long":4403.0,"plan":106.0,"pu":42.03}]},{"cj":"E-T-36","desc":"ANGULO — 212 uds","partes":[{"pr":"pr144","perfil":"L80*8","long":2052.0,"plan":212.0,"pu":19.58}]},{"cj":"E-T-37","desc":"ANGULO — 2 uds","partes":[{"pr":"pr134","perfil":"L75*8","long":4427.0,"plan":2.0,"pu":39.48}]},{"cj":"E-T-38","desc":"ANGULO — 4 uds","partes":[{"pr":"pr133","perfil":"L75*8","long":2064.0,"plan":4.0,"pu":18.4}]},{"cj":"E-T-39","desc":"ANGULO — 2 uds","partes":[{"pr":"pr148","perfil":"L80*8","long":4428.0,"plan":2.0,"pu":42.27}]},{"cj":"E-T-40","desc":"ANGULO — 2 uds","partes":[{"pr":"pr143","perfil":"L80*8","long":2064.0,"plan":2.0,"pu":19.7}]},{"cj":"PC-1","desc":"PLACA — 440 uds","partes":[{"pr":"pr155","perfil":"PL15*135","long":506.0,"plan":440.0,"pu":8.04}]},{"cj":"PC-2","desc":"PLACA — 220 uds","partes":[{"pr":"pr154","perfil":"PL15*300","long":506.0,"plan":220.0,"pu":17.87}]},{"cj":"PC-3","desc":"PLACA — 220 uds","partes":[{"pr":"pr151","perfil":"PL12*160","long":456.0,"plan":220.0,"pu":6.87}]},{"cj":"PC-4","desc":"PLACA — 220 uds","partes":[{"pr":"pr152","perfil":"PL15*300","long":504.0,"plan":220.0,"pu":17.81}]},{"cj":"PC-5","desc":"PLACA — 440 uds","partes":[{"pr":"pr153","perfil":"PL15*135","long":504.0,"plan":440.0,"pu":8.01}]},{"cj":"PC-6","desc":"PLACA — 220 uds","partes":[{"pr":"pr150","perfil":"PL12*160","long":454.0,"plan":220.0,"pu":6.84}]},{"cj":"E-C-1","desc":"TUBO-4\"X6 — 113 uds","partes":[{"pr":"pr78","perfil":"O100*6","long":1000.0,"plan":113.0,"pu":13.68},{"pr":"pr96","perfil":"PL8*150","long":200.0,"plan":226.0,"pu":1.88},{"pr":"pr97","perfil":"UPN160","long":997.0,"plan":226.0,"pu":18.57}]},{"cj":"E-PM-1","desc":"TC-75X3 — 2 uds","partes":[{"pr":"pr77","perfil":"K75*3","long":1099.0,"plan":6.0,"pu":7.45},{"pr":"pr92","perfil":"PL4*73","long":73.0,"plan":6.0,"pu":0.17},{"pr":"pr94","perfil":"PL4*48","long":48.0,"plan":6.0,"pu":0.07},{"pr":"pr108","perfil":"K50*3","long":2925.0,"plan":12.0,"pu":12.95},{"pr":"pr120","perfil":"K50*3","long":433.0,"plan":6.0,"pu":1.92}]},{"cj":"E-PM-2","desc":"TC-75X3 — 108 uds","partes":[{"pr":"pr77","perfil":"K75*3","long":1099.0,"plan":216.0,"pu":7.45},{"pr":"pr92","perfil":"PL4*73","long":73.0,"plan":216.0,"pu":0.17},{"pr":"pr108","perfil":"K50*3","long":2925.0,"plan":324.0,"pu":12.95}]},{"cj":"E-PM-3","desc":"TC-75X3 — 2 uds","partes":[{"pr":"pr77","perfil":"K75*3","long":1099.0,"plan":4.0,"pu":7.45},{"pr":"pr92","perfil":"PL4*73","long":73.0,"plan":4.0,"pu":0.17},{"pr":"pr94","perfil":"PL4*48","long":48.0,"plan":6.0,"pu":0.07},{"pr":"pr95","perfil":"K50*3","long":108.0,"plan":6.0,"pu":0.48},{"pr":"pr127","perfil":"K50*3","long":2204.0,"plan":6.0,"pu":9.76}]},{"cj":"E-PM-4","desc":"TC-50X3 — 318 uds","partes":[{"pr":"pr173","perfil":"K50*3","long":2931.0,"plan":318.0,"pu":12.98}]},{"cj":"E-PM-5","desc":"TC-50X3 — 6 uds","partes":[{"pr":"pr174","perfil":"K50*3","long":2974.0,"plan":6.0,"pu":13.17}]},{"cj":"E-PM-6","desc":"TC-50X3 — 6 uds","partes":[{"pr":"pr172","perfil":"K50*3","long":2684.0,"plan":6.0,"pu":11.89}]},{"cj":"ANC-1","desc":"BARRA DE ANCLAJE — 24 uds","partes":[{"pr":"pr193","perfil":"PL25*210","long":210.0,"plan":48.0,"pu":6.69},{"pr":"pr194","perfil":"PL25*106","long":120.0,"plan":96.0,"pu":1.21},{"pr":"pr195","perfil":"UPN100","long":100.0,"plan":288.0,"pu":1.04},{"pr":"pr196","perfil":"PL38*245","long":2244.0,"plan":24.0,"pu":161.96},{"pr":"pr197","perfil":"PL38*250","long":285.0,"plan":24.0,"pu":21.25}]}];
 
 // PLAN es la variable dinámica que usa toda la app. Arranca con la semilla local
 // (para funcionar sin red) y se reemplaza con lo que traiga el servidor apenas
@@ -466,6 +534,8 @@ let W=null,selFase=null,selCj=null,selParte=null,calidad='ok';
 let draft={pl:{},ct:{}};
 let _cache=[]; // registros de TODO el equipo (para "Hecho"/Total y stock disponible)
 let _myCache=[]; // registros SOLO de este operario (para "Yo" y su historial propio)
+let ALL_OPERARIOS=[]; // lista completa de operarios cargados (para la pantalla de Bodega)
+let _consumiblesCache=[]; // entregas de consumibles cargadas (Bodega)
 
 // ======= UTILS =======
 const todayISO=()=>new Date().toISOString().split('T')[0];
@@ -581,8 +651,8 @@ const DEFAULT_WORKERS=[
 ];
 
 // Acciones que deben filtrarse/etiquetarse por proyecto automáticamente.
-const PROYECTO_SCOPED_GET_W  = ['getOperarios','getRegistros','getCorrecciones','getAlertas','getPlanConjuntos'];
-const PROYECTO_SCOPED_POST_W = ['addRegistro','addOperario','addCorreccion','addAlerta','addPlanConjuntos'];
+const PROYECTO_SCOPED_GET_W  = ['getOperarios','getRegistros','getCorrecciones','getAlertas','getPlanConjuntos','getConsumibles'];
+const PROYECTO_SCOPED_POST_W = ['addRegistro','addOperario','addCorreccion','addAlerta','addPlanConjuntos','addConsumible'];
 
 // == API Google Apps Script ======================
 const GAS = {
@@ -840,6 +910,7 @@ async function loadAndRenderWorkers() {
 }
 
 function renderWorkers(ws){
+  ALL_OPERARIOS = ws || [];
   document.getElementById('worker-list').innerHTML=ws.length
     ? ws.filter(w=>w.est!=='inactivo').map(w=>`
       <div class="w-card" onclick='selectWorker(${JSON.stringify(w).replace(/'/g,"&#39;")})'>
@@ -906,9 +977,128 @@ function _entrarAHome(w){
   document.getElementById('home-name').textContent=`${w.nom} ${w.ape}`;
   document.getElementById('home-role').textContent=`${w.rol} · ${w.fase}`;
   document.getElementById('home-icon').textContent=w.icon||'👷';
+
+  const esBodega = (w.fase||'').trim().toLowerCase()==='bodega';
+  const btn = document.getElementById('home-btn-principal');
+  const histTitle = document.getElementById('home-hist-title');
+  if(esBodega){
+    btn.textContent = '📦  Registrar entrega de consumibles';
+    btn.setAttribute('onclick', "go('sc-bodega')");
+    histTitle.textContent = '📦 Entregas de hoy';
+  } else {
+    btn.textContent = '✚  Registrar mi trabajo';
+    btn.setAttribute('onclick', "go('sc-fase')");
+    histTitle.textContent = '📋 Mis registros de hoy';
+  }
+
   buildFaseGrid();
   go('sc-home');
-  loadMyRecs().then(renderHomeHist);
+  loadMyRecs().then(()=>{
+    if(esBodega){ bodPoblarOperarios(); loadConsumibles().then(renderBodHist); }
+    else renderHomeHist();
+  });
+}
+
+async function loadConsumibles(){
+  const pendKey = 'cons_pending_' + PROYECTO_ACTUAL;
+  let base = [];
+  if(GAS.configured()){
+    try{ base = await GAS.get('getConsumibles') || []; }catch(e){ base = []; }
+  }
+  const pendientes = LS.g(pendKey, []);
+  const idsServer = new Set(base.map(r=>String(r.id)));
+  _consumiblesCache = [...base, ...pendientes.filter(p=>!idsServer.has(String(p.id)))];
+  return _consumiblesCache;
+}
+
+// ════════════════════════════════════════════════════════════
+// BODEGA — entrega de consumibles a operarios de producción
+// ════════════════════════════════════════════════════════════
+
+function bodPoblarOperarios(){
+  const sel = document.getElementById('bod-op-destino');
+  if(!sel) return;
+  const opsProd = (ALL_OPERARIOS||[]).filter(o=>(o.fase||'').trim().toLowerCase()!=='bodega' && String(o.est||'activo').toLowerCase()!=='inactivo');
+  sel.innerHTML = '<option value="">Selecciona un operario...</option>' +
+    opsProd.map(o=>`<option value="${o.id}">${o.nom} ${o.ape} — ${o.fase}</option>`).join('');
+}
+
+function bodOnDestinoChange(){
+  const sel = document.getElementById('bod-op-destino');
+  const itemSel = document.getElementById('bod-item');
+  const opId = sel.value;
+  const op = (ALL_OPERARIOS||[]).find(o=>String(o.id)===String(opId));
+  if(!op){ itemSel.innerHTML = '<option value="">Primero selecciona el operario...</option>'; return; }
+  const items = CONSUMIBLES_CATALOGO[op.fase] || [];
+  if(!items.length){
+    itemSel.innerHTML = `<option value="">Sin consumibles definidos para ${op.fase}</option>`;
+    return;
+  }
+  itemSel.innerHTML = '<option value="">Selecciona el consumible...</option>' +
+    items.map((it,i)=>`<option value="${i}">${it.nombre} (${it.unidad}) — $${it.precio}</option>`).join('');
+}
+
+function wkRegistrarConsumible(){
+  const destSel = document.getElementById('bod-op-destino');
+  const itemSel = document.getElementById('bod-item');
+  const cantEl  = document.getElementById('bod-cantidad');
+  const destId  = destSel.value;
+  const dest    = (ALL_OPERARIOS||[]).find(o=>String(o.id)===String(destId));
+  const cantidad = parseFloat(cantEl.value);
+
+  if(!dest){ alert('⚠ Selecciona a quién le entregas.'); return; }
+  const items = CONSUMIBLES_CATALOGO[dest.fase] || [];
+  const item = items[itemSel.value];
+  if(!item){ alert('⚠ Selecciona qué le entregas.'); return; }
+  if(!cantidad || cantidad<=0){ alert('⚠ Ingresa una cantidad válida.'); return; }
+
+  const rec = {
+    id: 'cons_' + Date.now() + '_' + Math.random().toString(36).slice(2,8),
+    fecha: todayISO(),
+    timestamp: new Date().toISOString(),
+    bodegaId: W.id, bodegaNom: `${W.nom} ${W.ape}`,
+    destinoId: dest.id, destinoNom: `${dest.nom} ${dest.ape}`, destinoFase: dest.fase,
+    item: item.nombre, unidad: item.unidad, cantidad: cantidad,
+    precioUnit: item.precio, costoTotal: +(item.precio*cantidad).toFixed(2),
+  };
+
+  _consumiblesCache = [..._consumiblesCache, rec];
+  const pendKey = 'cons_pending_' + PROYECTO_ACTUAL;
+  const pending = LS.g(pendKey, []);
+  pending.push(rec);
+  LS.s(pendKey, pending);
+
+  if(GAS.configured()){
+    GAS.post('addConsumible', rec).then(r=>{
+      if(r && r.ok){
+        const upd = LS.g(pendKey, []).filter(p=>p.id!==rec.id);
+        LS.s(pendKey, upd);
+      }
+    }).catch(()=>{});
+  }
+
+  cantEl.value = '';
+  destSel.value = '';
+  itemSel.innerHTML = '<option value="">Primero selecciona el operario...</option>';
+  renderBodHist();
+  alert(`✅ Registrado: ${cantidad} ${item.unidad} de "${item.nombre}" para ${dest.nom} ${dest.ape}`);
+}
+
+function renderBodHist(){
+  const div = document.getElementById('bod-hist');
+  if(!div) return;
+  const hoy = (_consumiblesCache||[]).filter(r=>r.fecha===todayISO() && String(r.bodegaId)===String(W?.id));
+  if(!hoy.length){
+    div.innerHTML = '<div style="text-align:center;color:var(--gr);font-size:13px;padding:.75rem">Nada aún hoy.</div>';
+    return;
+  }
+  div.innerHTML = hoy.slice().reverse().map(r=>`
+    <div style="padding:.625rem 0;border-bottom:1px solid var(--bd)">
+      <div style="font-size:13px;font-weight:700;color:var(--b)">${r.destinoNom} <span style="font-weight:400;color:var(--gr)">(${r.destinoFase})</span></div>
+      <div style="font-size:12px;color:var(--gr)">${r.cantidad} ${r.unidad} — ${r.item}</div>
+      <div style="font-size:11px;color:var(--gr)">$${r.costoTotal.toFixed(2)}</div>
+    </div>
+  `).join('');
 }
 
 async function loadMyRecs(){
