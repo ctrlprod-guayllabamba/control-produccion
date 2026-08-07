@@ -1161,6 +1161,7 @@ global.Chart = class {
           <select id="op-rol">
             <option>Cortador</option><option>Armador</option><option>Soldador</option>
             <option>Perforador</option><option>Ayudante</option><option>Pintor</option><option>Operador Grúa</option>
+            <option>Bodeguero</option>
           </select>
         </div>
       </div>
@@ -1193,6 +1194,7 @@ global.Chart = class {
           <option value="">Todos los roles</option>
           <option>Cortador</option><option>Armador</option><option>Soldador</option>
           <option>Perforador</option><option>Ayudante</option><option>Pintor</option><option>Operador Grúa</option>
+          <option>Bodeguero</option>
         </select>
         <button class="btn btn-s btn-sm no-print" onclick="window.print()">🖨</button>
       </div>
@@ -1684,7 +1686,15 @@ async function loadFromServer(){
       // Cargar operarios
       const ops = await GAS.get('getOperarios');
       if(ops && Array.isArray(ops) && ops.length) {
-        ST.ops=ops; LS.save(LSK('ops'),ops);
+        // No perder los que aún están pendientes de guardarse en Google
+        // (evita el bug del 6 ago 2026: un operario recién registrado
+        // desaparecía si el servidor respondía antes de que se confirmara
+        // su propio guardado).
+        const pendientes = LS.load(OPS_PENDING_KEY(), []);
+        const idsServer = new Set(ops.map(o=>String(o.id)));
+        const faltantes = pendientes.filter(p=>!idsServer.has(String(p.id))).map(p=>({...p, _pendienteSync:true}));
+        ST.ops = [...ops, ...faltantes];
+        LS.save(LSK('ops'), ST.ops);
       } else if(Array.isArray(ops) && ops.length===0 && ST.ops.length>0) {
         GAS.post('bulkOperarios', ST.ops).catch(()=>{});
       }
@@ -6456,7 +6466,7 @@ function renderOps(){
   const list= ST.ops.filter(o=>(!q||(o.nom+o.ape+o.ced+o.rol).toLowerCase().includes(q))&&(!frol||o.rol===frol));
   const row = (o,i)=>`<tr style="${o.est==='inactivo'?'opacity:.5':''}">
     <td>${i+1}</td>
-    <td><strong>${o.nom} ${o.ape}</strong></td>
+    <td><strong>${o.nom} ${o.ape}</strong>${o._pendienteSync?' <span class="badge" style="background:#fef3c7;color:#92400e" title="Aún no confirmado en Google — se reintenta solo">⏳ pendiente</span>':''}</td>
     <td>${o.rol}</td><td>${o.fase}</td>
     <td class="mono" style="font-size:11px;">${o.ced||'—'}</td>
     <td style="font-size:11px;">${o.tel||'—'}</td>
@@ -6506,12 +6516,14 @@ async function reactivarOp(id, nombre){
   }catch(e){ alert('❌ Error: '+e.message); }
 }
 
-function addOp(){
+function OPS_PENDING_KEY(){ return LSK('ops_pending'); }
+
+async function addOp(){
   const nom=document.getElementById('op-nom').value.trim();
   const ape=document.getElementById('op-ape').value.trim();
   if(!nom||!ape){toast('⚠ Nombre y apellido requeridos');return;}
   const fase=document.getElementById('op-fase').value;
-  const ICONS={'Corte':'✂','Armado':'🔧','Soldadura':'🔥','Perforaciones':'🔩','Limpieza Mecánica':'🧹','Pintura':'🎨','Soporte':'🏗'};
+  const ICONS={'Corte':'✂','Armado':'🔧','Soldadura':'🔥','Perforaciones':'🔩','Limpieza Mecánica':'🧹','Pintura':'🎨','Soporte':'🏗','Bodega':'📦'};
   const newOp={id:Date.now(),nom,ape,
     ced:document.getElementById('op-ced').value.trim(),
     rol:document.getElementById('op-rol').value,
@@ -6521,14 +6533,59 @@ function addOp(){
     est:document.getElementById('op-est')?.value||'activo'};
   ST.ops.push(newOp);
   saveAll();
-  // Sync to Google Apps Script
-  if(GAS.configured()){
-    GAS.post('addOperario', newOp)
-      .then(r=>{ if(r&&r.ok) toast(`✓ Operario guardado en Google: ${nom} ${ape}`); })
-      .catch(()=>toast(`✓ Operario guardado localmente: ${nom} ${ape}`));
-  }
   clearOp();renderOps();initCorteSelects();initProdSelects();
-  toast(`✓ Operario registrado: ${nom} ${ape} — Exporta la lista y sube operarios.json a GitHub`);
+
+  // Guardar en Google Sheets — sin mentir sobre el resultado: si falla,
+  // se marca como pendiente y se reintenta solo, no se dice "guardado" si no
+  // se pudo confirmar de verdad (bug corregido 6 ago 2026: antes mostraba
+  // "guardado" incluso cuando nunca llegó al servidor, y el registro se
+  // perdía en el siguiente refresco de datos).
+  if(!GAS.configured()){
+    toast(`⚠ Sin conexión a Google configurada — "${nom} ${ape}" solo quedó en este navegador`);
+    return;
+  }
+  try{
+    const r = await GAS.post('addOperario', newOp);
+    if(r && r.ok){
+      toast(`✓ Operario guardado en Google: ${nom} ${ape} — recuerda exportar y subir operarios.json`);
+    } else {
+      _marcarOpComoPendiente(newOp);
+      toast(`⚠ "${nom} ${ape}" NO se pudo confirmar en Google (${(r&&r.msg)||'respuesta vacía'}) — se reintentará solo`);
+    }
+  }catch(e){
+    _marcarOpComoPendiente(newOp);
+    toast(`⚠ Sin conexión — "${nom} ${ape}" se guardará en Google apenas vuelva la señal`);
+  }
+}
+
+function _marcarOpComoPendiente(op){
+  const pend = LS.load(OPS_PENDING_KEY(), []);
+  if(!pend.some(p=>p.id===op.id)) pend.push(op);
+  LS.save(OPS_PENDING_KEY(), pend);
+  const row = ST.ops.find(o=>o.id===op.id);
+  if(row) row._pendienteSync = true;
+  renderOps();
+}
+
+async function reintentarOpsPendientes(){
+  if(!GAS.configured()) return;
+  const pend = LS.load(OPS_PENDING_KEY(), []);
+  if(!pend.length) return;
+  const siguenPendientes = [];
+  for(const op of pend){
+    try{
+      const r = await GAS.post('addOperario', op);
+      if(r && r.ok){
+        const row = ST.ops.find(o=>o.id===op.id);
+        if(row) delete row._pendienteSync;
+        toast(`✓ Sincronizado: ${op.nom} ${op.ape} ya quedó guardado en Google`);
+      } else {
+        siguenPendientes.push(op);
+      }
+    }catch(e){ siguenPendientes.push(op); }
+  }
+  LS.save(OPS_PENDING_KEY(), siguenPendientes);
+  renderOps();
 }
 
 
@@ -7784,6 +7841,7 @@ async function iniciarApp(){
   // Load alertas
   loadAlertas();
   setInterval(loadAlertas, 60000);
+  setInterval(reintentarOpsPendientes, 60000);
 
   // Auto-refresh every 30 seconds - picks up worker registros automatically
   let _refreshCnt = 0;
