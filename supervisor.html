@@ -452,6 +452,43 @@ global.Chart = class {
       onkeydown="if(event.key==='Enter')intentarLogin()">
     <div id="login-error" style="display:none;color:#991b1b;font-size:12px;margin-bottom:.75rem;text-align:center;"></div>
     <button id="login-btn" onclick="intentarLogin()" style="width:100%;padding:11px;background:#ff5a1f;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;">Entrar</button>
+    <div style="text-align:center;margin-top:.875rem;">
+      <a href="javascript:void(0)" onclick="mostrarRecuperarClave()" style="font-size:12px;color:#6c757d;text-decoration:underline;">¿Olvidaste tu contraseña?</a>
+    </div>
+  </div>
+</div>
+
+<!-- RECUPERAR CONTRASEÑA — paso 1: pedir correo -->
+<div id="recuperar-gate" style="display:none;position:fixed;inset:0;background:linear-gradient(135deg,#151b26 0%,#1c2534 100%);z-index:99999;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:14px;padding:2.5rem 2rem;width:340px;max-width:90vw;box-shadow:0 20px 60px rgba(0,0,0,.4);">
+    <div style="text-align:center;margin-bottom:1.5rem;">
+      <div style="font-size:14px;font-weight:800;letter-spacing:.14em;color:#151b26;text-transform:uppercase;">🔑 Recuperar contraseña</div>
+      <div style="font-size:12px;color:#6c757d;margin-top:.5rem;">Solo para cuentas de Administrador o Visor con correo registrado</div>
+    </div>
+    <input type="email" id="recuperar-email" placeholder="Tu correo electrónico" autocomplete="email"
+      style="width:100%;padding:11px;border:1.5px solid #d1d5db;border-radius:8px;font-size:15px;margin-bottom:.75rem;box-sizing:border-box;"
+      onkeydown="if(event.key==='Enter')enviarRecuperacion()">
+    <div id="recuperar-msg" style="display:none;font-size:12px;margin-bottom:.75rem;text-align:center;"></div>
+    <button id="recuperar-btn" onclick="enviarRecuperacion()" style="width:100%;padding:11px;background:#ff5a1f;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;">Enviar link de recuperación</button>
+    <div style="text-align:center;margin-top:.875rem;">
+      <a href="javascript:void(0)" onclick="document.getElementById('recuperar-gate').style.display='none';document.getElementById('login-gate').style.display='flex';" style="font-size:12px;color:#6c757d;text-decoration:underline;">← Volver a iniciar sesión</a>
+    </div>
+  </div>
+</div>
+
+<!-- RECUPERAR CONTRASEÑA — paso 2: definir contraseña nueva (llega por el link del correo) -->
+<div id="reset-gate" style="display:none;position:fixed;inset:0;background:linear-gradient(135deg,#151b26 0%,#1c2534 100%);z-index:99999;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:14px;padding:2.5rem 2rem;width:340px;max-width:90vw;box-shadow:0 20px 60px rgba(0,0,0,.4);">
+    <div style="text-align:center;margin-bottom:1.5rem;">
+      <div style="font-size:14px;font-weight:800;letter-spacing:.14em;color:#151b26;text-transform:uppercase;">🔑 Definir contraseña nueva</div>
+    </div>
+    <input type="password" id="reset-pass1" placeholder="Contraseña nueva" autocomplete="new-password"
+      style="width:100%;padding:11px;border:1.5px solid #d1d5db;border-radius:8px;font-size:15px;margin-bottom:.75rem;box-sizing:border-box;">
+    <input type="password" id="reset-pass2" placeholder="Repite la contraseña nueva" autocomplete="new-password"
+      style="width:100%;padding:11px;border:1.5px solid #d1d5db;border-radius:8px;font-size:15px;margin-bottom:.75rem;box-sizing:border-box;"
+      onkeydown="if(event.key==='Enter')confirmarNuevaClave()">
+    <div id="reset-msg" style="display:none;font-size:12px;margin-bottom:.75rem;text-align:center;"></div>
+    <button id="reset-btn" onclick="confirmarNuevaClave()" style="width:100%;padding:11px;background:#ff5a1f;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;">Guardar contraseña nueva</button>
   </div>
 </div>
 
@@ -1132,6 +1169,7 @@ global.Chart = class {
           <select id="op-fase">
             <option>Corte</option><option>Armado</option><option>Soldadura</option>
             <option>Perforaciones</option><option>Limpieza Mecánica</option><option>Pintura</option><option>Soporte</option>
+            <option>Bodega</option>
           </select>
         </div>
         <div class="fg"><label>Teléfono</label><input type="text" id="op-tel" placeholder="+593..."></div>
@@ -1234,6 +1272,7 @@ global.Chart = class {
       <div class="card-hdr">🔑 Registrar usuario</div>
       <div class="field"><label>Nombre completo</label><input type="text" id="us-nombre" placeholder="Ej: Ana Torres"></div>
       <div class="field"><label>Cédula (será su contraseña inicial)</label><input type="text" id="us-cedula" placeholder="Ej: 1234567890"></div>
+      <div class="field"><label>Correo electrónico <span style="font-weight:400;color:var(--gm)">(para recuperar contraseña — solo Admin/Visor)</span></label><input type="email" id="us-email" placeholder="Ej: ana@correo.com"></div>
       <div class="field"><label>Función</label>
         <select id="us-rol">
           <option value="viewer">👁 Visor — solo puede ver, no puede modificar nada</option>
@@ -6370,6 +6409,7 @@ function armarMensajeCompartir(nombre, url){
 async function crearUsuario(){
   const nombre = document.getElementById('us-nombre').value.trim();
   const cedula = document.getElementById('us-cedula').value.trim();
+  const email  = document.getElementById('us-email').value.trim();
   const rol = document.getElementById('us-rol').value;
   const err = document.getElementById('us-error');
   err.style.display='none';
@@ -6379,10 +6419,11 @@ async function crearUsuario(){
     return;
   }
   try{
-    const resp = await GAS.post('addUsuario', {nombre, cedula, rol});
+    const resp = await GAS.post('addUsuario', {nombre, cedula, rol, email});
     if(resp && resp.ok){
       document.getElementById('us-nombre').value='';
       document.getElementById('us-cedula').value='';
+      document.getElementById('us-email').value='';
       cargarUsuarios();
       alert(`✅ Usuario "${nombre}" registrado. Su contraseña inicial es su cédula.`);
     } else {
@@ -7604,6 +7645,93 @@ async function intentarLogin(){
   }
 }
 
+// ── Recuperación de contraseña por correo (solo Admin/Visor) ─────────
+function mostrarRecuperarClave(){
+  document.getElementById('login-gate').style.display='none';
+  document.getElementById('recuperar-gate').style.display='flex';
+  document.getElementById('recuperar-msg').style.display='none';
+  document.getElementById('recuperar-email').value='';
+  document.getElementById('recuperar-email').focus();
+}
+
+async function enviarRecuperacion(){
+  const email = document.getElementById('recuperar-email').value.trim();
+  const btn = document.getElementById('recuperar-btn');
+  const msg = document.getElementById('recuperar-msg');
+  if(!email){
+    msg.textContent = '⚠ Ingresa tu correo.';
+    msg.style.color = '#991b1b';
+    msg.style.display = '';
+    return;
+  }
+  btn.disabled = true; btn.textContent = 'Enviando...';
+  try{
+    const resp = await GAS.post('solicitarRecuperacion', {email});
+    msg.textContent = (resp && resp.msg) || 'Si el correo está registrado, se envió un link de recuperación.';
+    msg.style.color = '#166534';
+    msg.style.display = '';
+  }catch(e){
+    msg.textContent = '❌ Error de conexión: ' + e.message;
+    msg.style.color = '#991b1b';
+    msg.style.display = '';
+  }
+  btn.disabled = false; btn.textContent = 'Enviar link de recuperación';
+}
+
+// Al abrir la página con ?resetToken=... (el link que llega por correo),
+// se muestra la pantalla de "definir contraseña nueva" en vez del login normal.
+let _resetTokenActual = null;
+function detectarResetTokenEnURL(){
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get('resetToken');
+  if(token){
+    _resetTokenActual = token;
+    document.getElementById('login-gate').style.display='none';
+    document.getElementById('reset-gate').style.display='flex';
+  }
+}
+
+async function confirmarNuevaClave(){
+  const p1 = document.getElementById('reset-pass1').value;
+  const p2 = document.getElementById('reset-pass2').value;
+  const btn = document.getElementById('reset-btn');
+  const msg = document.getElementById('reset-msg');
+  msg.style.display='none';
+  if(!p1 || p1.length<4){
+    msg.textContent = '⚠ La contraseña debe tener al menos 4 caracteres.';
+    msg.style.color = '#991b1b'; msg.style.display='';
+    return;
+  }
+  if(p1 !== p2){
+    msg.textContent = '⚠ Las contraseñas no coinciden.';
+    msg.style.color = '#991b1b'; msg.style.display='';
+    return;
+  }
+  btn.disabled = true; btn.textContent = 'Guardando...';
+  try{
+    const resp = await GAS.post('cambiarPasswordConToken', {token: _resetTokenActual, nuevaPassword: p1});
+    if(resp && resp.ok){
+      msg.textContent = `✅ Contraseña actualizada${resp.nombre?', '+resp.nombre:''}. Ya puedes iniciar sesión.`;
+      msg.style.color = '#166534'; msg.style.display='';
+      btn.style.display = 'none';
+      // Limpiar el token de la URL y volver al login normal después de un momento
+      setTimeout(()=>{
+        window.history.replaceState({}, '', window.location.pathname);
+        document.getElementById('reset-gate').style.display='none';
+        document.getElementById('login-gate').style.display='flex';
+      }, 2200);
+    } else {
+      msg.textContent = '❌ ' + ((resp&&resp.msg)||'No se pudo cambiar la contraseña.');
+      msg.style.color = '#991b1b'; msg.style.display='';
+      btn.disabled = false; btn.textContent = 'Guardar contraseña nueva';
+    }
+  }catch(e){
+    msg.textContent = '❌ Error de conexión: ' + e.message;
+    msg.style.color = '#991b1b'; msg.style.display='';
+    btn.disabled = false; btn.textContent = 'Guardar contraseña nueva';
+  }
+}
+
 async function iniciarApp(){
   // Insignia de rol + nombre + botón de salir en el topbar
   const topbar = document.querySelector('.topbar');
@@ -7678,6 +7806,13 @@ async function iniciarApp(){
 }
 
 document.addEventListener('DOMContentLoaded', async ()=>{
+  // Si el link trae ?resetToken=..., siempre se prioriza la pantalla de
+  // "definir contraseña nueva", sin importar si ya había sesión iniciada.
+  const params = new URLSearchParams(window.location.search);
+  if(params.get('resetToken')){
+    detectarResetTokenEnURL();
+    return;
+  }
   if(!GAS.configured()){
     // Sin backend configurado: no tiene sentido pedir contraseña (no hay cómo verificarla)
     document.getElementById('login-gate').style.display='none';
