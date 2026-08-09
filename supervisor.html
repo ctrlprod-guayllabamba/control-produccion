@@ -1133,10 +1133,16 @@ global.Chart = class {
   <!-- Sincronizar operarios desde GAS -->
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:.625rem 1rem">
     <div style="font-size:12px;color:#065f46" id="op-sync-status">Operarios cargados desde Google Sheets</div>
-    <button onclick="sincronizarOperarios()" 
-      style="padding:.375rem .875rem;background:#16a34a;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer">
-      🔄 Sincronizar
-    </button>
+    <div style="display:flex;gap:6px">
+      <button onclick="reintentarOpsPendientes(false)" title="Reintenta guardar en Google los operarios marcados como pendientes y muestra el motivo si falla"
+        style="padding:.375rem .875rem;background:#b45309;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer">
+        ⏳ Reintentar pendientes
+      </button>
+      <button onclick="sincronizarOperarios()" 
+        style="padding:.375rem .875rem;background:#16a34a;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer">
+        🔄 Sincronizar
+      </button>
+    </div>
   </div>
   <div style="display:flex;gap:4px;margin-bottom:1rem;border-bottom:2px solid var(--gl);">
     <button class="op-inner-tab active" id="opti-manual" onclick="switchOpTab('manual')" style="padding:7px 18px;font-size:11px;font-weight:700;background:none;border:none;border-bottom:3px solid var(--oa);cursor:pointer;color:var(--sd);margin-bottom:-2px;">✏ Registro Manual</button>
@@ -6608,25 +6614,53 @@ function _marcarOpComoPendiente(op){
   renderOps();
 }
 
-async function reintentarOpsPendientes(){
+async function reintentarOpsPendientes(silencioso){
   if(!GAS.configured()) return;
+  // Sin sesión lista, addOperario se rechaza por falta de permisos —
+  // esperar a que el login termine antes de reintentar (corregido 8 ago 2026).
+  if(!ROL_ACTUAL || !AUTH_TOKEN) return;
   const pend = LS.load(OPS_PENDING_KEY(), []);
-  if(!pend.length) return;
+  if(!pend.length){ if(!silencioso) toast('No hay operarios pendientes de sincronizar'); return; }
+
   const siguenPendientes = [];
+  let okCount = 0;
+  const motivos = [];
+
   for(const op of pend){
     try{
       const r = await GAS.post('addOperario', op);
       if(r && r.ok){
-        const row = ST.ops.find(o=>o.id===op.id);
+        okCount++;
+        const row = ST.ops.find(o=>String(o.id)===String(op.id));
         if(row) delete row._pendienteSync;
-        toast(`✓ Sincronizado: ${op.nom} ${op.ape} ya quedó guardado en Google`);
       } else {
-        siguenPendientes.push(op);
+        const msg = (r && (r.msg||r.error)) || 'el servidor no confirmó';
+        // Si el servidor lo rechaza de forma definitiva (p.ej. cédula ya
+        // registrada), reintentar para siempre no sirve de nada: se descarta
+        // de la cola y se avisa, en vez de dejarlo atascado en "pendiente".
+        const definitivo = /ya existe|duplicad|no autorizado|obligatori/i.test(String(msg));
+        if(definitivo){
+          motivos.push(`${op.nom} ${op.ape}: ${msg}`);
+          ST.ops = ST.ops.filter(o=>String(o.id)!==String(op.id));
+        } else {
+          siguenPendientes.push(op);
+          motivos.push(`${op.nom} ${op.ape}: ${msg}`);
+        }
       }
-    }catch(e){ siguenPendientes.push(op); }
+    }catch(e){
+      siguenPendientes.push(op);
+      motivos.push(`${op.nom} ${op.ape}: sin conexión`);
+    }
   }
+
   LS.save(OPS_PENDING_KEY(), siguenPendientes);
+  LS.save(LSK('ops'), ST.ops);
   renderOps();
+
+  if(!silencioso || okCount>0 || motivos.length){
+    if(okCount>0) toast(`✓ ${okCount} operario(s) sincronizado(s) con Google`);
+    if(motivos.length) alert('Resultado de la sincronización:\n\n• ' + motivos.join('\n• '));
+  }
 }
 
 
@@ -8020,7 +8054,7 @@ async function iniciarApp(){
   // Load alertas
   loadAlertas();
   setInterval(loadAlertas, 60000);
-  setInterval(reintentarOpsPendientes, 60000);
+  setInterval(()=>reintentarOpsPendientes(true), 60000);
 
   // Auto-refresh every 30 seconds - picks up worker registros automatically
   let _refreshCnt = 0;
