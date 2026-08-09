@@ -168,15 +168,30 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);min-height
     </select>
 
     <label style="font-size:12px;font-weight:700;color:var(--gr);display:block;margin-bottom:.25rem">¿Qué le entregas?</label>
+    <input type="text" id="bod-item-buscar" placeholder="🔎 Buscar material..." oninput="bodFiltrarItems()"
+      style="width:100%;padding:.5rem;border:1.5px solid var(--bd);border-radius:10px;font-size:13px;margin-bottom:.375rem">
     <select id="bod-item" style="width:100%;padding:.625rem;border:1.5px solid var(--bd);border-radius:10px;font-size:14px;margin-bottom:.75rem">
       <option value="">Primero selecciona el operario...</option>
     </select>
 
     <label style="font-size:12px;font-weight:700;color:var(--gr);display:block;margin-bottom:.25rem">Cantidad</label>
     <input type="number" id="bod-cantidad" min="0" step="0.01" placeholder="Ej: 5"
-      style="width:100%;padding:.625rem;border:1.5px solid var(--bd);border-radius:10px;font-size:16px;font-weight:700;text-align:center;margin-bottom:.875rem">
+      style="width:100%;padding:.625rem;border:1.5px solid var(--bd);border-radius:10px;font-size:16px;font-weight:700;text-align:center;margin-bottom:.75rem">
 
-    <button class="btn-main" id="bod-btn-registrar" onclick="wkRegistrarConsumible()">✔ Registrar entrega</button>
+    <button onclick="bodAgregarItem()" style="width:100%;padding:.625rem;background:#eef4ff;color:#1e40af;border:1.5px dashed #93c5fd;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer">
+      ＋ Agregar a la lista
+    </button>
+  </div>
+
+  <!-- Lista de consumibles acumulados para este mismo operario -->
+  <div class="card" id="bod-lista-card" style="margin-bottom:.875rem;display:none">
+    <div class="card-t">🛒 Por entregar a <span id="bod-lista-destino" style="color:var(--o)">—</span></div>
+    <div id="bod-lista"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:.625rem 0;border-top:2px solid var(--bd);margin-top:.5rem">
+      <span style="font-size:13px;font-weight:700;color:var(--gr)">Total</span>
+      <span style="font-size:16px;font-weight:800;color:var(--b)" id="bod-lista-total">$0.00</span>
+    </div>
+    <button class="btn-main" id="bod-btn-registrar" onclick="wkRegistrarConsumible()">✔ Registrar todo</button>
   </div>
 
   <div class="card">
@@ -1005,11 +1020,38 @@ function _entrarAHome(w){
   });
 }
 
+// Reemplaza el catálogo local con el que mantiene el supervisor en Sheets,
+// para que el bodeguero siempre entregue con los precios vigentes.
+function _aplicarCatalogoWk(cat){
+  Object.keys(CONSUMIBLES_CATALOGO).forEach(f=>{ CONSUMIBLES_CATALOGO[f] = []; });
+  cat.forEach(it=>{
+    const fase = it.fase || 'Corte';
+    if(!CONSUMIBLES_CATALOGO[fase]) CONSUMIBLES_CATALOGO[fase] = [];
+    CONSUMIBLES_CATALOGO[fase].push({nombre:it.nombre, unidad:it.unidad, precio:Number(it.precio)||0});
+  });
+}
+
 async function loadConsumibles(){
   const pendKey = 'cons_pending_' + PROYECTO_ACTUAL;
   let base = [];
   if(GAS.configured()){
     try{ base = await GAS.get('getConsumibles') || []; }catch(e){ base = []; }
+    // Traer también el catálogo actualizado (precios y materiales nuevos que
+    // el supervisor haya cargado), y guardarlo en el celular por si luego
+    // se queda sin señal. (8 ago 2026)
+    try{
+      const cat = await GAS.get('getCatalogoConsumibles');
+      if(Array.isArray(cat) && cat.length){
+        _aplicarCatalogoWk(cat);
+        LS.s('cat_consumibles_'+PROYECTO_ACTUAL, cat);
+      }
+    }catch(e){
+      const cache = LS.g('cat_consumibles_'+PROYECTO_ACTUAL, null);
+      if(cache && cache.length) _aplicarCatalogoWk(cache);
+    }
+  } else {
+    const cache = LS.g('cat_consumibles_'+PROYECTO_ACTUAL, null);
+    if(cache && cache.length) _aplicarCatalogoWk(cache);
   }
   const pendientes = LS.g(pendKey, []);
   const idsServer = new Set(base.map(r=>String(r.id)));
@@ -1063,24 +1105,64 @@ function bodOnDestinoChange(){
   const sel = document.getElementById('bod-op-destino');
   const itemSel = document.getElementById('bod-item');
   const opId = sel.value;
+
+  // Si ya hay ítems acumulados para OTRA persona, avisar antes de perderlos
+  if(_bodCarrito.length && String(_bodCarrito[0].destinoId)!==String(opId)){
+    const seguir = confirm(`Tienes ${_bodCarrito.length} consumible(s) sin registrar para ${_bodCarrito[0].destinoNom}.\n\n¿Descartarlos y empezar con otro operario?\n\n(Cancelar = volver con ${_bodCarrito[0].destinoNom})`);
+    if(!seguir){
+      // Volver al operario original y repoblar su catálogo, sin recursión
+      sel.value = String(_bodCarrito[0].destinoId);
+      const opOrig = (ALL_OPERARIOS||[]).find(o=>String(o.id)===String(_bodCarrito[0].destinoId));
+      const itemsOrig = opOrig ? (CONSUMIBLES_CATALOGO[opOrig.fase] || []) : [];
+      itemSel.innerHTML = itemsOrig.length
+        ? '<option value="">Selecciona el consumible...</option>' + itemsOrig.map((it,i)=>`<option value="${i}">${it.nombre} (${it.unidad}) — $${it.precio}</option>`).join('')
+        : '<option value="">Primero selecciona el operario...</option>';
+      return;
+    }
+    _bodCarrito = [];
+    renderBodCarrito();
+  }
+
   const op = (ALL_OPERARIOS||[]).find(o=>String(o.id)===String(opId));
   if(!op){ itemSel.innerHTML = '<option value="">Primero selecciona el operario...</option>'; return; }
-  const items = CONSUMIBLES_CATALOGO[op.fase] || [];
-  if(!items.length){
-    itemSel.innerHTML = `<option value="">Sin consumibles definidos para ${op.fase}</option>`;
-    return;
-  }
-  itemSel.innerHTML = '<option value="">Selecciona el consumible...</option>' +
-    items.map((it,i)=>`<option value="${i}">${it.nombre} (${it.unidad}) — $${it.precio}</option>`).join('');
+  const bus = document.getElementById('bod-item-buscar');
+  if(bus) bus.value = '';
+  bodFiltrarItems();
 }
 
-async function wkRegistrarConsumible(){
+// Rellena el selector de consumibles según la fase del operario, filtrando
+// por el texto del buscador. Con catálogos grandes (2000+ ítems) sin esto
+// el desplegable es inusable en el celular. (8 ago 2026)
+function bodFiltrarItems(){
+  const destSel = document.getElementById('bod-op-destino');
+  const itemSel = document.getElementById('bod-item');
+  const q = (document.getElementById('bod-item-buscar')?.value||'').toLowerCase().trim();
+  const op = (ALL_OPERARIOS||[]).find(o=>String(o.id)===String(destSel.value));
+  if(!op){ itemSel.innerHTML = '<option value="">Primero selecciona el operario...</option>'; return; }
+
+  const items = CONSUMIBLES_CATALOGO[op.fase] || [];
+  if(!items.length){ itemSel.innerHTML = `<option value="">Sin consumibles definidos para ${op.fase}</option>`; return; }
+
+  const coinciden = items.map((it,i)=>({it,i})).filter(({it})=>!q || String(it.nombre).toLowerCase().includes(q));
+  if(!coinciden.length){ itemSel.innerHTML = '<option value="">Ningún material coincide</option>'; return; }
+
+  const MAX = 200;
+  const mostrar = coinciden.slice(0, MAX);
+  itemSel.innerHTML = `<option value="">Selecciona... (${coinciden.length})</option>` +
+    mostrar.map(({it,i})=>`<option value="${i}">${it.nombre} (${it.unidad}) — $${it.precio}</option>`).join('') +
+    (coinciden.length>MAX ? `<option value="" disabled>… ${coinciden.length-MAX} más — escribe para filtrar</option>` : '');
+}
+
+// Carrito de la entrega en curso: varios consumibles para un mismo operario.
+// El bodeguero suele entregar varias cosas a la misma persona de una vez, así
+// que se elige el operario una sola vez y se van sumando ítems. (8 ago 2026)
+let _bodCarrito = [];
+
+function bodAgregarItem(){
   const destSel = document.getElementById('bod-op-destino');
   const itemSel = document.getElementById('bod-item');
   const cantEl  = document.getElementById('bod-cantidad');
-  const btn     = document.getElementById('bod-btn-registrar');
-  const destId  = destSel.value;
-  const dest    = (ALL_OPERARIOS||[]).find(o=>String(o.id)===String(destId));
+  const dest    = (ALL_OPERARIOS||[]).find(o=>String(o.id)===String(destSel.value));
   const cantidad = parseFloat(cantEl.value);
 
   if(!dest){ alert('⚠ Selecciona a quién le entregas.'); return; }
@@ -1089,54 +1171,107 @@ async function wkRegistrarConsumible(){
   if(!item){ alert('⚠ Selecciona qué le entregas.'); return; }
   if(!cantidad || cantidad<=0){ alert('⚠ Ingresa una cantidad válida.'); return; }
 
-  const rec = {
-    id: 'cons_' + Date.now() + '_' + Math.random().toString(36).slice(2,8),
+  // Si ya está ese mismo consumible en la lista, sumar en vez de duplicar
+  const yaEsta = _bodCarrito.find(c=>c.item===item.nombre);
+  if(yaEsta){
+    yaEsta.cantidad = +(yaEsta.cantidad + cantidad).toFixed(2);
+    yaEsta.costoTotal = +(yaEsta.precioUnit * yaEsta.cantidad).toFixed(2);
+  } else {
+    _bodCarrito.push({
+      destinoId: dest.id, destinoNom: `${dest.nom} ${dest.ape}`, destinoFase: dest.fase,
+      item: item.nombre, unidad: item.unidad, cantidad,
+      precioUnit: item.precio, costoTotal: +(item.precio*cantidad).toFixed(2),
+    });
+  }
+
+  cantEl.value = '';
+  itemSel.value = '';
+  renderBodCarrito();
+}
+
+function bodQuitarItem(i){
+  _bodCarrito.splice(i,1);
+  renderBodCarrito();
+}
+
+function renderBodCarrito(){
+  const card = document.getElementById('bod-lista-card');
+  const cont = document.getElementById('bod-lista');
+  const totEl = document.getElementById('bod-lista-total');
+  const destEl = document.getElementById('bod-lista-destino');
+  if(!card||!cont) return;
+
+  if(!_bodCarrito.length){ card.style.display='none'; return; }
+  card.style.display='';
+  if(destEl) destEl.textContent = _bodCarrito[0].destinoNom;
+
+  cont.innerHTML = _bodCarrito.map((c,i)=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:.5rem 0;border-bottom:1px solid var(--bd)">
+      <div style="flex:1">
+        <div style="font-size:12px;font-weight:700;color:var(--b)">${c.item}</div>
+        <div style="font-size:12px;color:var(--gr)">${c.cantidad} ${c.unidad} · $${c.costoTotal.toFixed(2)}</div>
+      </div>
+      <button onclick="bodQuitarItem(${i})" style="background:#fee2e2;color:#991b1b;border:none;border-radius:8px;padding:6px 10px;font-size:13px;font-weight:700;cursor:pointer">✕</button>
+    </div>
+  `).join('');
+
+  const total = _bodCarrito.reduce((s,c)=>s+c.costoTotal,0);
+  if(totEl) totEl.textContent = '$' + total.toFixed(2);
+}
+
+async function wkRegistrarConsumible(){
+  const btn = document.getElementById('bod-btn-registrar');
+  if(!_bodCarrito.length){ alert('⚠ Agrega al menos un consumible a la lista.'); return; }
+
+  const pendKey = 'cons_pending_' + PROYECTO_ACTUAL;
+  const nuevos = _bodCarrito.map((c,idx)=>({
+    id: 'cons_' + Date.now() + '_' + idx + '_' + Math.random().toString(36).slice(2,6),
     fecha: todayISO(),
     timestamp: new Date().toISOString(),
     bodegaId: W.id, bodegaNom: `${W.nom} ${W.ape}`,
-    destinoId: dest.id, destinoNom: `${dest.nom} ${dest.ape}`, destinoFase: dest.fase,
-    item: item.nombre, unidad: item.unidad, cantidad: cantidad,
-    precioUnit: item.precio, costoTotal: +(item.precio*cantidad).toFixed(2),
-  };
+    destinoId: c.destinoId, destinoNom: c.destinoNom, destinoFase: c.destinoFase,
+    item: c.item, unidad: c.unidad, cantidad: c.cantidad,
+    precioUnit: c.precioUnit, costoTotal: c.costoTotal,
+  }));
 
   // Guardar SIEMPRE en local primero — el dato nunca se pierde
-  const pendKey = 'cons_pending_' + PROYECTO_ACTUAL;
-  const pending = LS.g(pendKey, []);
-  pending.push(rec);
-  LS.s(pendKey, pending);
-  _consumiblesCache = [..._consumiblesCache, {...rec, _pendiente:true}];
+  LS.s(pendKey, [...LS.g(pendKey, []), ...nuevos]);
+  _consumiblesCache = [..._consumiblesCache, ...nuevos.map(n=>({...n,_pendiente:true}))];
 
   if(btn){ btn.disabled = true; btn.textContent = 'Guardando...'; }
 
-  let guardadoOk = false, motivo = '';
-  if(GAS.configured()){
+  let okCount = 0, motivo = '';
+  for(const rec of nuevos){
+    if(!GAS.configured()){ motivo = 'sin backend configurado'; break; }
     try{
       const r = await GAS.post('addConsumible', rec);
       if(r && r.ok){
-        guardadoOk = true;
+        okCount++;
         LS.s(pendKey, LS.g(pendKey, []).filter(p=>p.id!==rec.id));
         _consumiblesCache = _consumiblesCache.map(c=>c.id===rec.id?{...c,_pendiente:false}:c);
       } else {
         motivo = (r && (r.msg||r.error)) || 'el servidor no confirmó';
       }
     }catch(e){ motivo = 'sin conexión'; }
-  } else {
-    motivo = 'sin backend configurado';
   }
 
-  if(btn){ btn.disabled = false; btn.textContent = '✔ Registrar entrega'; }
+  if(btn){ btn.disabled = false; btn.textContent = '✔ Registrar todo'; }
 
-  cantEl.value = '';
-  destSel.value = '';
-  itemSel.innerHTML = '<option value="">Primero selecciona el operario...</option>';
+  const destinoNom = nuevos[0].destinoNom;
+  const total = nuevos.reduce((s,n)=>s+n.costoTotal,0);
+  _bodCarrito = [];
+  renderBodCarrito();
+  document.getElementById('bod-op-destino').value = '';
+  document.getElementById('bod-item').innerHTML = '<option value="">Primero selecciona el operario...</option>';
   renderBodHist();
 
   // Ser honesto sobre el resultado: no decir "guardado" si no se confirmó
-  // (mismo criterio que el registro de operarios — corregido 8 ago 2026).
-  if(guardadoOk){
-    alert(`✅ Guardado: ${cantidad} ${item.unidad} de "${item.nombre}" para ${dest.nom} ${dest.ape}`);
+  if(okCount === nuevos.length){
+    alert(`✅ Guardado: ${okCount} consumible(s) para ${destinoNom} · $${total.toFixed(2)}`);
+  } else if(okCount > 0){
+    alert(`⚠ Se guardaron ${okCount} de ${nuevos.length}.\n\nLos demás quedaron anotados en el celular (${motivo}) y se enviarán solos. No los registres de nuevo.`);
   } else {
-    alert(`⏳ Anotado en el celular (${motivo}).\n\n${cantidad} ${item.unidad} de "${item.nombre}" para ${dest.nom} ${dest.ape}\n\nSe enviará solo cuando vuelva la señal. No lo registres de nuevo.`);
+    alert(`⏳ Anotado en el celular (${motivo}).\n\n${nuevos.length} consumible(s) para ${destinoNom}\n\nSe enviarán solos cuando vuelva la señal. No los registres de nuevo.`);
   }
 }
 

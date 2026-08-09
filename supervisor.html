@@ -1443,6 +1443,49 @@ global.Chart = class {
 <div class="container">
   <div class="kpi-row" id="kpi-consumibles"></div>
 
+  <!-- Catálogo: stock y precios editables -->
+  <div class="card">
+    <div class="card-hdr" style="justify-content:space-between;display:flex;align-items:center;">
+      <span>📦 Catálogo, stock y precios</span>
+      <div style="display:flex;gap:6px;align-items:center">
+        <label class="btn btn-s btn-sm" style="cursor:pointer;margin:0">
+          📄 Cargar desde Excel
+          <input type="file" id="cat-file" accept=".xlsx,.xls,.csv" onchange="catCargarExcel(event)" style="display:none">
+        </label>
+        <button class="btn btn-s btn-sm" onclick="catAgregarFila()">＋ Agregar ítem</button>
+        <button class="btn btn-p btn-sm" id="cat-btn-guardar" onclick="catGuardar()">💾 Guardar catálogo</button>
+      </div>
+    </div>
+    <div class="alert alert-warn" style="margin-bottom:.75rem;">
+      Al cambiar un precio, solo afecta las entregas <strong>nuevas</strong>. Las ya registradas conservan el precio que tenían ese día.
+    </div>
+    <div id="cat-msg" style="display:none;font-size:12px;margin-bottom:.5rem"></div>
+    <div class="fbar no-print" style="align-items:center;gap:8px;flex-wrap:wrap">
+      <input type="text" id="cat-buscar" placeholder="🔎 Buscar material por nombre..." oninput="renderCatalogo()" style="flex:1;min-width:220px">
+      <select id="cat-filtro-fase" onchange="renderCatalogo()" style="max-width:170px">
+        <option value="">Todas las fases</option>
+        <option>Corte</option><option>Armado</option><option>Soldadura</option>
+        <option>Perforaciones</option><option>Limpieza Mecánica</option><option>Pintura</option>
+      </select>
+      <select id="cat-filtro-stock" onchange="renderCatalogo()" style="max-width:170px">
+        <option value="">Todo el stock</option>
+        <option value="con">Solo con stock</option>
+        <option value="sin">Solo sin stock</option>
+      </select>
+    </div>
+    <div class="tw" style="max-height:520px;overflow-y:auto">
+      <table>
+        <thead><tr>
+          <th style="width:130px">Fase</th><th>Consumible</th>
+          <th style="width:70px">Unidad</th><th class="r" style="width:100px">Precio (USD)</th>
+          <th class="r" style="width:100px">Stock</th><th style="width:50px"></th>
+        </tr></thead>
+        <tbody id="cat-tbody"></tbody>
+      </table>
+    </div>
+    <div id="cat-info" style="font-size:11px;color:var(--gm);text-align:right;margin-top:.5rem;"></div>
+  </div>
+
   <!-- Registro manual de entregas desde el supervisor (además del celular del bodeguero) -->
   <div class="card">
     <div class="card-hdr">📦 Registrar entrega de consumibles</div>
@@ -1463,6 +1506,7 @@ global.Chart = class {
       </div>
       <div class="fg">
         <label>Consumible</label>
+        <input type="text" id="sc-item-buscar" placeholder="🔎 Filtrar por nombre..." oninput="scFiltrarItems()" style="margin-bottom:4px">
         <select id="sc-item"><option value="">Primero elige el operario...</option></select>
       </div>
     </div>
@@ -6615,12 +6659,22 @@ function _marcarOpComoPendiente(op){
 }
 
 async function reintentarOpsPendientes(silencioso){
-  if(!GAS.configured()) return;
+  if(!GAS.configured()){
+    if(!silencioso) alert('⚠ No hay conexión configurada con Google Sheets.');
+    return;
+  }
   // Sin sesión lista, addOperario se rechaza por falta de permisos —
   // esperar a que el login termine antes de reintentar (corregido 8 ago 2026).
-  if(!ROL_ACTUAL || !AUTH_TOKEN) return;
+  if(!ROL_ACTUAL || !AUTH_TOKEN){
+    if(!silencioso) alert('⚠ Tu sesión no tiene credenciales guardadas.\n\nCierra sesión con el botón "Salir" y vuelve a entrar con tu contraseña — eso regenera el permiso necesario para guardar en Google.');
+    return;
+  }
+  if(ROL_ACTUAL !== 'admin'){
+    if(!silencioso) alert('⚠ Solo el Administrador puede registrar operarios en Google Sheets.');
+    return;
+  }
   const pend = LS.load(OPS_PENDING_KEY(), []);
-  if(!pend.length){ if(!silencioso) toast('No hay operarios pendientes de sincronizar'); return; }
+  if(!pend.length){ if(!silencioso) alert('No hay operarios pendientes de sincronizar.'); return; }
 
   const siguenPendientes = [];
   let okCount = 0;
@@ -7532,6 +7586,232 @@ function renderAlertas(){
 // ══════════════════════════════════════════════════════════════
 let _consumibles = [];
 
+// ── Catálogo de consumibles: stock y precios editables ─────────────
+// El catálogo vive en Google Sheets (hoja CatalogoConsumibles). Si aún
+// no existe, se arranca con la lista base de CONSUMIBLES_CATALOGO.
+// Cambiar un precio aquí solo afecta entregas nuevas. (8 ago 2026)
+let _catalogo = [];
+const FASES_CONSUMIBLES = ['Corte','Armado','Soldadura','Perforaciones','Limpieza Mecánica','Pintura'];
+
+function _catDesdeBase(){
+  const out = [];
+  Object.keys(CONSUMIBLES_CATALOGO).forEach(fase=>{
+    (CONSUMIBLES_CATALOGO[fase]||[]).forEach(it=>{
+      out.push({fase, nombre:it.nombre, unidad:it.unidad, precio:it.precio, stock:0});
+    });
+  });
+  return out;
+}
+
+async function loadCatalogoConsumibles(){
+  let data = null;
+  try{
+    if(GAS.configured()) data = await GAS.get('getCatalogoConsumibles');
+  }catch(e){ data = null; }
+  _catalogo = (Array.isArray(data) && data.length) ? data : _catDesdeBase();
+  _aplicarCatalogoAMemoria();
+  renderCatalogo();
+}
+
+// Refleja el catálogo guardado en CONSUMIBLES_CATALOGO, que es lo que usan
+// los formularios de registro — así los precios nuevos se usan de inmediato.
+function _aplicarCatalogoAMemoria(){
+  Object.keys(CONSUMIBLES_CATALOGO).forEach(f=>{ CONSUMIBLES_CATALOGO[f] = []; });
+  _catalogo.forEach(it=>{
+    if(!CONSUMIBLES_CATALOGO[it.fase]) CONSUMIBLES_CATALOGO[it.fase] = [];
+    CONSUMIBLES_CATALOGO[it.fase].push({nombre:it.nombre, unidad:it.unidad, precio:Number(it.precio)||0});
+  });
+}
+
+function renderCatalogo(){
+  const tb = document.getElementById('cat-tbody');
+  if(!tb) return;
+
+  // Filtros: búsqueda por nombre, fase y stock. Con catálogos grandes
+  // (2000+ ítems) dibujar todo de golpe cuelga el navegador, así que se
+  // muestran los primeros 200 resultados y se pide afinar la búsqueda.
+  const q = (document.getElementById('cat-buscar')?.value||'').toLowerCase().trim();
+  const fFase = document.getElementById('cat-filtro-fase')?.value||'';
+  const fStock = document.getElementById('cat-filtro-stock')?.value||'';
+
+  const idxFiltrados = [];
+  _catalogo.forEach((it,i)=>{
+    if(q && !String(it.nombre||'').toLowerCase().includes(q)) return;
+    if(fFase && it.fase!==fFase) return;
+    const st = Number(it.stock)||0;
+    if(fStock==='con' && st<=0) return;
+    if(fStock==='sin' && st>0) return;
+    idxFiltrados.push(i);
+  });
+
+  const LIMITE = 200;
+  const visibles = idxFiltrados.slice(0, LIMITE);
+
+  if(!_catalogo.length){
+    tb.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:1.5rem;color:var(--gm);">Catálogo vacío — agrega ítems o carga un Excel</td></tr>';
+    const ci0 = document.getElementById('cat-info'); if(ci0) ci0.textContent = '';
+    return;
+  }
+  if(!visibles.length){
+    tb.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:1.5rem;color:var(--gm);">Ningún material coincide con la búsqueda</td></tr>';
+  } else {
+    tb.innerHTML = visibles.map(i=>{
+      const it = _catalogo[i];
+      return `
+    <tr>
+      <td>
+        <select onchange="catEditar(${i},'fase',this.value)" style="width:100%;font-size:11px">
+          ${FASES_CONSUMIBLES.map(f=>`<option value="${f}"${f===it.fase?' selected':''}>${f}</option>`).join('')}
+        </select>
+      </td>
+      <td><input type="text" value="${String(it.nombre||'').replace(/"/g,'&quot;')}" onchange="catEditar(${i},'nombre',this.value)" style="width:100%;font-size:11px"></td>
+      <td><input type="text" value="${it.unidad||''}" onchange="catEditar(${i},'unidad',this.value)" style="width:100%;font-size:11px;text-align:center"></td>
+      <td class="r"><input type="number" step="0.01" min="0" value="${Number(it.precio)||0}" onchange="catEditar(${i},'precio',this.value)" style="width:100%;font-size:11px;text-align:right"></td>
+      <td class="r"><input type="number" step="0.01" min="0" value="${Number(it.stock)||0}" onchange="catEditar(${i},'stock',this.value)" style="width:100%;font-size:11px;text-align:right"></td>
+      <td><button onclick="catQuitar(${i})" class="btn btn-d btn-sm" title="Quitar del catálogo">✕</button></td>
+    </tr>`;
+    }).join('');
+  }
+
+  const valorStock = _catalogo.reduce((s,it)=>s+(Number(it.precio)||0)*(Number(it.stock)||0),0);
+  const ult = _catalogo.map(it=>it.actualizado).filter(Boolean).sort().pop();
+  const ci = document.getElementById('cat-info');
+  if(ci){
+    let txt = '';
+    if(idxFiltrados.length !== _catalogo.length){
+      txt += `Mostrando ${visibles.length} de ${idxFiltrados.length} coincidencias · `;
+    } else if(idxFiltrados.length > LIMITE){
+      txt += `Mostrando ${LIMITE} de ${idxFiltrados.length} — usa el buscador para afinar · `;
+    }
+    txt += `${_catalogo.length} ítems en total · valor del stock: $${valorStock.toFixed(2)}`;
+    if(ult) txt += ` · última actualización: ${String(ult).split('T')[0]}`;
+    ci.textContent = txt;
+  }
+}
+
+function catEditar(i, campo, valor){
+  if(!_catalogo[i]) return;
+  _catalogo[i][campo] = (campo==='precio'||campo==='stock') ? (parseFloat(valor)||0) : valor;
+  if(campo==='precio'||campo==='stock') renderCatalogo();
+}
+
+function catAgregarFila(){
+  _catalogo.push({fase:'Corte', nombre:'', unidad:'und', precio:0, stock:0});
+  renderCatalogo();
+}
+
+function catQuitar(i){
+  const it = _catalogo[i];
+  if(!confirm(`¿Quitar "${it.nombre||'(sin nombre)'}" del catálogo?\n\nLas entregas ya registradas con este ítem no se borran.`)) return;
+  _catalogo.splice(i,1);
+  renderCatalogo();
+}
+
+function _catMsg(txt, ok){
+  const m = document.getElementById('cat-msg');
+  if(!m) return;
+  m.textContent = txt;
+  m.style.color = ok ? '#166534' : '#991b1b';
+  m.style.display = '';
+}
+
+// Lee un Excel de stock y actualiza precios/stock. Busca por nombre: si el
+// ítem ya existe, actualiza precio y stock; si no, lo agrega como nuevo.
+function catCargarExcel(ev){
+  const file = ev.target.files && ev.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e=>{
+    try{
+      const wb = XLSX.read(new Uint8Array(e.target.result), {type:'array'});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const filas = XLSX.utils.sheet_to_json(ws, {defval:''});
+      if(!filas.length){ _catMsg('⚠ El archivo no tiene filas de datos.', false); return; }
+
+      // Detectar columnas por nombre (primero coincidencia exacta, luego
+      // aproximada — así "Stock" gana sobre "Stock Reservado").
+      const claves = Object.keys(filas[0]);
+      const buscar = (...palabras) => {
+        const norm = k => String(k).toLowerCase().trim();
+        for(const p of palabras){
+          const exacta = claves.find(k=>norm(k)===p);
+          if(exacta) return exacta;
+        }
+        return claves.find(k=>palabras.some(p=>norm(k).includes(p)));
+      };
+      const cNombre = buscar('recurso','descripcion','descripción','material','item','nombre');
+      const cUnidad = buscar('unidad','und','medida');
+      const cPrecio = buscar('precio promedio ( u$ )','ultimo precio','precio','costo','valor','usd');
+      const cStock  = buscar('stock','saldo','existencia','cantidad');
+
+      if(!cNombre || !cPrecio){
+        _catMsg(`⚠ No encontré las columnas necesarias. Se necesita una de nombre (recurso/material/descripción) y una de precio. Columnas del archivo: ${claves.join(', ')}`, false);
+        return;
+      }
+
+      let actualizados = 0, agregados = 0;
+      filas.forEach(f=>{
+        const nombre = String(f[cNombre]||'').replace(/^N\s*-\s*/,'').trim();
+        if(!nombre) return;
+        const precio = parseFloat(f[cPrecio]) || 0;
+        const stock  = cStock ? (parseFloat(f[cStock])||0) : 0;
+        const unidad = cUnidad ? String(f[cUnidad]||'').trim() : '';
+
+        const existente = _catalogo.find(it=>String(it.nombre).trim().toLowerCase()===nombre.toLowerCase());
+        if(existente){
+          if(precio>0) existente.precio = precio;
+          if(cStock) existente.stock = stock;
+          if(unidad) existente.unidad = unidad;
+          actualizados++;
+        } else if(precio>0){
+          _catalogo.push({fase:'Corte', nombre, unidad:unidad||'und', precio, stock});
+          agregados++;
+        }
+      });
+
+      renderCatalogo();
+      _catMsg(`✓ Leído "${file.name}": ${actualizados} actualizados, ${agregados} nuevos. Revisa la fase de los nuevos y presiona "Guardar catálogo".`, true);
+    }catch(err){
+      _catMsg('❌ No se pudo leer el archivo: '+err.message, false);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+  ev.target.value = '';
+}
+
+async function catGuardar(){
+  const btn = document.getElementById('cat-btn-guardar');
+  const sinNombre = _catalogo.filter(it=>!String(it.nombre||'').trim()).length;
+  if(sinNombre){ _catMsg(`⚠ Hay ${sinNombre} ítem(s) sin nombre. Complétalos o quítalos antes de guardar.`, false); return; }
+
+  if(btn){ btn.disabled = true; btn.textContent = 'Guardando...'; }
+  try{
+    // Con catálogos grandes (2000+ ítems ≈ 220 KB) una sola petición puede
+    // exceder el límite de tamaño, así que se envía por lotes: el primero
+    // reemplaza todo y los siguientes van agregando. (8 ago 2026)
+    const LOTE = 400;
+    let guardados = 0, fallo = null;
+    for(let i=0; i<_catalogo.length || i===0; i+=LOTE){
+      const trozo = _catalogo.slice(i, i+LOTE);
+      if(btn) btn.textContent = `Guardando ${Math.min(i+LOTE,_catalogo.length)}/${_catalogo.length}...`;
+      const r = await GAS.post('guardarCatalogoConsumibles', {items:trozo, modo: i===0 ? 'reemplazar' : 'agregar'});
+      if(r && r.ok){ guardados += trozo.length; }
+      else { fallo = (r && (r.msg||r.error)) || 'el servidor no confirmó'; break; }
+    }
+
+    if(!fallo){
+      _aplicarCatalogoAMemoria();
+      scPoblarSelects();
+      _catMsg(`✅ Catálogo guardado (${guardados} ítems). Los precios nuevos ya se usan en los registros siguientes.`, true);
+    } else {
+      _catMsg(`❌ Se guardaron ${guardados} de ${_catalogo.length} y falló: ${fallo}`, false);
+    }
+  }catch(e){
+    _catMsg('❌ Sin conexión con Google Sheets — no se guardó.', false);
+  }
+  if(btn){ btn.disabled = false; btn.textContent = '💾 Guardar catálogo'; }
+}
+
 // Catálogo de consumibles por fase — mismo que trabajador.html.
 // Precios de referencia reales (STOCK_EGRESOS_VIVANTINO.XLSX, ago 2026).
 const CONSUMIBLES_CATALOGO = {
@@ -7595,14 +7875,32 @@ function scPoblarSelects(){
 }
 
 function scOnDestinoChange(){
+  const bus = document.getElementById('sc-item-buscar');
+  if(bus) bus.value = '';
+  scFiltrarItems();
+}
+
+// Rellena el selector de consumibles según la fase del operario elegido,
+// filtrando por el texto del buscador. El value de cada opción es el índice
+// real dentro del catálogo de esa fase, para que el filtro no descuadre.
+function scFiltrarItems(){
   const selDest = document.getElementById('sc-destino');
   const selItem = document.getElementById('sc-item');
+  const q = (document.getElementById('sc-item-buscar')?.value||'').toLowerCase().trim();
   const op = (ST.ops||[]).find(o=>String(o.id)===String(selDest.value));
   if(!op){ selItem.innerHTML = '<option value="">Primero elige el operario...</option>'; return; }
+
   const items = CONSUMIBLES_CATALOGO[op.fase] || [];
-  selItem.innerHTML = items.length
-    ? '<option value="">Selecciona el consumible...</option>' + items.map((it,i)=>`<option value="${i}">${it.nombre} (${it.unidad}) — $${it.precio}</option>`).join('')
-    : `<option value="">Sin consumibles definidos para ${op.fase}</option>`;
+  if(!items.length){ selItem.innerHTML = `<option value="">Sin consumibles definidos para ${op.fase}</option>`; return; }
+
+  const coinciden = items.map((it,i)=>({it,i})).filter(({it})=>!q || String(it.nombre).toLowerCase().includes(q));
+  if(!coinciden.length){ selItem.innerHTML = '<option value="">Ningún consumible coincide con la búsqueda</option>'; return; }
+
+  const MAX = 300;
+  const mostrar = coinciden.slice(0, MAX);
+  selItem.innerHTML = `<option value="">Selecciona el consumible... (${coinciden.length})</option>` +
+    mostrar.map(({it,i})=>`<option value="${i}">${it.nombre} (${it.unidad}) — $${it.precio}</option>`).join('') +
+    (coinciden.length>MAX ? `<option value="" disabled>… ${coinciden.length-MAX} más — afina la búsqueda</option>` : '');
 }
 
 function scLimpiar(){
@@ -7676,6 +7974,7 @@ async function loadConsumiblesSup(){
       if(Array.isArray(data)) _consumibles = data;
     }
   }catch(e){ /* usar lo que ya había en memoria */ }
+  await loadCatalogoConsumibles();
   scPoblarSelects();
   _consPoblarFiltroOperarios();
   renderConsumiblesComparativo();
