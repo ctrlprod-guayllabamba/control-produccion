@@ -176,7 +176,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);min-height
     <input type="number" id="bod-cantidad" min="0" step="0.01" placeholder="Ej: 5"
       style="width:100%;padding:.625rem;border:1.5px solid var(--bd);border-radius:10px;font-size:16px;font-weight:700;text-align:center;margin-bottom:.875rem">
 
-    <button class="btn-main" onclick="wkRegistrarConsumible()">✔ Registrar entrega</button>
+    <button class="btn-main" id="bod-btn-registrar" onclick="wkRegistrarConsumible()">✔ Registrar entrega</button>
   </div>
 
   <div class="card">
@@ -994,7 +994,13 @@ function _entrarAHome(w){
   buildFaseGrid();
   go('sc-home');
   loadMyRecs().then(()=>{
-    if(esBodega){ bodPoblarOperarios(); loadConsumibles().then(renderBodHist); }
+    if(esBodega){
+      bodPoblarOperarios();
+      loadConsumibles().then(()=>{ renderBodHist(); sincronizarConsumiblesPendientes(); });
+      if(!window._consSyncTimer){
+        window._consSyncTimer = setInterval(sincronizarConsumiblesPendientes, 60000);
+      }
+    }
     else renderHomeHist();
   });
 }
@@ -1007,7 +1013,8 @@ async function loadConsumibles(){
   }
   const pendientes = LS.g(pendKey, []);
   const idsServer = new Set(base.map(r=>String(r.id)));
-  _consumiblesCache = [...base, ...pendientes.filter(p=>!idsServer.has(String(p.id)))];
+  const soloPendientes = pendientes.filter(p=>!idsServer.has(String(p.id))).map(p=>({...p, _pendiente:true}));
+  _consumiblesCache = [...base, ...soloPendientes];
   return _consumiblesCache;
 }
 
@@ -1015,10 +1022,39 @@ async function loadConsumibles(){
 // BODEGA — entrega de consumibles a operarios de producción
 // ════════════════════════════════════════════════════════════
 
-function bodPoblarOperarios(){
+// Garantiza que ALL_OPERARIOS tenga datos. Si el bodeguero entró directo al
+// home (porque ya había confirmado su PIN hoy), nunca pasó por renderWorkers()
+// y la lista quedaría vacía — dejando el selector "¿A quién le entregas?" sin
+// opciones. Corregido 8 ago 2026.
+async function _asegurarOperarios(){
+  if(ALL_OPERARIOS && ALL_OPERARIOS.length) return ALL_OPERARIOS;
+  // 1) Intentar caché local
+  try{
+    const cached = LS.g(WORKER_OPS_KEY(), null);
+    if(cached && cached.length){ ALL_OPERARIOS = cached; return ALL_OPERARIOS; }
+  }catch(e){}
+  // 2) Pedirlos al servidor
+  if(GAS.configured()){
+    try{
+      const ops = await GAS.get('getOperarios');
+      if(ops && ops.length){
+        ALL_OPERARIOS = ops;
+        try{ LS.s(WORKER_OPS_KEY(), ops); }catch(e){}
+      }
+    }catch(e){}
+  }
+  return ALL_OPERARIOS || [];
+}
+
+async function bodPoblarOperarios(){
   const sel = document.getElementById('bod-op-destino');
   if(!sel) return;
+  await _asegurarOperarios();
   const opsProd = (ALL_OPERARIOS||[]).filter(o=>(o.fase||'').trim().toLowerCase()!=='bodega' && String(o.est||'activo').toLowerCase()!=='inactivo');
+  if(!opsProd.length){
+    sel.innerHTML = '<option value="">⚠ No se pudo cargar la lista de operarios</option>';
+    return;
+  }
   sel.innerHTML = '<option value="">Selecciona un operario...</option>' +
     opsProd.map(o=>`<option value="${o.id}">${o.nom} ${o.ape} — ${o.fase}</option>`).join('');
 }
@@ -1038,10 +1074,11 @@ function bodOnDestinoChange(){
     items.map((it,i)=>`<option value="${i}">${it.nombre} (${it.unidad}) — $${it.precio}</option>`).join('');
 }
 
-function wkRegistrarConsumible(){
+async function wkRegistrarConsumible(){
   const destSel = document.getElementById('bod-op-destino');
   const itemSel = document.getElementById('bod-item');
   const cantEl  = document.getElementById('bod-cantidad');
+  const btn     = document.getElementById('bod-btn-registrar');
   const destId  = destSel.value;
   const dest    = (ALL_OPERARIOS||[]).find(o=>String(o.id)===String(destId));
   const cantidad = parseFloat(cantEl.value);
@@ -1062,26 +1099,65 @@ function wkRegistrarConsumible(){
     precioUnit: item.precio, costoTotal: +(item.precio*cantidad).toFixed(2),
   };
 
-  _consumiblesCache = [..._consumiblesCache, rec];
+  // Guardar SIEMPRE en local primero — el dato nunca se pierde
   const pendKey = 'cons_pending_' + PROYECTO_ACTUAL;
   const pending = LS.g(pendKey, []);
   pending.push(rec);
   LS.s(pendKey, pending);
+  _consumiblesCache = [..._consumiblesCache, {...rec, _pendiente:true}];
 
+  if(btn){ btn.disabled = true; btn.textContent = 'Guardando...'; }
+
+  let guardadoOk = false, motivo = '';
   if(GAS.configured()){
-    GAS.post('addConsumible', rec).then(r=>{
+    try{
+      const r = await GAS.post('addConsumible', rec);
       if(r && r.ok){
-        const upd = LS.g(pendKey, []).filter(p=>p.id!==rec.id);
-        LS.s(pendKey, upd);
+        guardadoOk = true;
+        LS.s(pendKey, LS.g(pendKey, []).filter(p=>p.id!==rec.id));
+        _consumiblesCache = _consumiblesCache.map(c=>c.id===rec.id?{...c,_pendiente:false}:c);
+      } else {
+        motivo = (r && (r.msg||r.error)) || 'el servidor no confirmó';
       }
-    }).catch(()=>{});
+    }catch(e){ motivo = 'sin conexión'; }
+  } else {
+    motivo = 'sin backend configurado';
   }
+
+  if(btn){ btn.disabled = false; btn.textContent = '✔ Registrar entrega'; }
 
   cantEl.value = '';
   destSel.value = '';
   itemSel.innerHTML = '<option value="">Primero selecciona el operario...</option>';
   renderBodHist();
-  alert(`✅ Registrado: ${cantidad} ${item.unidad} de "${item.nombre}" para ${dest.nom} ${dest.ape}`);
+
+  // Ser honesto sobre el resultado: no decir "guardado" si no se confirmó
+  // (mismo criterio que el registro de operarios — corregido 8 ago 2026).
+  if(guardadoOk){
+    alert(`✅ Guardado: ${cantidad} ${item.unidad} de "${item.nombre}" para ${dest.nom} ${dest.ape}`);
+  } else {
+    alert(`⏳ Anotado en el celular (${motivo}).\n\n${cantidad} ${item.unidad} de "${item.nombre}" para ${dest.nom} ${dest.ape}\n\nSe enviará solo cuando vuelva la señal. No lo registres de nuevo.`);
+  }
+}
+
+// Reintenta enviar las entregas de consumibles que quedaron pendientes por
+// falta de conexión. Se llama al abrir la pantalla de Bodega y cada 60s.
+async function sincronizarConsumiblesPendientes(){
+  if(!GAS.configured()) return;
+  const pendKey = 'cons_pending_' + PROYECTO_ACTUAL;
+  const pend = LS.g(pendKey, []);
+  if(!pend.length) return;
+  const siguen = [];
+  for(const rec of pend){
+    try{
+      const r = await GAS.post('addConsumible', rec);
+      if(!(r && r.ok)) siguen.push(rec);
+    }catch(e){ siguen.push(rec); }
+  }
+  LS.s(pendKey, siguen);
+  const idsPend = new Set(siguen.map(p=>String(p.id)));
+  _consumiblesCache = _consumiblesCache.map(c=>({...c, _pendiente: idsPend.has(String(c.id))}));
+  renderBodHist();
 }
 
 function renderBodHist(){
@@ -1094,9 +1170,9 @@ function renderBodHist(){
   }
   div.innerHTML = hoy.slice().reverse().map(r=>`
     <div style="padding:.625rem 0;border-bottom:1px solid var(--bd)">
-      <div style="font-size:13px;font-weight:700;color:var(--b)">${r.destinoNom} <span style="font-weight:400;color:var(--gr)">(${r.destinoFase})</span></div>
+      <div style="font-size:13px;font-weight:700;color:var(--b)">${r.destinoNom} <span style="font-weight:400;color:var(--gr)">(${r.destinoFase})</span>${r._pendiente?' <span style="background:#fef3c7;color:#92400e;border-radius:4px;padding:1px 5px;font-size:10px;font-weight:700">⏳ pendiente</span>':''}</div>
       <div style="font-size:12px;color:var(--gr)">${r.cantidad} ${r.unidad} — ${r.item}</div>
-      <div style="font-size:11px;color:var(--gr)">$${r.costoTotal.toFixed(2)}</div>
+      <div style="font-size:11px;color:var(--gr)">$${Number(r.costoTotal||0).toFixed(2)}</div>
     </div>
   `).join('');
 }

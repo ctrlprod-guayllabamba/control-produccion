@@ -1437,6 +1437,42 @@ global.Chart = class {
 <div class="container">
   <div class="kpi-row" id="kpi-consumibles"></div>
 
+  <!-- Registro manual de entregas desde el supervisor (además del celular del bodeguero) -->
+  <div class="card">
+    <div class="card-hdr">📦 Registrar entrega de consumibles</div>
+    <div class="frow">
+      <div class="fg">
+        <label>Fecha</label>
+        <input type="date" id="sc-fecha">
+      </div>
+      <div class="fg">
+        <label>Entregado por (bodega)</label>
+        <select id="sc-bodega"><option value="">Cargando...</option></select>
+      </div>
+    </div>
+    <div class="frow">
+      <div class="fg">
+        <label>Entregado a (operario)</label>
+        <select id="sc-destino" onchange="scOnDestinoChange()"><option value="">Cargando...</option></select>
+      </div>
+      <div class="fg">
+        <label>Consumible</label>
+        <select id="sc-item"><option value="">Primero elige el operario...</option></select>
+      </div>
+    </div>
+    <div class="frow">
+      <div class="fg">
+        <label>Cantidad</label>
+        <input type="number" id="sc-cantidad" min="0" step="0.01" placeholder="Ej: 15">
+      </div>
+      <div class="fg" style="display:flex;align-items:flex-end;gap:8px">
+        <button class="btn btn-p" id="sc-btn" onclick="supRegistrarConsumible()" style="flex:1">✔ Registrar entrega</button>
+        <button class="btn btn-s" onclick="scLimpiar()">Limpiar</button>
+      </div>
+    </div>
+    <div id="sc-msg" style="display:none;font-size:12px;margin-top:.5rem"></div>
+  </div>
+
   <div class="card">
     <div class="card-hdr" style="justify-content:space-between;display:flex;align-items:center;">
       <span>🧰 Consumibles entregados vs. kg ejecutados</span>
@@ -6305,9 +6341,14 @@ async function sincronizarOperarios(){
   try {
     const ops = await GAS.get('getOperarios');
     if(ops && ops.length){
-      ST.ops = ops;
-      LS.save(LSK('ops'), ops);
-      renderOpTable();
+      // No perder los que aún están pendientes de guardarse en Google
+      // (mismo fix que loadFromServer — bug corregido 6 ago 2026).
+      const pendientes = LS.load(OPS_PENDING_KEY(), []);
+      const idsServer = new Set(ops.map(o=>String(o.id)));
+      const faltantes = pendientes.filter(p=>!idsServer.has(String(p.id))).map(p=>({...p, _pendienteSync:true}));
+      ST.ops = [...ops, ...faltantes];
+      LS.save(LSK('ops'), ST.ops);
+      renderOps();
       if(st) st.textContent = `✅ ${ops.length} operarios sincronizados · ${new Date().toLocaleTimeString('es-EC',{hour:'2-digit',minute:'2-digit'})}`;
       toast(`✓ ${ops.length} operarios cargados de Google Sheets`);
     } else {
@@ -7457,6 +7498,143 @@ function renderAlertas(){
 // ══════════════════════════════════════════════════════════════
 let _consumibles = [];
 
+// Catálogo de consumibles por fase — mismo que trabajador.html.
+// Precios de referencia reales (STOCK_EGRESOS_VIVANTINO.XLSX, ago 2026).
+const CONSUMIBLES_CATALOGO = {
+  "Corte": [
+    {nombre:"DISCO DE CORTE - METAL  4 1/2\" X 1/8\" X 7/8\"", unidad:"und", precio:1.16},
+    {nombre:"DISCO DE CORTE - METAL  7\" X 1/8\" X 7/8\"", unidad:"und", precio:1.83},
+    {nombre:"DISCO DE CORTE - METAL 14\" X 3/32\" X 1\"", unidad:"und", precio:3.52},
+    {nombre:"DISCO DE CORTE - METAL  7\" X 1/16\" X 7/8\"", unidad:"und", precio:1.62},
+    {nombre:"OXIGENO", unidad:"m3", precio:2.67},
+    {nombre:"RECARGA DE OXIGENO PERMACYL", unidad:"m3", precio:1.63},
+    {nombre:"ACETILENO", unidad:"kg", precio:12.39},
+  ],
+  "Armado": [],
+  "Soldadura": [
+    {nombre:"ELECTRODO 7018 X 1/8\"", unidad:"kg", precio:3.03},
+    {nombre:"ELECTRODO 6011 X 1/8\"", unidad:"kg", precio:3.5},
+    {nombre:"ALAMBRE TUBULAR E71T1 DE 1,20MM", unidad:"kg", precio:1.3},
+    {nombre:"ALAMBRE TUBULAR E81T1 DE 1,20MM", unidad:"kg", precio:3.1},
+    {nombre:"ALAMBRE SOLIDO MIG 1.20mm", unidad:"kg", precio:1.45},
+    {nombre:"CO2", unidad:"kg", precio:1.43},
+  ],
+  "Perforaciones": [],
+  "Limpieza Mecánica": [
+    {nombre:"DISCO DE DESBASTE - METAL 4 1/2\" X 1/4\" X 7/8\"", unidad:"und", precio:0.96},
+    {nombre:"DISCO DE DESBASTE - METAL 7\" X 1/4\" X 7/8\"", unidad:"und", precio:1.74},
+    {nombre:"GRATA TIPO COPA ALAMBRE TRENZADO 4\" X 0.25 X5/8", unidad:"und", precio:15.25},
+    {nombre:"GRATA CIRCULAR TRENZADA 6\"", unidad:"und", precio:19.19},
+    {nombre:"DISCO POLIFAN 7\"", unidad:"und", precio:5.6},
+    {nombre:"LIJAS PARA HIERRRO 80", unidad:"und", precio:0.6},
+    {nombre:"LIJAS PARA HIERRRO 100", unidad:"und", precio:0.53},
+  ],
+  "Pintura": [
+    {nombre:"PINTURA ANTICORROSIVA  RAL 7035", unidad:"gal", precio:14.54},
+    {nombre:"PINTURA - DISOLVENTE - DILUYENTE", unidad:"gal", precio:8.8},
+  ],
+};
+
+// ── Registro manual de entregas desde el supervisor ──────────────
+// Complementa el registro del bodeguero por celular: sirve para cargar
+// entregas atrasadas, corregir olvidos, o cuando el bodeguero no tiene
+// el celular a mano. Agregado 8 ago 2026.
+function scPoblarSelects(){
+  const selBod  = document.getElementById('sc-bodega');
+  const selDest = document.getElementById('sc-destino');
+  if(!selBod || !selDest) return;
+
+  const activos = (ST.ops||[]).filter(o=>String(o.est||'activo').toLowerCase()!=='inactivo');
+  const bodegas = activos.filter(o=>(o.fase||'').trim().toLowerCase()==='bodega');
+  const prod    = activos.filter(o=>(o.fase||'').trim().toLowerCase()!=='bodega');
+
+  selBod.innerHTML = bodegas.length
+    ? bodegas.map(o=>`<option value="${o.id}">${o.nom} ${o.ape}</option>`).join('')
+    : '<option value="">⚠ No hay operarios con fase "Bodega"</option>';
+
+  selDest.innerHTML = prod.length
+    ? '<option value="">Selecciona un operario...</option>' + prod.map(o=>`<option value="${o.id}">${o.nom} ${o.ape} — ${o.fase}</option>`).join('')
+    : '<option value="">⚠ No hay operarios registrados</option>';
+
+  const f = document.getElementById('sc-fecha');
+  if(f && !f.value) f.value = new Date().toISOString().split('T')[0];
+}
+
+function scOnDestinoChange(){
+  const selDest = document.getElementById('sc-destino');
+  const selItem = document.getElementById('sc-item');
+  const op = (ST.ops||[]).find(o=>String(o.id)===String(selDest.value));
+  if(!op){ selItem.innerHTML = '<option value="">Primero elige el operario...</option>'; return; }
+  const items = CONSUMIBLES_CATALOGO[op.fase] || [];
+  selItem.innerHTML = items.length
+    ? '<option value="">Selecciona el consumible...</option>' + items.map((it,i)=>`<option value="${i}">${it.nombre} (${it.unidad}) — $${it.precio}</option>`).join('')
+    : `<option value="">Sin consumibles definidos para ${op.fase}</option>`;
+}
+
+function scLimpiar(){
+  ['sc-destino','sc-cantidad'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  const si = document.getElementById('sc-item');
+  if(si) si.innerHTML = '<option value="">Primero elige el operario...</option>';
+  const msg = document.getElementById('sc-msg');
+  if(msg) msg.style.display='none';
+}
+
+function _scMsg(texto, ok){
+  const msg = document.getElementById('sc-msg');
+  if(!msg) return;
+  msg.textContent = texto;
+  msg.style.color = ok ? '#166534' : '#991b1b';
+  msg.style.display = '';
+}
+
+async function supRegistrarConsumible(){
+  const fecha   = document.getElementById('sc-fecha').value;
+  const bodId   = document.getElementById('sc-bodega').value;
+  const destId  = document.getElementById('sc-destino').value;
+  const itemIdx = document.getElementById('sc-item').value;
+  const cantidad = parseFloat(document.getElementById('sc-cantidad').value);
+  const btn = document.getElementById('sc-btn');
+
+  const bod  = (ST.ops||[]).find(o=>String(o.id)===String(bodId));
+  const dest = (ST.ops||[]).find(o=>String(o.id)===String(destId));
+
+  if(!fecha){ _scMsg('⚠ Elige la fecha de la entrega.', false); return; }
+  if(!bod){ _scMsg('⚠ Elige quién entregó (operario con fase "Bodega").', false); return; }
+  if(!dest){ _scMsg('⚠ Elige a qué operario se le entregó.', false); return; }
+  const items = CONSUMIBLES_CATALOGO[dest.fase] || [];
+  const item = items[itemIdx];
+  if(!item){ _scMsg('⚠ Elige el consumible entregado.', false); return; }
+  if(!cantidad || cantidad<=0){ _scMsg('⚠ Ingresa una cantidad válida.', false); return; }
+
+  const rec = {
+    id: 'cons_sup_' + Date.now() + '_' + Math.random().toString(36).slice(2,8),
+    fecha,
+    timestamp: new Date().toISOString(),
+    bodegaId: bod.id, bodegaNom: `${bod.nom} ${bod.ape}`,
+    destinoId: dest.id, destinoNom: `${dest.nom} ${dest.ape}`, destinoFase: dest.fase,
+    item: item.nombre, unidad: item.unidad, cantidad,
+    precioUnit: item.precio, costoTotal: +(item.precio*cantidad).toFixed(2),
+  };
+
+  if(btn){ btn.disabled = true; btn.textContent = 'Guardando...'; }
+  try{
+    const r = await GAS.post('addConsumible', rec);
+    if(r && r.ok){
+      _consumibles = [..._consumibles, rec];
+      _scMsg(`✅ Registrado: ${cantidad} ${item.unidad} de "${item.nombre}" para ${dest.nom} ${dest.ape}`, true);
+      scLimpiar();
+      _consPoblarFiltroOperarios();
+      renderConsumiblesComparativo();
+      renderConsumiblesRegistro();
+    } else {
+      _scMsg('❌ No se pudo guardar: ' + ((r && (r.msg||r.error)) || 'el servidor no confirmó'), false);
+    }
+  }catch(e){
+    _scMsg('❌ Sin conexión con Google Sheets — no se guardó. Intenta de nuevo.', false);
+  }
+  if(btn){ btn.disabled = false; btn.textContent = '✔ Registrar entrega'; }
+}
+
 async function loadConsumiblesSup(){
   try{
     if(GAS.configured()){
@@ -7464,6 +7642,7 @@ async function loadConsumiblesSup(){
       if(Array.isArray(data)) _consumibles = data;
     }
   }catch(e){ /* usar lo que ya había en memoria */ }
+  scPoblarSelects();
   _consPoblarFiltroOperarios();
   renderConsumiblesComparativo();
   renderConsumiblesRegistro();
