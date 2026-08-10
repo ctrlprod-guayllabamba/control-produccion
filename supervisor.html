@@ -1327,6 +1327,7 @@ global.Chart = class {
           <option value="avance_proceso">📈 Avance semanal por proceso</option>
           <option value="avance_peso">⚖️ Avance semanal por peso / Curva S</option>
           <option value="cronograma">📋 Cronograma por cuadrilla</option>
+          <option value="consumibles">🧰 Consumibles vs. kg producidos</option>
         </select>
       </div>
       <!-- Fecha simple (diario/semanal/mensual) -->
@@ -1466,6 +1467,7 @@ global.Chart = class {
         <option value="">Todas las fases</option>
         <option>Corte</option><option>Armado</option><option>Soldadura</option>
         <option>Perforaciones</option><option>Limpieza Mecánica</option><option>Pintura</option>
+        <option>Otros</option>
       </select>
       <select id="cat-filtro-stock" onchange="renderCatalogo()" style="max-width:170px">
         <option value="">Todo el stock</option>
@@ -6811,8 +6813,8 @@ function onRptTipoChange(){
   const tipo=document.getElementById('rpt-tipo')?.value||'diario';
   // Show/hide controls based on type
   document.getElementById('rpt-fecha-wrap').style.display  = ['diario','semanal','mensual','avance_proceso','avance_peso'].includes(tipo)?'':'none';
-  document.getElementById('rpt-desde-wrap').style.display  = tipo==='rango'?'':'none';
-  document.getElementById('rpt-hasta-wrap').style.display  = tipo==='rango'?'':'none';
+  document.getElementById('rpt-desde-wrap').style.display  = ['rango','consumibles'].includes(tipo)?'':'none';
+  document.getElementById('rpt-hasta-wrap').style.display  = ['rango','consumibles'].includes(tipo)?'':'none';
   document.getElementById('rpt-op-wrap').style.display        = tipo==='operario'?'':'none';
   document.getElementById('rpt-cj-wrap').style.display        = tipo==='conjunto'?'':'none';
   document.getElementById('rpt-op-desde-wrap').style.display  = ['operario','conjunto'].includes(tipo)?'':'none';
@@ -6830,6 +6832,143 @@ function onRptTipoChange(){
       PLAN.conjuntos.map(c=>`<option value="${c.conjunto}">${c.conjunto} — ${c.perfil}</option>`).join('');
   }
   renderInforme();
+}
+
+// ══════════════════════════════════════════════════════════════
+// INFORME: consumibles utilizados vs. kg producidos por operario
+// Cruza las entregas de bodega contra la producción real de cada
+// operario en el mismo período, para ver el consumo por kg.
+// AGREGADO 9 ago 2026
+// ══════════════════════════════════════════════════════════════
+async function renderInformeConsumibles(){
+  const area = document.getElementById('informe-area');
+  const desde = document.getElementById('rpt-desde')?.value || '';
+  const hasta = document.getElementById('rpt-hasta')?.value || '';
+
+  if(!desde || !hasta){
+    area.innerHTML = `<div class="card"><div class="alert alert-warn">Elige el rango de fechas (Desde / Hasta) para generar el informe.</div></div>`;
+    return;
+  }
+
+  area.innerHTML = `<div class="card"><div style="text-align:center;padding:2rem;color:var(--gm)">⏳ Cargando entregas de consumibles...</div></div>`;
+  try{
+    if(GAS.configured()){
+      const data = await GAS.get('getConsumibles');
+      if(Array.isArray(data)) _consumibles = data;
+    }
+  }catch(e){ /* usar lo que haya en memoria */ }
+
+  const entregas = (_consumibles||[]).filter(c=>c.fecha>=desde && c.fecha<=hasta);
+
+  // Agrupar por operario → consumible
+  const porOp = {};
+  entregas.forEach(c=>{
+    const k = String(c.destinoId);
+    if(!porOp[k]) porOp[k] = {nom:c.destinoNom, fase:c.destinoFase, items:{}, costo:0};
+    const ki = c.item;
+    if(!porOp[k].items[ki]) porOp[k].items[ki] = {cantidad:0, unidad:c.unidad, costo:0};
+    porOp[k].items[ki].cantidad += Number(c.cantidad)||0;
+    porOp[k].items[ki].costo    += Number(c.costoTotal)||0;
+    porOp[k].costo              += Number(c.costoTotal)||0;
+  });
+
+  // Kg producidos por cada operario en su fase, en el mismo período
+  Object.keys(porOp).forEach(id=>{
+    porOp[id].kg = getKgEjecutadoOperario(id, porOp[id].fase, desde, hasta);
+  });
+
+  const ops = Object.entries(porOp).sort((a,b)=>b[1].kg - a[1].kg);
+  const totalKg    = ops.reduce((s,[,o])=>s+o.kg, 0);
+  const totalCosto = ops.reduce((s,[,o])=>s+o.costo, 0);
+  const costoPorKg = totalKg>0 ? totalCosto/totalKg : 0;
+
+  if(!ops.length){
+    area.innerHTML = `<div class="card">
+      <div class="alert alert-warn">No hay entregas de consumibles registradas entre ${desde} y ${hasta}.</div>
+    </div>`;
+    return;
+  }
+
+  // Filas: una por cada combinación operario × consumible
+  let filas = '';
+  ops.forEach(([id,o])=>{
+    const items = Object.entries(o.items).sort((a,b)=>b[1].costo-a[1].costo);
+    items.forEach(([nombre,it],i)=>{
+      const razon = o.kg>0 ? (it.cantidad/o.kg) : null;
+      filas += `<tr>
+        ${i===0 ? `<td rowspan="${items.length}" style="vertical-align:top"><strong>${o.nom}</strong><div style="font-size:10px;color:var(--gm)">${o.fase}</div></td>
+                  <td rowspan="${items.length}" class="r" style="vertical-align:top;font-weight:700">${o.kg.toFixed(1)}</td>` : ''}
+        <td style="font-size:11px">${nombre}</td>
+        <td class="r">${it.cantidad.toFixed(2)} ${it.unidad}</td>
+        <td class="r" style="font-weight:700;color:${razon===null?'var(--gm)':'#1e40af'}">
+          ${razon===null ? '— sin producción' : razon.toFixed(4)+' '+it.unidad+'/kg'}
+        </td>
+        <td class="r">$${it.costo.toFixed(2)}</td>
+        ${i===0 ? `<td rowspan="${items.length}" class="r" style="vertical-align:top;font-weight:700">${o.kg>0 ? '$'+(o.costo/o.kg).toFixed(4) : '—'}</td>` : ''}
+      </tr>`;
+    });
+  });
+
+  // Resumen por consumible (para ver cuál pesa más en el costo)
+  const porItem = {};
+  entregas.forEach(c=>{
+    if(!porItem[c.item]) porItem[c.item] = {cantidad:0, unidad:c.unidad, costo:0};
+    porItem[c.item].cantidad += Number(c.cantidad)||0;
+    porItem[c.item].costo    += Number(c.costoTotal)||0;
+  });
+  const itemsOrd = Object.entries(porItem).sort((a,b)=>b[1].costo-a[1].costo);
+  const filasItem = itemsOrd.map(([n,it])=>`<tr>
+      <td style="font-size:11px">${n}</td>
+      <td class="r">${it.cantidad.toFixed(2)} ${it.unidad}</td>
+      <td class="r">$${it.costo.toFixed(2)}</td>
+      <td class="r">${totalKg>0 ? (it.cantidad/totalKg).toFixed(4)+' '+it.unidad+'/kg' : '—'}</td>
+      <td class="r">${totalCosto>0 ? (it.costo/totalCosto*100).toFixed(1)+'%' : '—'}</td>
+    </tr>`).join('');
+
+  area.innerHTML = `
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:1rem;margin-bottom:1rem;border-bottom:2px solid var(--sd);">
+      <div>
+        <div style="font-size:17px;font-weight:800;color:var(--sd);text-transform:uppercase;">Consumibles vs. kg producidos</div>
+        <div style="font-size:12px;color:var(--gm);margin-top:3px;">${PLAN.proyecto} · ${PLAN.codigo}</div>
+        <div style="font-size:11px;color:var(--gm);">${desde} al ${hasta}</div>
+      </div>
+      <div style="text-align:right;font-size:10px;color:var(--gm);">Generado: ${new Date().toLocaleString('es-EC')}</div>
+    </div>
+
+    <div class="kpi-row">
+      <div class="kpi"><div class="kpi-lbl">Kg producidos</div><div class="kpi-val">${totalKg.toFixed(0)}</div><div class="kpi-sub">por los operarios que recibieron consumibles</div></div>
+      <div class="kpi k-orange"><div class="kpi-lbl">Costo consumibles</div><div class="kpi-val">$${totalCosto.toFixed(2)}</div><div class="kpi-sub">total del período</div></div>
+      <div class="kpi k-blue"><div class="kpi-lbl">Costo por kg</div><div class="kpi-val">$${costoPorKg.toFixed(4)}</div><div class="kpi-sub">consumible por kg fabricado</div></div>
+      <div class="kpi"><div class="kpi-lbl">Operarios</div><div class="kpi-val">${ops.length}</div><div class="kpi-sub">con entregas en el período</div></div>
+    </div>
+
+    <div class="alert alert-warn" style="margin:1rem 0;">
+      La razón se expresa en la unidad propia de cada consumible (kg de alambre por kg soldado, discos por kg cortado, galones por kg pintado). Solo cuenta la producción registrada en la fase del operario dentro del rango elegido.
+    </div>
+
+    <div class="card-hdr">Detalle por operario</div>
+    <div class="tw">
+      <table>
+        <thead><tr>
+          <th>Operario</th><th class="r">Kg producidos</th><th>Consumible</th>
+          <th class="r">Cantidad</th><th class="r">Razón</th><th class="r">Costo</th><th class="r">$/kg</th>
+        </tr></thead>
+        <tbody>${filas}</tbody>
+      </table>
+    </div>
+
+    <div class="card-hdr" style="margin-top:1.5rem">Resumen por consumible</div>
+    <div class="tw">
+      <table>
+        <thead><tr>
+          <th>Consumible</th><th class="r">Total entregado</th><th class="r">Costo</th>
+          <th class="r">Razón global</th><th class="r">% del costo</th>
+        </tr></thead>
+        <tbody>${filasItem}</tbody>
+      </table>
+    </div>
+  </div>`;
 }
 
 function renderInforme(){
@@ -6889,6 +7028,9 @@ function renderInforme(){
     return;
   } else if(tipo==='cronograma'){
     renderCronograma();
+    return;
+  } else if(tipo==='consumibles'){
+    renderInformeConsumibles();
     return;
   } else {
     filtro=r=>true; lbl='Informe General';
@@ -7591,7 +7733,28 @@ let _consumibles = [];
 // no existe, se arranca con la lista base de CONSUMIBLES_CATALOGO.
 // Cambiar un precio aquí solo afecta entregas nuevas. (8 ago 2026)
 let _catalogo = [];
-const FASES_CONSUMIBLES = ['Corte','Armado','Soldadura','Perforaciones','Limpieza Mecánica','Pintura'];
+const FASES_CONSUMIBLES = ['Corte','Armado','Soldadura','Perforaciones','Limpieza Mecánica','Pintura','Otros'];
+// Reglas para clasificar automáticamente los materiales al importar un Excel
+// de stock. Sin esto, con 2000+ ítems habría que asignar la fase a mano uno
+// por uno. Lo que no coincide va a "Otros" para no ensuciar las listas que
+// ve el operario. (10 ago 2026)
+const REGLAS_FASE_CONSUMIBLE = [
+  ['Soldadura', ['ELECTRODO','ALAMBRE TUBULAR','ALAMBRE SOLIDO','ALAMBRE MIG','CO2','ARGON','FUNDENTE','TOBERA','CONTACT TIP','DIFUSOR DE GAS','PORTAELECTRODO','PINZA DE MASA','BOQUILLA DE GAS','ANTISALPICADURA','SAW','FERRULE','STUD','CONECTOR DE CORT']],
+  ['Corte', ['DISCO DE CORTE','OXIGENO','ACETILENO','PLASMA','BOQUILLA DE CORTE','BOQUILLA DE OXICORTE','SIERRA','SEGUETA','MANGUERA GEMELA','VALVULA ANTIRRETROCESO','CHISPERO']],
+  ['Perforaciones', ['BROCA','MACHUELO','AVELLAN','REFRIGERANTE','TALADRINA','PERNO CENTRADOR','GUIADOR PARA BROCA']],
+  ['Limpieza Mecánica', ['DISCO DE DESBASTE','GRATA','LIJA','POLIFAN','FLAP','CEPILLO','GRANALLA','SANDBLAST','ARENA PARA','ESCORIA','DESOXIDANTE','WAIPE','ESTOPA']],
+  ['Pintura', ['PINTURA','DILUYENTE','DISOLVENTE','THINNER','ESMALTE','IMPRIMANTE','PRIMER','ANTICORROSIV','BROCHA','RODILLO','CINTA DE ENMASCARAR','MASKING','PISTOLA DE PINTAR','FONDO EPOXICO','ACABADO']],
+  ['Armado', ['TIZA','MARCADOR','ESCUADRA','NIVEL','PLANTILLA','GRAPA','PRENSA','SARGENTO','CUÑA','FLEXOMETRO','CINTA METRICA','COMPAS','PUNTO DE TRAZ']],
+];
+
+function clasificarFaseConsumible(nombre){
+  const n = String(nombre||'').toUpperCase();
+  for(const [fase, kws] of REGLAS_FASE_CONSUMIBLE){
+    if(kws.some(k=>n.includes(k))) return fase;
+  }
+  return 'Otros';
+}
+
 
 function _catDesdeBase(){
   const out = [];
@@ -7764,13 +7927,16 @@ function catCargarExcel(ev){
           if(unidad) existente.unidad = unidad;
           actualizados++;
         } else if(precio>0){
-          _catalogo.push({fase:'Corte', nombre, unidad:unidad||'und', precio, stock});
+          _catalogo.push({fase:clasificarFaseConsumible(nombre), nombre, unidad:unidad||'und', precio, stock});
           agregados++;
         }
       });
 
       renderCatalogo();
-      _catMsg(`✓ Leído "${file.name}": ${actualizados} actualizados, ${agregados} nuevos. Revisa la fase de los nuevos y presiona "Guardar catálogo".`, true);
+      const porFase = {};
+      _catalogo.forEach(it=>{ porFase[it.fase] = (porFase[it.fase]||0)+1; });
+      const desglose = Object.entries(porFase).sort((a,b)=>b[1]-a[1]).map(([f,n])=>`${f}: ${n}`).join(' · ');
+      _catMsg(`✓ Leído "${file.name}": ${actualizados} actualizados, ${agregados} nuevos (clasificados automáticamente). ${desglose}. Revisa y presiona "Guardar catálogo".`, true);
     }catch(err){
       _catMsg('❌ No se pudo leer el archivo: '+err.message, false);
     }
@@ -7824,7 +7990,16 @@ const CONSUMIBLES_CATALOGO = {
     {nombre:"RECARGA DE OXIGENO PERMACYL", unidad:"m3", precio:1.63},
     {nombre:"ACETILENO", unidad:"kg", precio:12.39},
   ],
-  "Armado": [],
+  "Armado": [
+    {nombre:"TIZA INDUSTRIAL", unidad:"und", precio:0.18},
+    {nombre:"TIZA PARA METAL", unidad:"und", precio:0.11},
+    {nombre:"MARCADOR PARA ACERO - AMARILLO", unidad:"und", precio:6.66},
+    {nombre:"MARCADOR PARA ACERO - BLANCO", unidad:"und", precio:6.61},
+    {nombre:"MARCADOR PARA METAL", unidad:"und", precio:6.50},
+    {nombre:"ELECTRODO 6011 X 1/8\"", unidad:"kg", precio:3.5},
+    {nombre:"DISCO DE CORTE - METAL  7\" X 1/8\" X 7/8\"", unidad:"und", precio:1.83},
+    {nombre:"DISCO DE DESBASTE - METAL 7\" X 1/4\" X 7/8\"", unidad:"und", precio:1.74},
+  ],
   "Soldadura": [
     {nombre:"ELECTRODO 7018 X 1/8\"", unidad:"kg", precio:3.03},
     {nombre:"ELECTRODO 6011 X 1/8\"", unidad:"kg", precio:3.5},
@@ -7833,7 +8008,16 @@ const CONSUMIBLES_CATALOGO = {
     {nombre:"ALAMBRE SOLIDO MIG 1.20mm", unidad:"kg", precio:1.45},
     {nombre:"CO2", unidad:"kg", precio:1.43},
   ],
-  "Perforaciones": [],
+  "Perforaciones": [
+    {nombre:"BROCA ANULAR HSS DE 2\" X 7/8\" TMX", unidad:"und", precio:60.00},
+    {nombre:"BROCA ANULAR HSS DE 2\" X 1/2\" TMX", unidad:"und", precio:39.54},
+    {nombre:"BROCA ANULAR HSS DE 2\" X 3/4\" TMX", unidad:"und", precio:60.79},
+    {nombre:"BROCA ANULAR HSS DE 2\" X 1\" TMX", unidad:"und", precio:101.64},
+    {nombre:"BROCAS PARA METAL DE 6MM", unidad:"und", precio:1.40},
+    {nombre:"BROCA PARA METAL 9/16\"", unidad:"und", precio:5.10},
+    {nombre:"PERNO CENTRADOR PARA BROCA ANULAR DE 2\"", unidad:"und", precio:9.17},
+    {nombre:"REFRIGERANTE ROJO", unidad:"gal", precio:5.00},
+  ],
   "Limpieza Mecánica": [
     {nombre:"DISCO DE DESBASTE - METAL 4 1/2\" X 1/4\" X 7/8\"", unidad:"und", precio:0.96},
     {nombre:"DISCO DE DESBASTE - METAL 7\" X 1/4\" X 7/8\"", unidad:"und", precio:1.74},
@@ -7847,6 +8031,7 @@ const CONSUMIBLES_CATALOGO = {
     {nombre:"PINTURA ANTICORROSIVA  RAL 7035", unidad:"gal", precio:14.54},
     {nombre:"PINTURA - DISOLVENTE - DILUYENTE", unidad:"gal", precio:8.8},
   ],
+  "Otros": [],
 };
 
 // ── Registro manual de entregas desde el supervisor ──────────────
