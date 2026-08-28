@@ -8577,8 +8577,14 @@ async function iniciarApp(){
     const badge = document.createElement('div');
     badge.id = 'rol-badge';
     badge.style.cssText = 'margin-left:auto;display:flex;align-items:center;gap:8px;';
+    // Mostrar de forma clara QUIÉN está operando. Si entró con la clave fija
+    // compartida, el nombre es genérico ("Administrador") y se avisa, porque
+    // en ese caso no queda rastro de la persona. (10 ago 2026)
+    const esGenerico = !NOMBRE_USUARIO || NOMBRE_USUARIO==='Administrador' || NOMBRE_USUARIO==='Supervisor' || NOMBRE_USUARIO==='Visor';
     badge.innerHTML = `
-      <span style="font-size:11px;color:rgba(255,255,255,.85);">${NOMBRE_USUARIO}</span>
+      <span style="font-size:12px;font-weight:700;color:#fff;" title="${esGenerico?'Entraste con la clave compartida — las acciones no quedan a nombre de una persona':'Usuario que está operando'}">
+        ${esGenerico?'⚠ ':'👋 '}${NOMBRE_USUARIO||'Sin identificar'}
+      </span>
       <span style="font-size:10px;font-weight:700;padding:4px 9px;border-radius:12px;background:${ROL_ACTUAL==='admin'?'#166534':ROL_ACTUAL==='supervisor'?'#1e40af':'#92400e'};color:#fff;letter-spacing:.04em;">
         ${ROL_ACTUAL==='admin'?'👤 ADMIN':ROL_ACTUAL==='supervisor'?'🏭 SUPERVISOR':'👁 SOLO LECTURA'}
       </span>
