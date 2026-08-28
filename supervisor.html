@@ -1062,6 +1062,7 @@ global.Chart = class {
         <option>Armado</option><option>Soldadura</option>
         <option>Perforaciones</option><option>Limpieza Mecánica</option><option>Pintura</option>
       </select>
+      <button class="btn btn-d btn-sm no-print" onclick="borrarRegistrosFiltrados()" title="Elimina de Google Sheets todos los registros que se ven con el filtro actual">🗑 Borrar filtrados</button>
     </div>
     <div class="tw">
       <table>
@@ -4711,11 +4712,30 @@ function saveSobrante(id){
   toast('✓ Sobrantes actualizados');
 }
 
-function delCorte(id){
-  const r=ST.cortes.find(x=>x.id===id);
-  if(r){addExec(r.conjunto||r.cj,r.parte||r.pr,'Corte',-r.qty);}
-  ST.cortes=ST.cortes.filter(x=>x.id!==id);
-  saveAll(); renderCorteHist(); renderDashboard();
+async function delCorte(id){
+  const r=ST.cortes.find(x=>String(x.id)===String(id));
+  const desc = r ? `${r.fecha} · ${r.conjunto||r.cj} · ${r.parte||r.pr} · ${r.opNom||''}` : '';
+  if(!confirm(`¿Eliminar este corte?\n\n${desc}\n\nSe borra también de Google Sheets. Esta acción no se puede deshacer.`)) return;
+
+  const quitarLocal = ()=>{
+    if(r){addExec(r.conjunto||r.cj,r.parte||r.pr,'Corte',-r.qty);}
+    ST.cortes=ST.cortes.filter(x=>String(x.id)!==String(id));
+    saveAll(); renderCorteHist(); renderDashboard();
+  };
+
+  if(!GAS.configured()){ quitarLocal(); toast('⚠ Sin conexión configurada — solo se quitó de este navegador'); return; }
+
+  try{
+    const resp = await GAS.post('deleteRegistros', {id});
+    if(resp && resp.ok){
+      quitarLocal();
+      toast(resp.borrados>0 ? '✓ Corte eliminado de Google Sheets' : '✓ Quitado (no estaba en Google Sheets)');
+    } else {
+      alert('❌ No se pudo eliminar: ' + ((resp&&(resp.msg||resp.error))||'el servidor no confirmó') + '\n\nEl corte NO se borró.');
+    }
+  }catch(e){
+    alert('❌ Sin conexión con Google Sheets — el corte NO se borró.');
+  }
 }
 
 // ======================= PRODUCCIÓN =======================
@@ -5285,6 +5305,70 @@ function getPesoRegistro(r){
   return pesoMostrar;
 }
 
+// Borra un registro de producción de verdad: primero en Google Sheets y,
+// solo si el servidor confirma, lo quita de la pantalla. Antes el botón ✕
+// borraba únicamente en el navegador, así que el registro reaparecía al
+// recargar y los conteos volvían a inflarse. (10 ago 2026)
+async function borrarRegistroProd(id){
+  const rec = ST.prods.find(x=>String(x.id)===String(id));
+  const desc = rec ? `${rec.fecha} · ${rec.conjunto||rec.cj} · ${rec.fase} · ${rec.opNom||''}` : '';
+  if(!confirm(`¿Eliminar este registro?\n\n${desc}\n\nSe borra también de Google Sheets. Esta acción no se puede deshacer.`)) return;
+
+  if(!GAS.configured()){
+    ST.prods = ST.prods.filter(x=>String(x.id)!==String(id));
+    saveAll(); renderProd();
+    toast('⚠ Sin conexión configurada — solo se quitó de este navegador');
+    return;
+  }
+
+  try{
+    const r = await GAS.post('deleteRegistros', {id});
+    if(r && r.ok){
+      ST.prods = ST.prods.filter(x=>String(x.id)!==String(id));
+      ST.cortes = ST.cortes.filter(x=>String(x.id)!==String(id));
+      saveAll();
+      renderProd();
+      if(typeof renderDashboard==='function') renderDashboard();
+      toast(r.borrados>0 ? '✓ Registro eliminado de Google Sheets' : '✓ Quitado (no estaba en Google Sheets)');
+    } else {
+      alert('❌ No se pudo eliminar: ' + ((r&&(r.msg||r.error))||'el servidor no confirmó') + '\n\nEl registro NO se borró.');
+    }
+  }catch(e){
+    alert('❌ Sin conexión con Google Sheets — el registro NO se borró.\n\nIntenta de nuevo cuando vuelva la señal.');
+  }
+}
+
+// Borra en bloque todos los registros que estén visibles según los filtros
+// actuales — pensado para limpiar tandas de pruebas sin ir uno por uno.
+async function borrarRegistrosFiltrados(){
+  const q=(document.getElementById('pr-q')?.value||'').toLowerCase();
+  const ff=document.getElementById('pr-fase')?.value||'';
+  const recs=ST.prods.filter(r=>(!q||(r.conjunto+r.parte+r.fase+(r.opNom||'')).toLowerCase().includes(q))&&(!ff||r.fase===ff));
+  if(!recs.length){ alert('No hay registros que coincidan con el filtro actual.'); return; }
+
+  const filtroTxt = [q?`búsqueda "${q}"`:'', ff?`fase ${ff}`:''].filter(Boolean).join(' · ') || 'sin filtros (TODOS los registros)';
+  if(!confirm(`¿Eliminar ${recs.length} registro(s)?\n\nFiltro: ${filtroTxt}\n\nSe borran también de Google Sheets. Esta acción no se puede deshacer.`)) return;
+  if(!confirm(`Confirma otra vez: se van a borrar ${recs.length} registros de forma permanente.`)) return;
+
+  const ids = recs.map(r=>r.id);
+  try{
+    const r = await GAS.post('deleteRegistros', {ids});
+    if(r && r.ok){
+      const borrar = new Set(ids.map(String));
+      ST.prods = ST.prods.filter(x=>!borrar.has(String(x.id)));
+      ST.cortes = ST.cortes.filter(x=>!borrar.has(String(x.id)));
+      saveAll();
+      renderProd();
+      if(typeof renderDashboard==='function') renderDashboard();
+      alert(`✅ ${r.borrados} registro(s) eliminados de Google Sheets.`);
+    } else {
+      alert('❌ No se pudo eliminar: ' + ((r&&(r.msg||r.error))||'el servidor no confirmó'));
+    }
+  }catch(e){
+    alert('❌ Sin conexión con Google Sheets — no se borró nada.');
+  }
+}
+
 function renderProd(){
   const q=(document.getElementById('pr-q')?.value||'').toLowerCase();
   const ff=document.getElementById('pr-fase')?.value||'';
@@ -5317,7 +5401,7 @@ function renderProd(){
     <td>${calBadge(r.calidad||r.cal||'ok')}</td>
     <td class="c no-print" style="white-space:nowrap">
       ${incompletas>0?`<button class="btn btn-s btn-sm" onclick="completarVigas(${r.id})" style="background:#f59e0b;color:#fff;border-color:#f59e0b;margin-right:2px" title="Completar vigas incompletas">✏</button>`:''}
-      <button class="btn btn-d btn-sm" onclick="ST.prods=ST.prods.filter(x=>x.id!==${r.id});saveAll();renderProd()">✕</button>
+      <button class="btn btn-d btn-sm" onclick="borrarRegistroProd(${r.id})">✕</button>
     </td>
   </tr>`;
   }).join(''):'<tr><td colspan="9" style="text-align:center;padding:1.5rem;color:var(--gm);">Sin registros</td></tr>';
