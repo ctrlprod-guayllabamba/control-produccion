@@ -2703,16 +2703,20 @@ function renderDashboard() {
   const totalKgEjec = ST.cortes.reduce((s,c)=>s+Number(c.pesoParts||c.pesoPzas||0),0);
   const pendPartes = allPartes().reduce((s,p)=>s+Math.max(0,p.cantidad-getCortadoQty(p.conjunto,p.parte)),0);
   const pendKg = Math.max(0, totalKgPlan - totalKgEjec);
-  // Avance global por kg
-  const pctGlobalKg = totalKgPlan>0?Math.min(100,(totalKgEjec/totalKgPlan*100)):0;
+  // Avance global por kg. NO se topa al 100%: si pasa del plan es señal de
+  // registros duplicados o de prueba, y ocultarlo hacía que el dashboard
+  // dijera 98% mientras "Partes del conjunto" decía 110% con los mismos
+  // datos. Mejor mostrarlo y avisar. (28 ago 2026)
+  const pctGlobalKg = totalKgPlan>0 ? (totalKgEjec/totalKgPlan*100) : 0;
   const pctGlobal = pctGlobalKg;
+  const haySobreRegistro = pctGlobalKg > 100.5;
 
   // == KPIs ==
   document.getElementById('kpi-main').innerHTML = `
     <div class="kpi k-blue"><div class="kpi-lbl">Partes plan</div><div class="kpi-val">${partesTotal.toLocaleString()}</div><div class="kpi-sub">${PLAN.conjuntos.length} conjuntos · ${(totalKgPlan/1000).toFixed(1)}t</div></div>
     <div class="kpi k-warn"><div class="kpi-lbl">⚠ Pendientes</div><div class="kpi-val">${pendPartes.toLocaleString()}</div><div class="kpi-sub">por fabricar · ${(pendKg/1000).toFixed(1)}t</div></div>
-    <div class="kpi k-orange"><div class="kpi-lbl">Avance global</div><div class="kpi-val">${pctGlobal.toFixed(1)}%</div><div class="kpi-sub">${totalKgEjec.toFixed(0)} kg de ${totalKgPlan.toFixed(0)} kg</div></div>
-    <div class="kpi k-green"><div class="kpi-lbl">Kg ejecutados</div><div class="kpi-val">${(totalKgEjec/1000).toFixed(1)}t</div><div class="kpi-sub">de ${(totalKgPlan/1000).toFixed(0)}t plan</div></div>
+    <div class="kpi ${haySobreRegistro?'k-warn':'k-orange'}"><div class="kpi-lbl">Avance global ${haySobreRegistro?'⚠':''}</div><div class="kpi-val">${pctGlobal.toFixed(1)}%</div><div class="kpi-sub">${haySobreRegistro?'⚠ supera el plan — revisa duplicados':`${totalKgEjec.toFixed(0)} kg de ${totalKgPlan.toFixed(0)} kg`}</div></div>
+    <div class="kpi k-green"><div class="kpi-lbl">Kg cortados</div><div class="kpi-val">${(totalKgEjec/1000).toFixed(1)}t</div><div class="kpi-sub">de ${(totalKgPlan/1000).toFixed(0)}t plan</div></div>
     <div class="kpi"><div class="kpi-lbl">Stock sobrante</div><div class="kpi-val">${totalStock.toFixed(0)}</div><div class="kpi-sub">kg reutilizable</div></div>
     <div class="kpi k-warn" style="background:#f8d7da;border-color:#f5c6cb;"><div class="kpi-lbl" style="color:#721c24;">Desperdicio</div><div class="kpi-val" style="color:#721c24;">${totalDesp.toFixed(0)}</div><div class="kpi-sub" style="color:#721c24;">kg total</div></div>`;
   if(document.getElementById('dash-pct-global'))
@@ -5519,20 +5523,30 @@ const FASE_COLORS = {
 
 function getExecFase(conjunto, parte, fase) {
   if (fase === 'Corte') return getCortadoQty(conjunto, parte);
-  return ST.prods.filter(p=>p.conjunto===conjunto&&p.parte===parte&&p.fase===fase).reduce((s,p)=>s+p.qty,0);
+  // Los registros de producción se guardan por conjunto con la parte
+  // combinada ("pr64+pr65+pr98"), así que comparar p.parte===parte siempre
+  // daba 0. Se usa getProdQtyParte, que lee el detalle real por viga.
+  // (mismo bug ya corregido en la tabla "Partes del conjunto" — 28 ago 2026)
+  return getProdQtyParte(conjunto, parte, fase);
 }
 
 function renderFases() {
   // KPIs per fase
+  // OJO: Corte se registra por PIEZA individual y las demás fases por VIGA
+  // completa del conjunto. Antes ambos se mostraban como "uds ejecutadas",
+  // lado a lado, como si fueran comparables — y no lo son (791 piezas vs
+  // 124 vigas hacía ver Armado como muy atrasado cuando iba adelantado).
+  // Ahora cada uno dice su unidad real. (28 ago 2026)
   const kpiHtml = FASES.map(f=>{
-    const qty = f==='Corte'
+    const esCorte = f==='Corte';
+    const qty = esCorte
       ? ST.cortes.reduce((s,c)=>s+c.qty,0)
-      : ST.prods.filter(p=>p.fase===f).reduce((s,p)=>s+p.qty,0);
+      : ST.prods.filter(p=>p.fase===f).reduce((s,p)=>s+(Number(p.qty)||0),0);
     const fc = FASE_COLORS[f];
     return `<div class="kpi" style="border-color:${fc.hdr}30;">
       <div class="kpi-lbl" style="color:${fc.hdr}">${f}</div>
       <div class="kpi-val" style="color:${fc.hdr};font-size:20px;">${qty}</div>
-      <div class="kpi-sub">uds ejecutadas</div>
+      <div class="kpi-sub">${esCorte?'piezas cortadas':'vigas registradas'}</div>
     </div>`;
   }).join('');
   document.getElementById('kpi-fases').innerHTML = kpiHtml;
