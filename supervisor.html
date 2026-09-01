@@ -5122,12 +5122,21 @@ function pCalcResumenDia(){
     });
   });
 
+  const _tienePartes = v => c.partes.some(p=>{
+    const piezasHI = PIEZAS_HI_SUP[p.perfil];
+    if(piezasHI) return piezasHI.some(sp=>Number(v.subQty?.[p.parte]?.[sp.tipo]||0)>0);
+    return Number(v.qty?.[p.parte]||0)>0;
+  });
   const vigasCompletas = pVigasData.filter(v=>c.partes.every(p=>{
     const piezasHI = PIEZAS_HI_SUP[p.perfil];
     if(piezasHI) return piezasHI.every(sp=>Number(v.subQty?.[p.parte]?.[sp.tipo]||0)>0);
     return Number(v.qty?.[p.parte]||0)>0;
   })).length;
-  const vigasIncompletas = pVigasData.length - vigasCompletas;
+  // Solo cuentan como incompletas las vigas EMPEZADAS a medias. Una fila
+  // recién abierta y todavía en blanco no es una viga incompleta — antes
+  // el formulario mostraba "INCOMPLETAS 1" nada más abrirlo. (1 sep 2026)
+  const vigasIncompletas = pVigasData.filter(v=>_tienePartes(v)).length - vigasCompletas;
+  const vigasVacias = pVigasData.length - pVigasData.filter(v=>_tienePartes(v)).length;
 
   document.getElementById('p-peso').value = pesoTotal.toFixed(2);
 
@@ -5141,7 +5150,7 @@ function pCalcResumenDia(){
     <div style="text-align:center">
       <div style="font-size:9px;opacity:.7;font-weight:700">🔶 INCOMPLETAS</div>
       <div style="font-size:20px;font-weight:800;color:#fde68a">${vigasIncompletas}</div>
-      <div style="font-size:9px;opacity:.6">vigas</div>
+      <div style="font-size:9px;opacity:.6">${vigasVacias>0?`vigas · ${vigasVacias} en blanco`:'vigas'}</div>
     </div>
     <div style="text-align:center">
       <div style="font-size:9px;opacity:.7;font-weight:700">⚖ PESO REAL</div>
