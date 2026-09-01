@@ -5168,9 +5168,13 @@ function pUpdateInfo(){
 
   const plan=c.cantidad;
   const pu=c.peso_unit||0;
-  // Ejecutado = vigas COMPLETAS en esta fase (ver _vigasCompletasDe)
-  const ej=ST.prods.filter(r=>(r.conjunto||r.cj)===cj&&r.fase===fase)
-    .reduce((s,r)=>s+_vigasCompletasDe(r),0);
+  // Vigas realmente completas = las que tienen TODAS sus partes puestas.
+  // Se calcula desde las piezas reales (getProdQtyParte), igual que la tabla
+  // "Partes del conjunto", en vez de sumar el campo vigasCompletas guardado
+  // al registrar. Antes ambos podían contradecirse: el resumen decía
+  // "113 vigas · 0 pendientes" mientras la tabla mostraba que a pr64 le
+  // faltaba 1 pieza y a pr98 le faltaban 6. (1 sep 2026)
+  const ej = _vigasCompletasPorPartes(cj, fase, plan);
   const pend=Math.max(0,plan-ej);
   const pct=plan>0?Math.min(100,(ej/plan*100)):0;
 
@@ -5205,6 +5209,20 @@ function toggleSoldExtra(){
 }
 
 // ── Tabla de referencia del conjunto ──────────────────
+// Cuántas vigas del conjunto están REALMENTE completas en una fase: se mira
+// pieza por pieza y se toma la parte más atrasada. Una viga solo cuenta como
+// completa si todas sus partes están puestas. Es la misma fuente de datos que
+// usa la tabla "Partes del conjunto", así que ambos siempre coinciden.
+function _vigasCompletasPorPartes(cj, fase, planVigas){
+  const c = PLAN.conjuntos.find(x=>x.conjunto===cj);
+  if(!c || !c.partes || !c.partes.length) return 0;
+  const vigas = c.partes.map(p=>{
+    const porViga = (planVigas>0 ? Math.round((Number(p.cantidad)||0)/planVigas) : 0) || 1;
+    return Math.floor(getProdQtyParte(cj, p.parte, fase) / porViga);
+  });
+  return Math.max(0, Math.min(...vigas));
+}
+
 // Vigas COMPLETAS de un registro de producción.
 // Cuidado con el fallback: (r.vigasCompletas || r.qty) contaba una viga a
 // medias (0 completas) como completa, porque 0 es "falsy" en JS. Solo se usa
@@ -5346,6 +5364,43 @@ function addProd(){
         `Estás agregando: ${qty}\n` +
         `Quedaría en: ${yaReg + qty}  (${exceso} de más)\n\n` +
         `¿Es correcto? Si no, cancela y revisa si hay registros duplicados.`);
+      if(!ok) return;
+    }
+  }
+
+  // Validación PARTE POR PARTE. El control de arriba solo mira el total de
+  // vigas del conjunto, así que una pieza suelta podía pasarse de su propio
+  // plan sin avisar (p.ej. pr98 llegando a 454 de 452 mientras las vigas
+  // seguían en 113). Aquí se revisa cada parte por separado. (1 sep 2026)
+  if(c && c.partes && c.partes.length){
+    const excesos = [];
+    c.partes.forEach(p=>{
+      const planParte = Number(p.cantidad) || 0;
+      if(planParte <= 0) return;
+      const yaParte = getProdQtyParte(cj, p.parte, fase);
+      // Piezas de esta parte que trae el registro que se está por guardar
+      const piezasHI = PIEZAS_HI_SUP[p.perfil];
+      let agrega = 0;
+      if(piezasHI){
+        const totales = {};
+        piezasHI.forEach(sp=>totales[sp.tipo]=0);
+        pVigasData.forEach(v=>{
+          piezasHI.forEach(sp=>{ totales[sp.tipo] += Number(v.subQty?.[p.parte]?.[sp.tipo]||0); });
+        });
+        agrega = Math.min(...piezasHI.map(sp=>Math.floor(totales[sp.tipo]/(sp.qty||1))));
+        if(!isFinite(agrega) || agrega < 0) agrega = 0;
+      } else {
+        pVigasData.forEach(v=>{ agrega += Number(v.qty?.[p.parte]||0); });
+      }
+      if(yaParte + agrega > planParte){
+        excesos.push(`  • ${p.parte}: plan ${planParte} · ya ${yaParte} · agregas ${agrega} → ${yaParte+agrega} (${yaParte+agrega-planParte} de más)`);
+      }
+    });
+    if(excesos.length){
+      const ok = confirm(
+        `⚠ Estas piezas superan su plan en ${cj}:\n\n` +
+        excesos.join('\n') +
+        `\n\n¿Es correcto? Si no, cancela y revisa las cantidades o si hay registros duplicados.`);
       if(!ok) return;
     }
   }
@@ -5522,6 +5577,18 @@ function renderProd(){
       return Number(v.qty?.[p.parte]||0)>0;
     })).length:0;
 
+    // Un registro puede tener vigas "incompletas" en sí mismo y aun así el
+    // conjunto estar terminado: pasa cuando se registran solo las piezas que
+    // faltaban para cerrar el plan (un aporte parcial que completó vigas de
+    // registros anteriores). En ese caso avisar "incompleta" es engañoso —
+    // sugiere trabajo pendiente cuando ya no lo hay. (1 sep 2026)
+    const faseCompleta = c ? _vigasCompletasPorPartes(cj, r.fase, Number(c.cantidad)||0) >= (Number(c.cantidad)||0) : false;
+    const badgeIncomp = incompletas>0
+      ? (faseCompleta
+          ? `<br><span style="font-size:9px;color:#166534;font-weight:700" title="Este registro aportó piezas sueltas que completaron vigas de registros anteriores">✓ aporte parcial</span>`
+          : `<br><span style="font-size:9px;color:#b45309;font-weight:700">⚠ ${incompletas} incomp.</span>`)
+      : '';
+
     const pesoMostrar = getPesoRegistro(r);
     return `<tr>
     <td>${r.fecha}</td>
@@ -5531,13 +5598,13 @@ function renderProd(){
     <td>${r.opNom||'—'}</td>
     <td class="r">
       <strong>${_vigasCompletasDe(r)}</strong>
-      ${incompletas>0?`<br><span style="font-size:9px;color:#b45309;font-weight:700">⚠ ${incompletas} incomp.</span>`:''}
+      ${badgeIncomp}
     </td>
     <td class="r">${pesoMostrar.toFixed(1)}</td>
     <td class="r">${r.sold_ml?`<span style="font-size:11px;font-weight:700;color:#1e40af;">${r.sold_ml} ml</span>`:'—'}</td>
     <td>${calBadge(r.calidad||r.cal||'ok')}</td>
     <td class="c no-print" style="white-space:nowrap">
-      ${incompletas>0?`<button class="btn btn-s btn-sm" onclick="completarVigas(${r.id})" style="background:#f59e0b;color:#fff;border-color:#f59e0b;margin-right:2px" title="Completar vigas incompletas">✏</button>`:''}
+      ${incompletas>0 && !faseCompleta?`<button class="btn btn-s btn-sm" onclick="completarVigas(${r.id})" style="background:#f59e0b;color:#fff;border-color:#f59e0b;margin-right:2px" title="Completar vigas incompletas">✏</button>`:''}
       <button class="btn btn-d btn-sm" onclick="borrarRegistroProd(${r.id})">✕</button>
     </td>
   </tr>`;
