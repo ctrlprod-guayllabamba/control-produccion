@@ -1755,12 +1755,62 @@ const GAS = {
       const r=await fetch(GAS_URL,{method:'POST',redirect:'follow',
         body:JSON.stringify({action,data}), signal:ctrl.signal});
       const txt=await r.text();
-      if(txt&&(txt.startsWith('{')||txt.startsWith('['))) return JSON.parse(txt);
+      if(txt&&(txt.startsWith('{')||txt.startsWith('['))){
+        const resp = JSON.parse(txt);
+        return await _reintentarSiNoAutorizado(resp, action, data);
+      }
     } catch(e) {}
     // Fallback GET/JSONP para POST también
-    try { return await GAS.get(action,{data:JSON.stringify(data)}); } catch(e){ return null; }
+    try {
+      const resp = await GAS.get(action,{data:JSON.stringify(data)});
+      return await _reintentarSiNoAutorizado(resp, action, data);
+    } catch(e){ return null; }
   },
 };
+
+// Si el backend rechaza por credenciales (típicamente porque la sesión
+// guardada en el navegador quedó vieja tras cambiar la contraseña), pide la
+// clave, renueva la sesión y reintenta la acción una sola vez. Antes esto
+// obligaba a cerrar sesión manualmente y el mensaje "No autorizado" no
+// explicaba por qué. (1 sep 2026)
+let _reintentandoAuth = false;
+async function _reintentarSiNoAutorizado(resp, action, data){
+  const msg = resp && (resp.error || resp.msg) || '';
+  if(!/no autorizado/i.test(String(msg))) return resp;
+  if(_reintentandoAuth) return resp;          // evitar bucles
+  if(!ACCIONES_SOLO_ADMIN.has(action) && !ACCIONES_ADMIN_O_SUPERVISOR.has(action)) return resp;
+
+  _reintentandoAuth = true;
+  try{
+    const pass = prompt(
+      'Tu sesión ya no tiene permisos válidos (probablemente la contraseña cambió).\n\n' +
+      'Escribe la contraseña de Administrador para continuar:');
+    if(!pass) return resp;
+
+    const login = await GAS.post('login', {password: pass});
+    if(!(login && login.ok)){
+      alert('❌ Contraseña incorrecta. La acción no se realizó.');
+      return resp;
+    }
+    guardarSesion(login.role, pass, login.nombre);
+    // Refrescar el encabezado con el usuario renovado (el badge se crea una
+    // sola vez en iniciarApp, así que se quita para que se regenere).
+    document.getElementById('rol-badge')?.remove();
+    if(typeof iniciarApp==='function'){ try{ iniciarApp(); }catch(e){} }
+
+    // Reintentar la acción original con la sesión renovada
+    const data2 = {...(data||{}), authToken: pass};
+    const r2 = await fetch(GAS_URL,{method:'POST',redirect:'follow',
+      body:JSON.stringify({action, data:data2})});
+    const t2 = await r2.text();
+    if(t2 && (t2.startsWith('{')||t2.startsWith('['))) return JSON.parse(t2);
+    return resp;
+  }catch(e){
+    return resp;
+  }finally{
+    _reintentandoAuth = false;
+  }
+}
 
 function saveAll(){
   LS.save(LSK('ops'),ST.ops); LS.save(LSK('cortes'),ST.cortes); LS.save(LSK('prods'),ST.prods);
@@ -4729,8 +4779,11 @@ async function delCorte(id){
 
   if(!GAS.configured()){ quitarLocal(); toast('⚠ Sin conexión configurada — solo se quitó de este navegador'); return; }
 
+  const clave = await pedirClaveAdmin('Vas a eliminar un registro de corte.');
+  if(!clave) return;
+
   try{
-    const resp = await GAS.post('deleteRegistros', {id});
+    const resp = await GAS.post('deleteRegistros', {id, authToken: clave});
     if(resp && resp.ok){
       quitarLocal();
       toast(resp.borrados>0 ? '✓ Corte eliminado de Google Sheets' : '✓ Quitado (no estaba en Google Sheets)');
@@ -5251,6 +5304,29 @@ function addProd(){
   const qty=pVigasData.length;
   const op=ST.ops.find(o=>o.id==opId);
 
+  // Avisar si este registro hace superar el plan del conjunto. El trabajador
+  // ya bloquea el sobre-registro por parte, pero el supervisor registra por
+  // viga completa y no tenía ningún control — así entraron 124 vigas contra
+  // un plan de 113 en E-T-1. No se bloquea (puede haber reposiciones
+  // legítimas), pero se pide confirmación explícita. (28 ago 2026)
+  const planVigas = Number(c?.cantidad) || 0;
+  if(planVigas > 0){
+    const yaReg = ST.prods
+      .filter(r=>(r.conjunto||r.cj)===cj && r.fase===fase)
+      .reduce((s,r)=>s+(Number(r.qty)||0), 0);
+    if(yaReg + qty > planVigas){
+      const exceso = (yaReg + qty) - planVigas;
+      const ok = confirm(
+        `⚠ Este registro supera el plan de ${cj}.\n\n` +
+        `Plan: ${planVigas} vigas\n` +
+        `Ya registrado en ${fase}: ${yaReg}\n` +
+        `Estás agregando: ${qty}\n` +
+        `Quedaría en: ${yaReg + qty}  (${exceso} de más)\n\n` +
+        `¿Es correcto? Si no, cancela y revisa si hay registros duplicados.`);
+      if(!ok) return;
+    }
+  }
+
   const rec={
     id:Date.now(), fecha, turno:document.getElementById('p-turno').value,
     tipo:'produccion', fase, conjunto:cj, cj,
@@ -5309,6 +5385,35 @@ function getPesoRegistro(r){
   return pesoMostrar;
 }
 
+// Pide la clave de administrador, la valida contra el servidor y renueva la
+// sesión. Devuelve la clave si es correcta, o null si se canceló / falló.
+// Se usa como paso de autorización antes de borrar: así la acción se ejecuta
+// siempre con una credencial recién verificada, sin depender del token
+// guardado en el navegador (que puede haber quedado viejo). (1 sep 2026)
+async function pedirClaveAdmin(motivo){
+  const pass = prompt((motivo||'Esta acción requiere autorización.') +
+    '\n\nEscribe la contraseña de Administrador para confirmar:');
+  if(!pass) return null;
+  try{
+    const login = await GAS.post('login', {password: pass});
+    if(login && login.ok && login.role === 'admin'){
+      guardarSesion(login.role, pass, login.nombre);
+      document.getElementById('rol-badge')?.remove();
+      if(typeof iniciarApp==='function'){ try{ iniciarApp(); }catch(e){} }
+      return pass;
+    }
+    if(login && login.ok){
+      alert('⚠ Esa contraseña es válida pero no es de Administrador.\n\nLa acción no se realizó.');
+      return null;
+    }
+    alert('❌ Contraseña incorrecta. La acción no se realizó.');
+    return null;
+  }catch(e){
+    alert('❌ No se pudo verificar la contraseña (sin conexión). La acción no se realizó.');
+    return null;
+  }
+}
+
 // Borra un registro de producción de verdad: primero en Google Sheets y,
 // solo si el servidor confirma, lo quita de la pantalla. Antes el botón ✕
 // borraba únicamente en el navegador, así que el registro reaparecía al
@@ -5325,8 +5430,11 @@ async function borrarRegistroProd(id){
     return;
   }
 
+  const clave = await pedirClaveAdmin('Vas a eliminar un registro de producción.');
+  if(!clave) return;
+
   try{
-    const r = await GAS.post('deleteRegistros', {id});
+    const r = await GAS.post('deleteRegistros', {id, authToken: clave});
     if(r && r.ok){
       ST.prods = ST.prods.filter(x=>String(x.id)!==String(id));
       ST.cortes = ST.cortes.filter(x=>String(x.id)!==String(id));
@@ -5352,11 +5460,13 @@ async function borrarRegistrosFiltrados(){
 
   const filtroTxt = [q?`búsqueda "${q}"`:'', ff?`fase ${ff}`:''].filter(Boolean).join(' · ') || 'sin filtros (TODOS los registros)';
   if(!confirm(`¿Eliminar ${recs.length} registro(s)?\n\nFiltro: ${filtroTxt}\n\nSe borran también de Google Sheets. Esta acción no se puede deshacer.`)) return;
-  if(!confirm(`Confirma otra vez: se van a borrar ${recs.length} registros de forma permanente.`)) return;
+
+  const clave = await pedirClaveAdmin(`Vas a eliminar ${recs.length} registro(s) de producción.`);
+  if(!clave) return;
 
   const ids = recs.map(r=>r.id);
   try{
-    const r = await GAS.post('deleteRegistros', {ids});
+    const r = await GAS.post('deleteRegistros', {ids, authToken: clave});
     if(r && r.ok){
       const borrar = new Set(ids.map(String));
       ST.prods = ST.prods.filter(x=>!borrar.has(String(x.id)));
