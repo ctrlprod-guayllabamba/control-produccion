@@ -1862,7 +1862,7 @@ async function loadFromServer(){
             ST.cortes.push(r); addExec(r.conjunto,r.parte,'Corte',r.qty);
           } else {
             ST.prods.push(r);
-            const ejQty = Number(r.vigasCompletas||r.qty)||0;
+            const ejQty = _vigasCompletasDe(r);
             addExec(r.conjunto,r.parte,r.fase,ejQty);
           }
         });
@@ -2935,10 +2935,10 @@ function renderPendientes() {
       conjunto:c.conjunto, tipo:c.perfil, vigasPlan, vigasCompletas, pendVigas,
       pendKg: pendVigas*c.peso_unit, kgPct: kgAv.pct, kgEjec: kgAv.kgEjec, kgPlan: kgAv.kgPlan,
       detalle, ejCorte,
-      ejArm:  ST.prods.filter(r=>r.conjunto===c.conjunto&&r.fase==='Armado').reduce((s,r)=>s+(Number(r.vigasCompletas||r.qty)||0),0),
-      ejSold: ST.prods.filter(r=>r.conjunto===c.conjunto&&r.fase==='Soldadura').reduce((s,r)=>s+(Number(r.vigasCompletas||r.qty)||0),0),
-      ejPerf: ST.prods.filter(r=>r.conjunto===c.conjunto&&r.fase==='Perforaciones').reduce((s,r)=>s+(Number(r.vigasCompletas||r.qty)||0),0),
-      ejPint: ST.prods.filter(r=>r.conjunto===c.conjunto&&r.fase==='Pintura').reduce((s,r)=>s+(Number(r.vigasCompletas||r.qty)||0),0),
+      ejArm:  ST.prods.filter(r=>r.conjunto===c.conjunto&&r.fase==='Armado').reduce((s,r)=>s+_vigasCompletasDe(r),0),
+      ejSold: ST.prods.filter(r=>r.conjunto===c.conjunto&&r.fase==='Soldadura').reduce((s,r)=>s+_vigasCompletasDe(r),0),
+      ejPerf: ST.prods.filter(r=>r.conjunto===c.conjunto&&r.fase==='Perforaciones').reduce((s,r)=>s+_vigasCompletasDe(r),0),
+      ejPint: ST.prods.filter(r=>r.conjunto===c.conjunto&&r.fase==='Pintura').reduce((s,r)=>s+_vigasCompletasDe(r),0),
     });
   });
   rows.sort((a,b)=>b.pendVigas-a.pendVigas);
@@ -4821,7 +4821,7 @@ function buildResumenConjuntosSup(fase, selCj){
   return PLAN.conjuntos.map(c=>{
     const planVigas  = c.cantidad;
     const ej = ST.prods.filter(r=>(r.conjunto||r.cj)===c.conjunto&&r.fase===fase)
-                        .reduce((s,r)=>s+(Number(r.vigasCompletas||r.qty)||0),0);
+                        .reduce((s,r)=>s+_vigasCompletasDe(r),0);
     const pend       = Math.max(0, planVigas - ej);
     const pesoPlanKg = Math.round(c.peso_total||0);
     const pesoEjKg   = Math.round(ej * (c.peso_unit||0));
@@ -5168,9 +5168,9 @@ function pUpdateInfo(){
 
   const plan=c.cantidad;
   const pu=c.peso_unit||0;
-  // Ejecutado = vigas COMPLETAS en esta fase
+  // Ejecutado = vigas COMPLETAS en esta fase (ver _vigasCompletasDe)
   const ej=ST.prods.filter(r=>(r.conjunto||r.cj)===cj&&r.fase===fase)
-    .reduce((s,r)=>s+(Number(r.vigasCompletas||r.qty)||0),0);
+    .reduce((s,r)=>s+_vigasCompletasDe(r),0);
   const pend=Math.max(0,plan-ej);
   const pct=plan>0?Math.min(100,(ej/plan*100)):0;
 
@@ -5205,6 +5205,29 @@ function toggleSoldExtra(){
 }
 
 // ── Tabla de referencia del conjunto ──────────────────
+// Vigas COMPLETAS de un registro de producción.
+// Cuidado con el fallback: (r.vigasCompletas || r.qty) contaba una viga a
+// medias (0 completas) como completa, porque 0 es "falsy" en JS. Solo se usa
+// r.qty cuando el campo no existe (registros viejos). Esta función se usa en
+// todas las vistas para que los números coincidan entre sí. (1 sep 2026)
+function _vigasCompletasDe(r){
+  if(!r) return 0;
+  if(r.vigasCompletas !== undefined && r.vigasCompletas !== null && r.vigasCompletas !== '')
+    return Number(r.vigasCompletas) || 0;
+  return Number(r.qty) || 0;
+}
+
+// Formatea un porcentaje sin redondear hacia arriba a 100% cuando todavía
+// falta algo. Antes pr98 con 450 de 452 mostraba "100%" (99.56 redondeado)
+// aunque la columna Pendiente decía 2 — se contradecían en la misma fila.
+// (1 sep 2026)
+function _pctTxt(pct, completo){
+  if(completo) return '100%';
+  if(pct >= 99.5) return '99%';
+  if(pct > 0 && pct < 1) return '<1%';
+  return pct.toFixed(0)+'%';
+}
+
 function pRenderRef(){
   const cj = document.getElementById('p-cj')?.value;
   const fase = document.getElementById('p-fase')?.value||'Armado';
@@ -5248,9 +5271,9 @@ function pRenderRef(){
       <td class="r">
         <div style="display:flex;align-items:center;gap:4px;justify-content:flex-end">
           <div style="background:#e5e7eb;border-radius:3px;height:6px;width:50px;overflow:hidden">
-            <div style="height:100%;background:${pct>=100?'#22c55e':pct>0?'#f59e0b':'#d1d5db'};width:${pct.toFixed(0)}%"></div>
+            <div style="height:100%;background:${completo?'#22c55e':pct>0?'#f59e0b':'#d1d5db'};width:${Math.min(100,pct).toFixed(0)}%"></div>
           </div>
-          <span style="font-size:10px;color:#6b7280">${pct.toFixed(0)}%</span>
+          <span style="font-size:10px;color:${completo?'#166534':'#6b7280'};font-weight:${completo?'700':'400'}">${_pctTxt(pct, completo)}</span>
         </div>
       </td>
       <td class="c no-print">
@@ -5507,7 +5530,7 @@ function renderProd(){
     <td>${r.fase}</td>
     <td>${r.opNom||'—'}</td>
     <td class="r">
-      <strong>${r.vigasCompletas||r.qty||0}</strong>
+      <strong>${_vigasCompletasDe(r)}</strong>
       ${incompletas>0?`<br><span style="font-size:9px;color:#b45309;font-weight:700">⚠ ${incompletas} incomp.</span>`:''}
     </td>
     <td class="r">${pesoMostrar.toFixed(1)}</td>
@@ -5520,7 +5543,7 @@ function renderProd(){
   </tr>`;
   }).join(''):'<tr><td colspan="9" style="text-align:center;padding:1.5rem;color:var(--gm);">Sin registros</td></tr>';
 
-  const tot=recs.reduce((s,r)=>s+(r.vigasCompletas||r.qty||0),0);
+  const tot=recs.reduce((s,r)=>s+_vigasCompletasDe(r),0);
   const totkg=recs.reduce((s,r)=>s+(r.peso||r.pesoReal||r.kg||0),0);
   document.getElementById('pr-tot').textContent=recs.length?`Total: ${tot} vigas completas — ${totkg.toFixed(1)} kg`:'';
 }
@@ -7359,7 +7382,7 @@ function renderInformeAvanceProceso(refFecha){
     const byFase={};
     FASES.forEach(f=>{
       if(f==='Corte') byFase[f]=recsW.filter(r=>r.fase==='Corte').reduce((s,r)=>s+r.qty,0);
-      else byFase[f]=recsW.filter(r=>r.fase===f).reduce((s,r)=>s+(Number(r.vigasCompletas||r.qty)||0),0);
+      else byFase[f]=recsW.filter(r=>r.fase===f).reduce((s,r)=>s+_vigasCompletasDe(r),0);
     });
     const kgW=recsW.filter(r=>r.fase==='Corte').reduce((s,r)=>s+Number(r.pesoParts||r.pesoPzas||0),0);
     return{wk,label:wr.label,start:wr.start,end:wr.end,byFase,kgCorte:kgW,total:Object.values(byFase).reduce((a,b)=>a+b,0)};
