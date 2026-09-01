@@ -6493,6 +6493,29 @@ function cotaV(x, y1, y2, label){
   <text x="${x-5}" y="${(y1+y2)/2}" text-anchor="middle" font-size="8" fill="#ff0000" transform="rotate(-90,${x-5},${(y1+y2)/2})">${label}</text>`;
 }
 
+// Dibujo de un sobrante rectangular (plancha entera sin cortes). Antes solo
+// se dibujaban las formas en L, así que al hacer clic en una plancha no se
+// abría nada y parecía que el sistema fallaba. (1 sep 2026)
+function planchaSVG(esp, ancho, largo){
+  const a = Number(ancho)||0, l = Number(largo)||0;
+  if(!a || !l) return '';
+  const maxPx = 260;
+  const sc = Math.min(maxPx/Math.max(a,l), 0.05);
+  const W = Math.round(a*sc), H = Math.round(l*sc);
+  const ox = 30, oy = 26;
+  const vw = W + 70, vh = H + 55;
+  const peso = (Number(esp)||0) * a * l * 7.85e-6;
+  return `<svg viewBox="0 0 ${vw} ${vh}" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:${vw}px;background:#1a1a2e;border-radius:6px;padding:4px">
+    <g transform="translate(${ox},${oy})">
+      <rect x="0" y="0" width="${W}" height="${H}" fill="#00cc4422" stroke="#00cc44" stroke-width="1.5"/>
+      ${cotaH(0, W, H+14, a)}
+      ${cotaV(-14, 0, H, l)}
+      <text x="${W/2}" y="${H/2}" text-anchor="middle" font-size="10" fill="#00cc44" font-weight="bold">${esp}mm · ~${peso.toFixed(1)}kg</text>
+      <text x="${W/2}" y="${H/2+12}" text-anchor="middle" font-size="7" fill="#9ca3af">plancha completa</text>
+    </g>
+  </svg>`;
+}
+
 function formaLSVG(esp, ancho, largo, ancho_corte, largo_corte, cortes_extra){
   // Compatibilidad hacia atrás: si no hay cortes_extra, usar el corte único TL
   const todosCortes = cortes_extra && cortes_extra.length > 0
@@ -6602,14 +6625,19 @@ function renderStock(){
   document.getElementById('st-tbody').innerHTML=filtered.length?filtered.map(s=>{
     const esL=(s.tipo==='forma_l'||s.tipo==='forma_compleja')&&s.ancho_corte>0&&s.largo_corte>0;
     const cortesExtra = s.cortes_extra && s.cortes_extra.length>0 ? s.cortes_extra : [{ac:s.ancho_corte, lc:s.largo_corte, esq:s.esq||'tl'}];
-    const svgDibujo=esL?formaLSVG(s.esp,s.ancho,s.largo,s.ancho_corte,s.largo_corte,cortesExtra):''
+    // Todos los sobrantes con medidas tienen dibujo: los de forma en L con sus
+    // cortes, y las planchas enteras como rectángulo simple.
+    const svgDibujo = esL
+      ? formaLSVG(s.esp,s.ancho,s.largo,s.ancho_corte,s.largo_corte,cortesExtra)
+      : planchaSVG(s.esp,s.ancho,s.largo);
+    const tieneDibujo = !!svgDibujo;
     const saldoColor=s.saldo<=0?'#991b1b':s.saldo<s.pesoOriginal?'#b45309':'#166534';
     const saldoLabel=s.saldo<=0
       ?'<span style="color:#991b1b;font-weight:800">AGOTADO</span>'
       :s.saldo<s.pesoOriginal
         ?`<span style="color:#b45309;font-weight:700">${s.saldo.toFixed(1)} kg<br><span style="font-size:9px">de ${s.pesoOriginal.toFixed(1)} kg</span></span>`
         :`<strong style="color:#166534">${s.saldo.toFixed(1)} kg</strong>`;
-    return `<tr style="cursor:${esL?'pointer':'default'};opacity:${s.saldo<=0?'0.5':'1'}" onclick="${esL?`toggleFormaL('fl_${s._key||s.id}')`:''}" title="${esL?'Clic para ver dibujo':''}">
+    return `<tr style="cursor:${tieneDibujo?'pointer':'default'};opacity:${s.saldo<=0?'0.5':'1'}" onclick="${tieneDibujo?`toggleFormaL('fl_${s._key||s.id}')`:''}" title="${tieneDibujo?'Clic para ver dibujo':''}">
     <td>${s.fecha||'—'}</td>
     <td><span style="font-weight:700;color:#3730a3;">📋 ${s.colada}</span><br>
       <span style="font-size:9px;color:var(--gm);">${s.tipo==='forma_l'?'⌐ Forma en L':s.tipo==='forma_compleja'?'⌐⌐ Forma compleja':s.tipo}</span>
@@ -6627,7 +6655,7 @@ function renderStock(){
       ${s.saldo>0?`<button class="btn btn-s btn-sm" onclick="event.stopPropagation();marcarAgotado('${s._key}')" title="Marcar como agotado" style="background:#dc2626;color:#fff;border-color:#dc2626;margin-right:2px">⛔</button>`:''}
       ${s.saldo<=0?`<button class="btn btn-s btn-sm" onclick="event.stopPropagation();restaurarSobrante('${s._key}')" title="Restaurar" style="margin-right:2px">↩</button>`:''}
     </td>
-  </tr>${esL?`<tr id="fl_${s._key||s.id}" style="display:none"><td colspan="12" style="padding:.75rem 1rem;background:var(--color-background-secondary)">${svgDibujo}</td></tr>`:''}`;
+  </tr>${tieneDibujo?`<tr id="fl_${s._key||s.id}" style="display:none"><td colspan="12" style="padding:.75rem 1rem;background:var(--color-background-secondary)">${svgDibujo}</td></tr>`:''}`;
   }).join('')
   :'<tr><td colspan="12" style="text-align:center;padding:1.5rem;color:var(--gm);">Sin sobrantes registrados</td></tr>';
 
