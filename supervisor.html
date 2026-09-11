@@ -4552,7 +4552,12 @@ function editRegistro(id){
   const sobArr=(()=>{try{return JSON.parse(r.sob_por_plancha||'[]');}catch(e){return[];}})();
   const sobEdit = sobArr.length>0 ? sobArr : [{tipo:'plancha',esp:r.sob_esp||0,ancho:r.sob_ancho||0,largo:r.sob_largo||0,qty:r.sob_qty||1,colada:r.sob_colada||'',dest:r.sob_dest||'stock',peso:Number(r.sob_peso||0)}];
   const esDesp = r.descompuesto;
-  const subpiezas = (()=>{try{return JSON.parse(r.subpiezas||r.pl_cortes_por_plancha||'[]');}catch(e){return[];}})().filter(p=>p.descompuesto||r.descompuesto);
+  // Mostrar las piezas cortadas SIEMPRE que existan. Antes se exigía la marca
+  // interna "descompuesto"; los registros que no la tenían mostraban el modal
+  // sin la sección de piezas y no se podían corregir sus medidas. (2 sep 2026)
+  const subpiezas = (()=>{
+    try{ return JSON.parse(r.subpiezas||r.pl_cortes_por_plancha||'[]'); }catch(e){ return []; }
+  })().filter(p=>p && (p.esp||p.ancho||p.largo||p.qty));
 
   const html=`<div style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center" id="sob-edit-modal">
     <div style="background:white;border-radius:12px;padding:1.5rem;width:580px;max-width:95vw;max-height:90vh;overflow-y:auto">
@@ -4561,7 +4566,7 @@ function editRegistro(id){
         <button onclick="document.getElementById('sob-edit-modal').remove()" style="background:none;border:none;font-size:20px;cursor:pointer">✕</button>
       </div>
 
-      ${esDesp && subpiezas.length>0 ? `
+      ${subpiezas.length>0 ? `
       <!-- Sub-piezas cortadas -->
       <div style="background:#eef4ff;border-radius:8px;padding:.75rem;margin-bottom:1rem">
         <div style="font-size:13px;font-weight:700;color:#1e40af;margin-bottom:.5rem">✂ Piezas cortadas (descompuesto)</div>
@@ -4722,7 +4727,7 @@ function saveRegistroEdit(id, esDesp){
   const sobs=window._sobEditData||[];
 
   // Actualizar sub-piezas si es descompuesto
-  if(esDesp==='true' && window._subpiezasEdit){
+  if(window._subpiezasEdit && window._subpiezasEdit.length){
     const D=7.85e-6;
     // Leer TODAS las medidas editadas, no solo la cantidad: ahora se pueden
     // corregir espesor, ancho y largo de cada sub-pieza. (2 sep 2026)
