@@ -3903,7 +3903,14 @@ function supUpdSob(i){
 // ── Balance y desperdicio ───────────────────────────
 function supRecalc(){
   const totalMat  =supMateriales.reduce((s,m)=>s+(m.peso||supCalcPesoMat(m)),0);
-  const totalPzas =supPiezas.reduce((s,p)=>s+(p.peso||supCalcPesoPieza(p)),0);
+  // Las piezas cortadas pueden venir por dos caminos: la lista normal
+  // (supPiezas) o la descomposición en sub-piezas Alma/Patín (supSubPiezas),
+  // que es la que se usa en perfiles HI. Antes el balance solo sumaba la
+  // primera, así que al cortar con sub-piezas mostraba "PIEZAS 0.0 kg" y
+  // mandaba el 100% del material a desperdicio. (2 sep 2026)
+  const totalPzasNormales = supPiezas.reduce((s,p)=>s+(p.peso||supCalcPesoPieza(p)),0);
+  const totalSubPzas      = supSubPiezas.reduce((s,p)=>s+(Number(p.peso)||0),0);
+  const totalPzas = totalPzasNormales + totalSubPzas;
   const totalSob  =supSobrantes.reduce((s,sb)=>s+(sb.peso||supCalcPesoSob(sb)),0);
   const desp=Math.max(0,totalMat-totalPzas-totalSob);
   const aprov=totalMat>0?(totalPzas/totalMat*100):0;
