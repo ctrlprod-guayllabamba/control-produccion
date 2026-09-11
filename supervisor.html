@@ -4566,17 +4566,70 @@ function editRegistro(id){
       <div style="background:#eef4ff;border-radius:8px;padding:.75rem;margin-bottom:1rem">
         <div style="font-size:13px;font-weight:700;color:#1e40af;margin-bottom:.5rem">✂ Piezas cortadas (descompuesto)</div>
         ${subpiezas.map((p,i)=>`
-        <div style="background:white;border:1px solid #bfdbfe;border-radius:6px;padding:.5rem .75rem;margin-bottom:.375rem;display:flex;justify-content:space-between;align-items:center">
-          <span style="font-size:12px;font-weight:600;color:#1e40af">${p.nombre||'Sub-pieza '+(i+1)}</span>
-          <span style="font-size:11px;color:#6b7280">${p.esp}×${p.ancho}×${p.largo} mm</span>
-          <div style="display:flex;align-items:center;gap:6px">
-            <label style="font-size:11px;color:#6b7280">Cant:</label>
-            <input type="number" value="${p.qty||0}" min="0" id="sp-qty-edit-${i}"
-              style="width:70px;padding:4px;border:1.5px solid #93c5fd;border-radius:6px;font-size:14px;font-weight:700;text-align:center"
+        <div style="background:white;border:1px solid #bfdbfe;border-radius:6px;padding:.5rem .75rem;margin-bottom:.375rem">
+          <div style="font-size:12px;font-weight:600;color:#1e40af;margin-bottom:.375rem">${p.nombre||'Sub-pieza '+(i+1)}</div>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">
+            <div>
+              <label style="font-size:9px;color:#6b7280;font-weight:700;display:block">ESP (mm)</label>
+              <input type="number" step="0.1" min="0" value="${p.esp||0}" id="sp-esp-edit-${i}"
+                style="width:100%;padding:4px;border:1.5px solid #93c5fd;border-radius:6px;font-size:13px;text-align:center"
+                oninput="recalcEditDesp()">
+            </div>
+            <div>
+              <label style="font-size:9px;color:#6b7280;font-weight:700;display:block">ANCHO (mm)</label>
+              <input type="number" step="1" min="0" value="${p.ancho||0}" id="sp-ancho-edit-${i}"
+                style="width:100%;padding:4px;border:1.5px solid #93c5fd;border-radius:6px;font-size:13px;text-align:center"
+                oninput="recalcEditDesp()">
+            </div>
+            <div>
+              <label style="font-size:9px;color:#6b7280;font-weight:700;display:block">LARGO (mm)</label>
+              <input type="number" step="1" min="0" value="${p.largo||0}" id="sp-largo-edit-${i}"
+                style="width:100%;padding:4px;border:1.5px solid #93c5fd;border-radius:6px;font-size:13px;text-align:center"
+                oninput="recalcEditDesp()">
+            </div>
+            <div>
+              <label style="font-size:9px;color:#6b7280;font-weight:700;display:block">CANT.</label>
+              <input type="number" value="${p.qty||0}" min="0" id="sp-qty-edit-${i}"
+                style="width:100%;padding:4px;border:1.5px solid #93c5fd;border-radius:6px;font-size:13px;font-weight:700;text-align:center"
+                oninput="recalcEditDesp()">
+            </div>
+          </div>
+          <div style="text-align:right;font-size:10px;color:#1e40af;font-weight:700;margin-top:.25rem" id="sp-peso-edit-${i}">—</div>
+        </div>`).join('')}
+        <div style="text-align:right;font-size:12px;font-weight:800;color:#1e40af;padding-top:.375rem;border-top:1px solid #bfdbfe" id="sp-total-edit">—</div>
+      </div>` : ''}
+
+      <!-- Material de entrada (plancha) -->
+      <div style="background:#fff7ed;border-radius:8px;padding:.75rem;margin-bottom:1rem">
+        <div style="font-size:13px;font-weight:700;color:#9a3412;margin-bottom:.5rem">📋 Plancha / material de entrada</div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">
+          <div>
+            <label style="font-size:9px;color:#6b7280;font-weight:700;display:block">ESP (mm)</label>
+            <input type="number" step="0.1" min="0" value="${Number(r.pl_esp)||0}" id="pl-esp-edit"
+              style="width:100%;padding:4px;border:1.5px solid #fdba74;border-radius:6px;font-size:13px;text-align:center"
               oninput="recalcEditDesp()">
           </div>
-        </div>`).join('')}
-      </div>` : ''}
+          <div>
+            <label style="font-size:9px;color:#6b7280;font-weight:700;display:block">ANCHO (mm)</label>
+            <input type="number" step="1" min="0" value="${Number(r.pl_ancho)||0}" id="pl-ancho-edit"
+              style="width:100%;padding:4px;border:1.5px solid #fdba74;border-radius:6px;font-size:13px;text-align:center"
+              oninput="recalcEditDesp()">
+          </div>
+          <div>
+            <label style="font-size:9px;color:#6b7280;font-weight:700;display:block">LARGO (mm)</label>
+            <input type="number" step="1" min="0" value="${Number(r.pl_largo)||0}" id="pl-largo-edit"
+              style="width:100%;padding:4px;border:1.5px solid #fdba74;border-radius:6px;font-size:13px;text-align:center"
+              oninput="recalcEditDesp()">
+          </div>
+          <div>
+            <label style="font-size:9px;color:#6b7280;font-weight:700;display:block">CANT.</label>
+            <input type="number" step="1" min="0" value="${Number(r.pl_cant)||1}" id="pl-cant-edit"
+              style="width:100%;padding:4px;border:1.5px solid #fdba74;border-radius:6px;font-size:13px;font-weight:700;text-align:center"
+              oninput="recalcEditDesp()">
+          </div>
+        </div>
+        <div style="text-align:right;font-size:10px;color:#9a3412;font-weight:700;margin-top:.25rem" id="pl-peso-edit">—</div>
+      </div>
 
       <!-- Sobrantes -->
       <div style="font-size:13px;font-weight:700;color:#065f46;margin-bottom:.5rem">📦 Sobrantes</div>
@@ -4590,11 +4643,13 @@ function editRegistro(id){
       <!-- Balance -->
       <div id="edit-balance" style="background:#151b26;color:white;border-radius:8px;padding:.75rem;margin-bottom:.75rem;font-size:12px">
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center">
-          <div><div style="opacity:.6">Material</div><div style="font-size:16px;font-weight:700">${Number(r.pl_peso||0).toFixed(1)} kg</div></div>
+          <div><div style="opacity:.6">Material</div><div id="edit-bal-mat" style="font-size:16px;font-weight:700">${Number(r.pl_peso||0).toFixed(1)} kg</div></div>
           <div><div style="opacity:.6">Sobrante</div><div id="edit-bal-sob" style="font-size:16px;font-weight:700;color:#86efac">0.0 kg</div></div>
           <div><div style="opacity:.6">Desperdicio</div><div id="edit-bal-desp" style="font-size:16px;font-weight:700;color:#fca5a5">${Number(r.desperdicio||0).toFixed(1)} kg</div></div>
         </div>
       </div>
+
+      <div id="edit-aviso" style="display:none;background:#fef2f2;border:1.5px solid #fca5a5;color:#991b1b;border-radius:8px;padding:.625rem;margin-bottom:.75rem;font-size:11px;line-height:1.4"></div>
 
       <button onclick="saveRegistroEdit(${id},'${esDesp}')" style="width:100%;padding:.75rem;background:#1e40af;color:white;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer">
         ✔ Guardar cambios
@@ -4608,11 +4663,58 @@ function editRegistro(id){
 }
 
 function recalcEditDesp(){
-  const r=ST.cortes.find(x=>x.id===(window._editRecId||0));
+  const D=7.85e-6;
   const totalSob=(window._sobEditData||[]).reduce((a,s)=>a+(s.peso||0),0);
+
+  // Peso de las sub-piezas con las medidas que estén escritas ahora mismo
+  let totalPzas=0;
+  (window._subpiezasEdit||[]).forEach((sp,i)=>{
+    const esp  = parseFloat(document.getElementById(`sp-esp-edit-${i}`)?.value)||0;
+    const anc  = parseFloat(document.getElementById(`sp-ancho-edit-${i}`)?.value)||0;
+    const lar  = parseFloat(document.getElementById(`sp-largo-edit-${i}`)?.value)||0;
+    const qty  = parseInt(document.getElementById(`sp-qty-edit-${i}`)?.value)||0;
+    const peso = esp*anc*lar*D*qty;
+    totalPzas += peso;
+    const el=document.getElementById(`sp-peso-edit-${i}`);
+    if(el) el.textContent = qty>0 ? `${qty} pzas · ${peso.toFixed(1)} kg` : '—';
+  });
+  const totEl=document.getElementById('sp-total-edit');
+  if(totEl) totEl.textContent = totalPzas>0 ? `Total piezas: ${totalPzas.toFixed(1)} kg` : '—';
+
+  // Peso del material de entrada con las medidas escritas ahora mismo
+  const plEsp = parseFloat(document.getElementById('pl-esp-edit')?.value)||0;
+  const plAnc = parseFloat(document.getElementById('pl-ancho-edit')?.value)||0;
+  const plLar = parseFloat(document.getElementById('pl-largo-edit')?.value)||0;
+  const plCant= parseInt(document.getElementById('pl-cant-edit')?.value)||0;
+  const r0=ST.cortes.find(x=>x.id===(window._editRecId||0));
+  const totalMat = (plEsp&&plAnc&&plLar&&plCant)
+    ? plEsp*plAnc*plLar*D*plCant
+    : Number(r0?.pl_peso||0);
+  const plEl=document.getElementById('pl-peso-edit');
+  if(plEl) plEl.textContent = totalMat>0 ? `${totalMat.toFixed(1)} kg de entrada` : '—';
+
+  const desp = Math.max(0, totalMat - totalPzas - totalSob);
+
   const sobEl=document.getElementById('edit-bal-sob');
   const despEl=document.getElementById('edit-bal-desp');
-  if(sobEl) sobEl.textContent=totalSob.toFixed(1)+' kg';
+  const matEl=document.getElementById('edit-bal-mat');
+  if(sobEl)  sobEl.textContent  = totalSob.toFixed(1)+' kg';
+  if(despEl) despEl.textContent = desp.toFixed(1)+' kg';
+  if(matEl)  matEl.textContent  = totalMat.toFixed(1)+' kg';
+
+  // Aviso: no se puede cortar más material del que entró. Si pasa, casi
+  // siempre es un espesor o una medida mal escrita — que es justo lo que se
+  // viene a corregir aquí. (2 sep 2026)
+  const avisoEl=document.getElementById('edit-aviso');
+  if(avisoEl){
+    const exceso = (totalPzas + totalSob) - totalMat;
+    if(totalMat>0 && exceso > 0.5){
+      avisoEl.style.display='';
+      avisoEl.innerHTML = `⚠ Las piezas y sobrantes (${(totalPzas+totalSob).toFixed(1)} kg) superan el material de entrada (${totalMat.toFixed(1)} kg) por <strong>${exceso.toFixed(1)} kg</strong>.<br>Revisa los espesores y medidas — suele ser un dato mal escrito.`;
+    } else {
+      avisoEl.style.display='none';
+    }
+  }
 }
 
 function saveRegistroEdit(id, esDesp){
@@ -4621,13 +4723,18 @@ function saveRegistroEdit(id, esDesp){
 
   // Actualizar sub-piezas si es descompuesto
   if(esDesp==='true' && window._subpiezasEdit){
-    window._subpiezasEdit.forEach((sp,i)=>{
-      const el=document.getElementById(`sp-qty-edit-${i}`);
-      if(el) sp.qty=parseInt(el.value)||0;
-    });
-    // Recalcular pesos sub-piezas
     const D=7.85e-6;
-    window._subpiezasEdit.forEach(sp=>{
+    // Leer TODAS las medidas editadas, no solo la cantidad: ahora se pueden
+    // corregir espesor, ancho y largo de cada sub-pieza. (2 sep 2026)
+    window._subpiezasEdit.forEach((sp,i)=>{
+      const esp=parseFloat(document.getElementById(`sp-esp-edit-${i}`)?.value);
+      const anc=parseFloat(document.getElementById(`sp-ancho-edit-${i}`)?.value);
+      const lar=parseFloat(document.getElementById(`sp-largo-edit-${i}`)?.value);
+      const qty=parseInt(document.getElementById(`sp-qty-edit-${i}`)?.value);
+      if(!isNaN(esp)) sp.esp=esp;
+      if(!isNaN(anc)) sp.ancho=anc;
+      if(!isNaN(lar)) sp.largo=lar;
+      if(!isNaN(qty)) sp.qty=qty;
       sp.peso = sp.esp&&sp.ancho&&sp.largo&&sp.qty ? sp.esp*sp.ancho*sp.largo*D*sp.qty : 0;
     });
     // Actualizar qty del registro = vigas completas
@@ -4645,6 +4752,20 @@ function saveRegistroEdit(id, esDesp){
     r.pesoParts = r.pesoPzas;
     r.subpiezas = JSON.stringify(window._subpiezasEdit);
     r.pl_cortes_por_plancha = JSON.stringify(window._subpiezasEdit.map(sp=>({...sp,descompuesto:true})));
+  }
+
+  // Actualizar medidas de la plancha (material de entrada) si se editaron
+  const D2=7.85e-6;
+  const plEsp =parseFloat(document.getElementById('pl-esp-edit')?.value);
+  const plAnc =parseFloat(document.getElementById('pl-ancho-edit')?.value);
+  const plLar =parseFloat(document.getElementById('pl-largo-edit')?.value);
+  const plCant=parseInt(document.getElementById('pl-cant-edit')?.value);
+  if(!isNaN(plEsp))  r.pl_esp  = plEsp;
+  if(!isNaN(plAnc))  r.pl_ancho= plAnc;
+  if(!isNaN(plLar))  r.pl_largo= plLar;
+  if(!isNaN(plCant)) r.pl_cant = plCant;
+  if(r.pl_esp && r.pl_ancho && r.pl_largo && r.pl_cant){
+    r.pl_peso = parseFloat((r.pl_esp*r.pl_ancho*r.pl_largo*D2*r.pl_cant).toFixed(2));
   }
 
   // Actualizar sobrantes
