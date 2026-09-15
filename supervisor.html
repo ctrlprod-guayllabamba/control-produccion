@@ -1817,6 +1817,7 @@ function saveAll(){
 }
 
 async function loadFromServer(){
+  loadPerforaciones();   // catálogo de huecos por parte (no bloquea la carga)
   const si=document.getElementById('sync-indicator');
   if(si){ si.textContent='⏳ Sincronizando...'; si.style.color='var(--gm)'; }
 
@@ -4995,12 +4996,39 @@ function buildResumenConjuntosSup(fase, selCj){
 }
 // ──────────────────────────────────────────────────────────────────────────
 
+// Fases que se registran POR CONJUNTO: al elegir el conjunto se activan
+// todas sus partes automáticamente, y el operario solo desmarca las que no
+// apliquen (p.ej. si el cliente decidió no colocar una parte). (2 sep 2026)
+const FASES_POR_CONJUNTO = ['Limpieza Mecánica','Pintura','Perforaciones'];
+
+// Perforaciones por parte: {"E-T-1|pr64": 8, ...}. Se llena desde la hoja
+// PerforacionesPartes y sirve para autocompletar la cantidad de huecos.
+let _perfPorParte = {};
+async function loadPerforaciones(){
+  try{
+    if(!GAS.configured()) return;
+    const data = await GAS.get('getPerforaciones');
+    if(Array.isArray(data)){
+      _perfPorParte = {};
+      data.forEach(p=>{ _perfPorParte[`${p.conjunto}|${p.parte}`] = Number(p.perforaciones)||0; });
+    }
+  }catch(e){ /* sin conexión: se queda con lo que haya */ }
+}
+function perfDeParte(cj, parte){ return Number(_perfPorParte[`${cj}|${parte}`])||0; }
+
 function pBuildVigas(){
   const cj = document.getElementById('p-cj')?.value;
+  const fase = document.getElementById('p-fase')?.value;
   const sec = document.getElementById('p-vigas-section');
   if(!cj||!sec){ if(sec) sec.style.display='none'; return; }
   sec.style.display = '';
-  pVigasData = [{qty:{}, subQty:{}}];
+  const c = PLAN.conjuntos.find(x=>x.conjunto===cj);
+  if(FASES_POR_CONJUNTO.includes(fase) && c){
+    // Arranca con TODAS las partes activadas (una viga completa)
+    pVigasData = [_vigaCompletaTemplate(c, 0)];
+  } else {
+    pVigasData = [{qty:{}, subQty:{}}];
+  }
   pRenderVigas();
   pUpdateInfo();
 }
@@ -5080,12 +5108,192 @@ function pRemoveViga(i){
   pRenderVigas();
 }
 
+// Vista por conjunto (Limpieza Mecánica / Pintura): todas las partes vienen
+// marcadas; desmarcar una la deja fuera del registro y del conteo.
+// Vista de Perforaciones: se marcan las partes que llevan huecos y el sistema
+// autocompleta cuántos, según lo registrado antes. La cantidad es editable
+// por si el operario necesita corregirla, y lo corregido queda guardado para
+// la próxima vez. (2 sep 2026)
+function pRenderPerforaciones(c, cont){
+  const v = pVigasData[0] || (pVigasData[0] = {qty:{}, subQty:{}});
+  if(!v.perf) v.perf = {};
+  const planVigas = Number(c.cantidad) || 1;
+
+  // Autocompletar en el primer render: marca las partes que ya tienen
+  // perforaciones registradas, con su cantidad conocida.
+  if(!v._perfInit){
+    c.partes.forEach(p=>{
+      const n = perfDeParte(c.conjunto, p.parte);
+      if(n > 0) v.perf[p.parte] = n;
+    });
+    v._perfInit = true;
+  }
+
+  let totalHuecos = 0, nActivas = 0, sinDato = 0;
+  const filas = c.partes.map((p,i)=>{
+    const porPieza = Number(v.perf[p.parte])||0;
+    const on = porPieza > 0;
+    const uds = Number(p.cantidad)||0;
+    const totalParte = porPieza * uds;
+    if(on){ totalHuecos += totalParte; nActivas++; }
+    const conocido = perfDeParte(c.conjunto, p.parte) > 0;
+    if(!conocido) sinDato++;
+    return `
+    <div style="display:flex;align-items:center;gap:10px;padding:.5rem .75rem;border-bottom:1px solid var(--gl);background:${on?'#f0fdf4':'#fafafa'}">
+      <input type="checkbox" ${on?'checked':''} onchange="pTogglePerf(${i},this.checked)" style="width:17px;height:17px;cursor:pointer">
+      <div style="flex:1">
+        <div style="font-size:12px;font-weight:700;color:${on?'#166534':'#9ca3af'}">${p.parte}
+          ${conocido?'<span style="font-size:9px;color:#3b82f6;font-weight:600"> · guardado</span>':'<span style="font-size:9px;color:#b45309;font-weight:600"> · sin dato</span>'}
+        </div>
+        <div style="font-size:10px;color:var(--gm)">${p.perfil} · ${uds} uds</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:4px">
+        <input type="number" min="0" step="1" value="${porPieza}" onchange="pSetPerf(${i},this.value)"
+          style="width:62px;padding:4px;border:1.5px solid ${on?'#86efac':'var(--gl)'};border-radius:6px;font-size:13px;font-weight:700;text-align:center">
+        <span style="font-size:10px;color:var(--gm)">/pza</span>
+      </div>
+      <div style="font-size:11px;font-weight:700;color:${on?'#166534':'#d1d5db'};width:70px;text-align:right">${totalParte} huecos</div>
+    </div>`;
+  }).join('');
+
+  cont.innerHTML = `
+  <div style="background:#eff6ff;border:1.5px solid #bfdbfe;border-radius:10px;padding:.625rem .75rem;margin-bottom:.625rem">
+    <div style="font-size:12px;font-weight:700;color:#1e40af">🔩 Perforaciones — por conjunto</div>
+    <div style="font-size:11px;color:#3b82f6;margin-top:2px">Se marcan solas las partes con perforaciones ya registradas. Ajusta la cantidad por pieza si hace falta; lo que corrijas queda guardado para la próxima vez.</div>
+  </div>
+  ${sinDato>0?`<div class="alert alert-warn" style="margin-bottom:.5rem;font-size:11px">${sinDato} parte(s) sin dato de perforaciones. Escribe cuántos huecos lleva cada pieza y quedará guardado.</div>`:''}
+  <div style="border:1px solid var(--gl);border-radius:8px;overflow:hidden">${filas}</div>
+  <div style="display:flex;justify-content:space-between;padding:.625rem .75rem;background:var(--sd);color:#fff;border-radius:8px;margin-top:.5rem">
+    <span style="font-size:12px;font-weight:700">${nActivas} de ${c.partes.length} partes con perforación</span>
+    <span style="font-size:14px;font-weight:800">${totalHuecos} huecos en total</span>
+  </div>`;
+}
+
+function pTogglePerf(idx, on){
+  const cj = document.getElementById('p-cj')?.value;
+  const c = PLAN.conjuntos.find(x=>x.conjunto===cj); if(!c) return;
+  const p = c.partes[idx];
+  const v = pVigasData[0] || (pVigasData[0] = {qty:{}, subQty:{}});
+  if(!v.perf) v.perf = {};
+  if(on){
+    const conocido = perfDeParte(cj, p.parte);
+    v.perf[p.parte] = conocido > 0 ? conocido : 1;
+  } else {
+    v.perf[p.parte] = 0;
+  }
+  pRenderVigas(); pUpdateInfo();
+}
+
+function pSetPerf(idx, valor){
+  const cj = document.getElementById('p-cj')?.value;
+  const c = PLAN.conjuntos.find(x=>x.conjunto===cj); if(!c) return;
+  const p = c.partes[idx];
+  const v = pVigasData[0] || (pVigasData[0] = {qty:{}, subQty:{}});
+  if(!v.perf) v.perf = {};
+  v.perf[p.parte] = Math.max(0, parseInt(valor)||0);
+  pRenderVigas(); pUpdateInfo();
+}
+
+// Guarda en el catálogo las perforaciones que el operario escribió, para que
+// la próxima vez se autocompleten solas.
+async function guardarPerfCatalogo(cj, perf){
+  const items = Object.keys(perf||{})
+    .filter(parte => Number(perf[parte])>0)
+    .map(parte => ({conjunto:cj, parte, perforaciones:Number(perf[parte])}));
+  if(!items.length || !GAS.configured()) return;
+  try{
+    const r = await GAS.post('guardarPerforaciones', {items});
+    if(r && r.ok) items.forEach(it=>{ _perfPorParte[`${it.conjunto}|${it.parte}`] = it.perforaciones; });
+  }catch(e){ /* si falla, el registro igual se guarda */ }
+}
+
+function pRenderPorConjunto(c, cont, fase){
+  if(fase==='Perforaciones'){ pRenderPerforaciones(c, cont); return; }
+  const v = pVigasData[0] || (pVigasData[0] = {qty:{}, subQty:{}});
+  const planVigas = Number(c.cantidad) || 1;
+
+  const activa = p => {
+    const piezasHI = PIEZAS_HI_SUP[p.perfil];
+    if(piezasHI) return piezasHI.some(sp=>Number(v.subQty?.[p.parte]?.[sp.tipo]||0)>0);
+    return Number(v.qty?.[p.parte]||0)>0;
+  };
+
+  let pesoTotal = 0, nActivas = 0;
+  const filas = c.partes.map((p,i)=>{
+    const on = activa(p);
+    const uds = Math.round((Number(p.cantidad)||0)/planVigas) || 1;
+    const peso = (Number(p.peso_unit)||0) * (Number(p.cantidad)||0);
+    if(on){ pesoTotal += peso; nActivas++; }
+    return `
+    <label style="display:flex;align-items:center;gap:10px;padding:.5rem .75rem;border-bottom:1px solid var(--gl);cursor:pointer;background:${on?'#f0fdf4':'#fafafa'}">
+      <input type="checkbox" ${on?'checked':''} onchange="pTogglePartePorConjunto(${i},this.checked)" style="width:17px;height:17px;cursor:pointer">
+      <div style="flex:1">
+        <div style="font-size:12px;font-weight:700;color:${on?'#166534':'#9ca3af'}">${p.parte}</div>
+        <div style="font-size:10px;color:var(--gm)">${p.perfil} · ${p.cantidad} uds (${uds}/viga)</div>
+      </div>
+      <div style="font-size:11px;font-weight:700;color:${on?'#166534':'#d1d5db'};text-align:right">${peso.toFixed(1)} kg</div>
+    </label>`;
+  }).join('');
+
+  cont.innerHTML = `
+  <div style="background:#eff6ff;border:1.5px solid #bfdbfe;border-radius:10px;padding:.625rem .75rem;margin-bottom:.625rem">
+    <div style="font-size:12px;font-weight:700;color:#1e40af">🧽 ${fase} — por conjunto completo</div>
+    <div style="font-size:11px;color:#3b82f6;margin-top:2px">Todas las partes vienen marcadas. Desmarca las que no se trabajaron (p.ej. si el cliente decidió no colocarlas).</div>
+  </div>
+  <div style="display:flex;gap:6px;margin-bottom:.5rem">
+    <button class="btn btn-s btn-sm" onclick="pMarcarTodasPartes(true)">✔ Marcar todas</button>
+    <button class="btn btn-s btn-sm" onclick="pMarcarTodasPartes(false)">✕ Desmarcar todas</button>
+  </div>
+  <div style="border:1px solid var(--gl);border-radius:8px;overflow:hidden">${filas}</div>
+  <div style="display:flex;justify-content:space-between;padding:.625rem .75rem;background:var(--sd);color:#fff;border-radius:8px;margin-top:.5rem">
+    <span style="font-size:12px;font-weight:700">${nActivas} de ${c.partes.length} partes · ${c.cantidad} vigas</span>
+    <span style="font-size:14px;font-weight:800">${pesoTotal.toFixed(1)} kg</span>
+  </div>`;
+}
+
+function pTogglePartePorConjunto(idx, on){
+  const cj = document.getElementById('p-cj')?.value;
+  const c = PLAN.conjuntos.find(x=>x.conjunto===cj);
+  if(!c) return;
+  const p = c.partes[idx];
+  const v = pVigasData[0] || (pVigasData[0] = {qty:{}, subQty:{}});
+  const planVigas = Number(c.cantidad) || 1;
+  const uds = Math.round((Number(p.cantidad)||0)/planVigas) || 1;
+  const piezasHI = PIEZAS_HI_SUP[p.perfil];
+  if(piezasHI){
+    v.subQty[p.parte] = {};
+    piezasHI.forEach(sp=>{ v.subQty[p.parte][sp.tipo] = on ? sp.qty*uds : 0; });
+  } else {
+    v.qty[p.parte] = on ? uds : 0;
+  }
+  pRenderVigas();
+  pUpdateInfo();
+}
+
+function pMarcarTodasPartes(on){
+  const cj = document.getElementById('p-cj')?.value;
+  const c = PLAN.conjuntos.find(x=>x.conjunto===cj);
+  if(!c) return;
+  pVigasData[0] = on ? _vigaCompletaTemplate(c, 0) : {qty:{}, subQty:{}};
+  pRenderVigas();
+  pUpdateInfo();
+}
+
 function pRenderVigas(){
   try {
   const cj = document.getElementById('p-cj')?.value;
+  const fase = document.getElementById('p-fase')?.value;
   const c = PLAN.conjuntos.find(x=>x.conjunto===cj);
   const cont = document.getElementById('p-vigas-list');
   if(!cont||!c){ return; }
+
+  // Limpieza Mecánica y Pintura: se trabaja el conjunto completo, así que en
+  // vez de escribir cantidad por cantidad se muestran las partes marcadas y
+  // el operario desmarca lo que no aplique.
+  if(FASES_POR_CONJUNTO.includes(fase)){
+    pRenderPorConjunto(c, cont, fase);
+    return;
+  }
 
   cont.innerHTML = pVigasData.map((v,i)=>{
     // Calcular peso real según partes y cantidades marcadas
@@ -5563,6 +5771,12 @@ function addProd(){
     sold_elec:parseFloat(document.getElementById('p-sold-elec')?.value)||0,
     sold_pos:document.getElementById('p-sold-pos')?.value||'',
   };
+
+  // Si es Perforaciones, recordar cuántos huecos lleva cada parte para
+  // autocompletarlo la próxima vez. (2 sep 2026)
+  if(fase==='Perforaciones' && pVigasData[0]?.perf){
+    guardarPerfCatalogo(cj, pVigasData[0].perf);
+  }
 
   ST.prods.push(rec);
   addExec(cj, rec.parte, fase, vigasCompletas);
