@@ -1294,6 +1294,23 @@ global.Chart = class {
       <div style="font-size:11px;color:var(--gm);margin-top:.75rem;">
         La contraseña inicial es la cédula de la persona. Puedes restablecerla a la cédula original en cualquier momento con el botón "Reiniciar clave", o desactivar su acceso sin borrar el registro.
       </div>
+
+      <!-- Diagnóstico de correo: para saber por qué no llega el link de
+           recuperación, en vez de quedarse sin información. (26 oct 2026) -->
+      <div style="border-top:1px solid var(--gl);margin-top:1rem;padding-top:.875rem">
+        <div style="font-size:12px;font-weight:800;color:var(--b);margin-bottom:.5rem">📧 Revisar el correo de recuperación</div>
+        <div style="font-size:11px;color:var(--gm);margin-bottom:.5rem">
+          Si el link de recuperación no llega, escribe el correo aquí y revisa qué está pasando.
+        </div>
+        <div class="field" style="margin-bottom:.5rem">
+          <input type="email" id="diag-email" placeholder="correo a revisar">
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn btn-s btn-sm" onclick="correoDiagnosticar()">🔍 Revisar</button>
+          <button class="btn btn-s btn-sm" onclick="correoProbar()">✉ Enviar prueba</button>
+        </div>
+        <div id="diag-salida" style="display:none;margin-top:.625rem;font-size:11px;line-height:1.5"></div>
+      </div>
     </div>
     <div class="card">
       <div class="card-hdr" style="display:flex;justify-content:space-between;align-items:center;">
@@ -5001,6 +5018,62 @@ function buildResumenConjuntosSup(fase, selCj){
 // apliquen (p.ej. si el cliente decidió no colocar una parte). (2 sep 2026)
 const FASES_POR_CONJUNTO = ['Limpieza Mecánica','Pintura','Perforaciones'];
 
+// Estado del panel "por conjunto": cuántas vigas se trabajaron y qué partes
+// quedaron desmarcadas. Antes el panel pintaba el peso de TODO el conjunto
+// (28 697 kg en E-T-1) mientras el registro guardaba una sola viga (254 kg),
+// 113 veces menos. Ahora el lote se arma con n vigas y lo que se ve es
+// exactamente lo que se guarda. (26 oct 2026)
+let _pVigasN = 1;
+let _pPartesOff = {};
+
+// Arma el lote de n vigas completas, respetando las partes desmarcadas.
+function _vigasLote(c, n, off){
+  const lote = [];
+  for(let i=0; i<n; i++){
+    const v = _vigaCompletaTemplate(c, i);
+    Object.keys(off||{}).forEach(parte=>{
+      if(!off[parte]) return;
+      if(v.subQty && v.subQty[parte]) Object.keys(v.subQty[parte]).forEach(t=>{ v.subQty[parte][t] = 0; });
+      if(v.qty && v.qty[parte] !== undefined) v.qty[parte] = 0;
+    });
+    lote.push(v);
+  }
+  return lote;
+}
+
+// Una viga cuenta como "completa" cuando todas las partes QUE CORRESPONDEN
+// tienen cantidad. En Limpieza / Pintura / Perforaciones las partes
+// desmarcadas (las que el cliente decidió no colocar) no deben impedir que la
+// viga cuente como terminada. (26 oct 2026)
+function _partesQueCuentan(c, fase){
+  if(FASES_POR_CONJUNTO.includes(fase)) return c.partes.filter(p=>!_pPartesOff[p.parte]);
+  return c.partes;
+}
+function _vigaCompleta(v, c, fase){
+  const partes = _partesQueCuentan(c, fase);
+  if(!partes.length) return false;
+  return partes.every(p=>{
+    const piezasHI = PIEZAS_HI_SUP[p.perfil];
+    if(piezasHI) return piezasHI.every(sp=>Number(v.subQty?.[p.parte]?.[sp.tipo]||0)>0);
+    return Number(v.qty?.[p.parte]||0)>0;
+  });
+}
+
+// Piezas de una parte que trae el lote actual (lo que de verdad se guardará).
+function _udsLoteDeParte(p){
+  const piezasHI = PIEZAS_HI_SUP[p.perfil];
+  let total = 0;
+  pVigasData.forEach(v=>{
+    if(piezasHI){
+      const n = Math.min(...piezasHI.map(sp=>Math.floor(Number(v.subQty?.[p.parte]?.[sp.tipo]||0)/(sp.qty||1))));
+      if(isFinite(n) && n>0) total += n;
+    } else {
+      total += Number(v.qty?.[p.parte]||0);
+    }
+  });
+  return total;
+}
+
 // Perforaciones por parte: {"E-T-1|pr64": 8, ...}. Se llena desde la hoja
 // PerforacionesPartes y sirve para autocompletar la cantidad de huecos.
 let _perfPorParte = {};
@@ -5024,8 +5097,12 @@ function pBuildVigas(){
   sec.style.display = '';
   const c = PLAN.conjuntos.find(x=>x.conjunto===cj);
   if(FASES_POR_CONJUNTO.includes(fase) && c){
-    // Arranca con TODAS las partes activadas (una viga completa)
-    pVigasData = [_vigaCompletaTemplate(c, 0)];
+    // Arranca con TODAS las partes activadas. Perforaciones se maneja por
+    // piezas (no por vigas), así que ahí basta una fila.
+    _pVigasN = 1; _pPartesOff = {};
+    pVigasData = (fase==='Perforaciones')
+      ? [_vigaCompletaTemplate(c, 0)]
+      : _vigasLote(c, 1, {});
   } else {
     pVigasData = [{qty:{}, subQty:{}}];
   }
@@ -5129,30 +5206,46 @@ function pRenderPerforaciones(c, cont){
     v._perfInit = true;
   }
 
-  let totalHuecos = 0, nActivas = 0, sinDato = 0;
+  let totalHuecos = 0, nActivas = 0, sinDato = 0, pesoTotal = 0, totalPzas = 0;
   const filas = c.partes.map((p,i)=>{
     const porPieza = Number(v.perf[p.parte])||0;
     const on = porPieza > 0;
     const uds = Number(p.cantidad)||0;
-    const totalParte = porPieza * uds;
-    if(on){ totalHuecos += totalParte; nActivas++; }
+    // Piezas realmente perforadas (la producción que se registra hoy)
+    const piezasHI = PIEZAS_HI_SUP[p.perfil];
+    const hechas = piezasHI
+      ? Math.min(...piezasHI.map(sp=>Math.floor(Number(v.subQty?.[p.parte]?.[sp.tipo]||0)/(sp.qty||1))))
+      : Number(v.qty?.[p.parte]||0);
+    const nHechas = (isFinite(hechas) && hechas>0) ? hechas : 0;
+    const pesoParte = (Number(p.peso_unit)||0) * nHechas;
+    const huecosParte = porPieza * nHechas;
+    if(on){ nActivas++; }
+    totalHuecos += huecosParte; pesoTotal += pesoParte; totalPzas += nHechas;
     const conocido = perfDeParte(c.conjunto, p.parte) > 0;
     if(!conocido) sinDato++;
     return `
-    <div style="display:flex;align-items:center;gap:10px;padding:.5rem .75rem;border-bottom:1px solid var(--gl);background:${on?'#f0fdf4':'#fafafa'}">
+    <div style="display:flex;align-items:center;gap:8px;padding:.5rem .75rem;border-bottom:1px solid var(--gl);background:${on?'#f0fdf4':'#fafafa'}">
       <input type="checkbox" ${on?'checked':''} onchange="pTogglePerf(${i},this.checked)" style="width:17px;height:17px;cursor:pointer">
-      <div style="flex:1">
+      <div style="flex:1;min-width:0">
         <div style="font-size:12px;font-weight:700;color:${on?'#166534':'#9ca3af'}">${p.parte}
           ${conocido?'<span style="font-size:9px;color:#3b82f6;font-weight:600"> · guardado</span>':'<span style="font-size:9px;color:#b45309;font-weight:600"> · sin dato</span>'}
         </div>
         <div style="font-size:10px;color:var(--gm)">${p.perfil} · ${uds} uds</div>
       </div>
-      <div style="display:flex;align-items:center;gap:4px">
+      <div style="text-align:center">
+        <div style="font-size:8px;color:var(--gm);font-weight:700">HUECOS/PZA</div>
         <input type="number" min="0" step="1" value="${porPieza}" onchange="pSetPerf(${i},this.value)"
-          style="width:62px;padding:4px;border:1.5px solid ${on?'#86efac':'var(--gl)'};border-radius:6px;font-size:13px;font-weight:700;text-align:center">
-        <span style="font-size:10px;color:var(--gm)">/pza</span>
+          style="width:58px;padding:3px;border:1.5px solid ${on?'#86efac':'var(--gl)'};border-radius:6px;font-size:13px;font-weight:700;text-align:center">
       </div>
-      <div style="font-size:11px;font-weight:700;color:${on?'#166534':'#d1d5db'};width:70px;text-align:right">${totalParte} huecos</div>
+      <div style="text-align:center">
+        <div style="font-size:8px;color:#1e40af;font-weight:700">PZAS PERFORADAS</div>
+        <input type="number" min="0" max="${uds}" step="1" value="${nHechas}" onchange="pSetPerfQty(${i},this.value)"
+          style="width:64px;padding:3px;border:1.5px solid #93c5fd;border-radius:6px;font-size:13px;font-weight:700;text-align:center">
+      </div>
+      <div style="width:96px;text-align:right">
+        <div style="font-size:11px;font-weight:700;color:${nHechas>0?'#166534':'#d1d5db'}">${huecosParte} huecos</div>
+        <div style="font-size:10px;color:${nHechas>0?'#1e40af':'#d1d5db'}">${pesoParte.toFixed(1)} kg</div>
+      </div>
     </div>`;
   }).join('');
 
@@ -5162,11 +5255,36 @@ function pRenderPerforaciones(c, cont){
     <div style="font-size:11px;color:#3b82f6;margin-top:2px">Se marcan solas las partes con perforaciones ya registradas. Ajusta la cantidad por pieza si hace falta; lo que corrijas queda guardado para la próxima vez.</div>
   </div>
   ${sinDato>0?`<div class="alert alert-warn" style="margin-bottom:.5rem;font-size:11px">${sinDato} parte(s) sin dato de perforaciones. Escribe cuántos huecos lleva cada pieza y quedará guardado.</div>`:''}
+  <div style="display:flex;gap:6px;margin-bottom:.5rem;flex-wrap:wrap">
+    <label class="btn btn-s btn-sm" style="cursor:pointer;margin:0" title="Carga las perforaciones de TODOS los conjuntos desde el Excel de Tekla">
+      📄 Cargar desde Tekla
+      <input type="file" accept=".xlsx,.xls,.csv" onchange="perfCargarTekla(event)" style="display:none">
+    </label>
+    <button class="btn btn-s btn-sm" onclick="pPerfTodasPzas(true)">✔ Todas las piezas</button>
+    <button class="btn btn-s btn-sm" onclick="pPerfTodasPzas(false)">✕ Limpiar piezas</button>
+  </div>
+  <div id="perf-import-msg" style="display:none;font-size:11px;margin-bottom:.5rem"></div>
   <div style="border:1px solid var(--gl);border-radius:8px;overflow:hidden">${filas}</div>
-  <div style="display:flex;justify-content:space-between;padding:.625rem .75rem;background:var(--sd);color:#fff;border-radius:8px;margin-top:.5rem">
-    <span style="font-size:12px;font-weight:700">${nActivas} de ${c.partes.length} partes con perforación</span>
-    <span style="font-size:14px;font-weight:800">${totalHuecos} huecos en total</span>
+  <div style="display:flex;justify-content:space-between;align-items:center;padding:.625rem .75rem;background:var(--sd);color:#fff;border-radius:8px;margin-top:.5rem">
+    <span style="font-size:12px;font-weight:700">${nActivas} de ${c.partes.length} partes con perforación · ${totalPzas} pzas perforadas</span>
+    <span style="text-align:right">
+      <div style="font-size:14px;font-weight:800">${totalHuecos} huecos</div>
+      <div style="font-size:12px;font-weight:700;opacity:.85">${pesoTotal.toFixed(1)} kg</div>
+    </span>
   </div>`;
+}
+
+// Llena o limpia de golpe las piezas perforadas de todas las partes marcadas.
+function pPerfTodasPzas(llenar){
+  const cj = document.getElementById('p-cj')?.value;
+  const c = PLAN.conjuntos.find(x=>x.conjunto===cj); if(!c) return;
+  const v = pVigasData[0] || (pVigasData[0] = {qty:{}, subQty:{}});
+  if(!v.perf) v.perf = {};
+  c.partes.forEach((p,i)=>{
+    const tienePerf = Number(v.perf[p.parte])>0;
+    pSetPerfQty(i, llenar && tienePerf ? (Number(p.cantidad)||0) : 0, true);
+  });
+  pRenderVigas(); pUpdateInfo();
 }
 
 function pTogglePerf(idx, on){
@@ -5182,6 +5300,88 @@ function pTogglePerf(idx, on){
     v.perf[p.parte] = 0;
   }
   pRenderVigas(); pUpdateInfo();
+}
+
+// Carga masiva de perforaciones desde el Excel de Tekla: llena el catálogo de
+// TODOS los conjuntos de una vez, en vez de escribirlos uno por uno.
+// Detecta las columnas por nombre, tolerando variaciones. (2 sep 2026)
+function perfCargarTekla(ev){
+  const file = ev.target.files && ev.target.files[0];
+  if(!file) return;
+  const msg = document.getElementById('perf-import-msg');
+  const decir = (t,ok)=>{ if(msg){ msg.textContent=t; msg.style.color=ok?'#166534':'#991b1b'; msg.style.display=''; } };
+
+  const reader = new FileReader();
+  reader.onload = async e=>{
+    try{
+      const wb = XLSX.read(new Uint8Array(e.target.result), {type:'array'});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const filas = XLSX.utils.sheet_to_json(ws, {defval:''});
+      if(!filas.length){ decir('⚠ El archivo no tiene filas de datos.', false); return; }
+
+      const claves = Object.keys(filas[0]);
+      const buscar = (...pal)=>{
+        const norm = k=>String(k).toLowerCase().trim();
+        for(const p of pal){ const ex = claves.find(k=>norm(k)===p); if(ex) return ex; }
+        return claves.find(k=>pal.some(p=>norm(k).includes(p)));
+      };
+      const cCj   = buscar('conjunto','ensamble','assembly','cj');
+      const cPr   = buscar('parte','pieza','pos','part','pr','marca');
+      const cPerf = buscar('perforaciones','huecos','holes','bolts','agujeros','n° huecos','no huecos');
+
+      if(!cCj || !cPr || !cPerf){
+        decir(`⚠ Faltan columnas. Se necesita conjunto, parte y perforaciones. El archivo trae: ${claves.join(', ')}`, false);
+        return;
+      }
+
+      const items = [];
+      filas.forEach(f=>{
+        const cj = String(f[cCj]||'').trim();
+        const pr = String(f[cPr]||'').trim();
+        const n  = parseInt(f[cPerf]);
+        if(cj && pr && !isNaN(n) && n>0) items.push({conjunto:cj, parte:pr, perforaciones:n});
+      });
+      if(!items.length){ decir('⚠ No se encontraron filas con perforaciones mayores a 0.', false); return; }
+
+      decir(`⏳ Guardando ${items.length} partes...`, true);
+      // Enviar por lotes: un plan completo puede traer miles de filas
+      const LOTE = 400;
+      let guardados = 0;
+      for(let i=0;i<items.length;i+=LOTE){
+        const r = await GAS.post('guardarPerforaciones', {items: items.slice(i,i+LOTE)});
+        if(r && r.ok) guardados += Math.min(LOTE, items.length-i);
+        else { decir(`❌ Se guardaron ${guardados} y falló: ${(r&&(r.msg||r.error))||'sin confirmación'}`, false); return; }
+      }
+      await loadPerforaciones();
+      const conjuntos = new Set(items.map(i=>i.conjunto)).size;
+      decir(`✅ ${guardados} partes cargadas de ${conjuntos} conjuntos. Ya se autocompletan en todo el proyecto.`, true);
+      pRenderVigas(); pUpdateInfo();
+    }catch(err){
+      decir('❌ No se pudo leer el archivo: '+err.message, false);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+  ev.target.value='';
+}
+
+// Registra cuántas PIEZAS se perforaron de una parte. Se guarda en los mismos
+// campos que el resto de fases (qty / subQty) para que el peso ejecutado y los
+// informes de avance lo tomen sin cambios. (2 sep 2026)
+function pSetPerfQty(idx, valor, sinRender){
+  const cj = document.getElementById('p-cj')?.value;
+  const c = PLAN.conjuntos.find(x=>x.conjunto===cj); if(!c) return;
+  const p = c.partes[idx];
+  const v = pVigasData[0] || (pVigasData[0] = {qty:{}, subQty:{}});
+  const max = Number(p.cantidad)||0;
+  const n = Math.max(0, Math.min(max, parseInt(valor)||0));
+  const piezasHI = PIEZAS_HI_SUP[p.perfil];
+  if(piezasHI){
+    v.subQty[p.parte] = {};
+    piezasHI.forEach(sp=>{ v.subQty[p.parte][sp.tipo] = sp.qty * n; });
+  } else {
+    v.qty[p.parte] = n;
+  }
+  if(!sinRender){ pRenderVigas(); pUpdateInfo(); }
 }
 
 function pSetPerf(idx, valor){
@@ -5212,43 +5412,69 @@ function pRenderPorConjunto(c, cont, fase){
   const v = pVigasData[0] || (pVigasData[0] = {qty:{}, subQty:{}});
   const planVigas = Number(c.cantidad) || 1;
 
-  const activa = p => {
-    const piezasHI = PIEZAS_HI_SUP[p.perfil];
-    if(piezasHI) return piezasHI.some(sp=>Number(v.subQty?.[p.parte]?.[sp.tipo]||0)>0);
-    return Number(v.qty?.[p.parte]||0)>0;
-  };
+  // Vigas ya registradas en esta fase, para avisar si el lote se pasa del plan.
+  const yaReg = ST.prods
+    .filter(r=>(r.conjunto||r.cj)===c.conjunto && r.fase===fase)
+    .reduce((s,r)=>s+(Number(r.qty)||0), 0);
+  const pendVigas = Math.max(0, planVigas - yaReg);
 
   let pesoTotal = 0, nActivas = 0;
   const filas = c.partes.map((p,i)=>{
-    const on = activa(p);
-    const uds = Math.round((Number(p.cantidad)||0)/planVigas) || 1;
-    const peso = (Number(p.peso_unit)||0) * (Number(p.cantidad)||0);
+    const uds = _udsLoteDeParte(p);          // piezas reales del lote
+    const on  = !_pPartesOff[p.parte];
+    const peso = (Number(p.peso_unit)||0) * uds;
+    const porViga = Math.round((Number(p.cantidad)||0)/planVigas) || 1;
     if(on){ pesoTotal += peso; nActivas++; }
     return `
     <label style="display:flex;align-items:center;gap:10px;padding:.5rem .75rem;border-bottom:1px solid var(--gl);cursor:pointer;background:${on?'#f0fdf4':'#fafafa'}">
       <input type="checkbox" ${on?'checked':''} onchange="pTogglePartePorConjunto(${i},this.checked)" style="width:17px;height:17px;cursor:pointer">
       <div style="flex:1">
         <div style="font-size:12px;font-weight:700;color:${on?'#166534':'#9ca3af'}">${p.parte}</div>
-        <div style="font-size:10px;color:var(--gm)">${p.perfil} · ${p.cantidad} uds (${uds}/viga)</div>
+        <div style="font-size:10px;color:var(--gm)">${p.perfil} · ${porViga}/viga · plan ${p.cantidad} uds</div>
       </div>
-      <div style="font-size:11px;font-weight:700;color:${on?'#166534':'#d1d5db'};text-align:right">${peso.toFixed(1)} kg</div>
+      <div style="text-align:right;min-width:92px">
+        <div style="font-size:12px;font-weight:800;color:${on?'#166534':'#d1d5db'}">${on?uds:0} uds</div>
+        <div style="font-size:10px;font-weight:700;color:${on?'#1e40af':'#d1d5db'}">${(on?peso:0).toFixed(1)} kg</div>
+      </div>
     </label>`;
   }).join('');
 
   cont.innerHTML = `
   <div style="background:#eff6ff;border:1.5px solid #bfdbfe;border-radius:10px;padding:.625rem .75rem;margin-bottom:.625rem">
-    <div style="font-size:12px;font-weight:700;color:#1e40af">🧽 ${fase} — por conjunto completo</div>
-    <div style="font-size:11px;color:#3b82f6;margin-top:2px">Todas las partes vienen marcadas. Desmarca las que no se trabajaron (p.ej. si el cliente decidió no colocarlas).</div>
+    <div style="font-size:12px;font-weight:700;color:#1e40af">🧽 ${fase} — por conjunto</div>
+    <div style="font-size:11px;color:#3b82f6;margin-top:2px">Todas las partes vienen marcadas. Desmarca las que no se trabajaron (p.ej. si el cliente decidió no colocarlas) e indica cuántas vigas se hicieron.</div>
   </div>
+  <div style="display:flex;gap:8px;align-items:center;background:#f0fdf4;border:1.5px solid #86efac;border-radius:10px;padding:.5rem .625rem;margin-bottom:.5rem">
+    <span style="font-size:12px;font-weight:700;color:#065f46;white-space:nowrap">Vigas trabajadas:</span>
+    <button class="btn btn-s btn-sm" onclick="pSetVigasN(${_pVigasN}-1)" style="padding:2px 10px">−</button>
+    <input type="number" min="1" value="${_pVigasN}" onchange="pSetVigasN(this.value)"
+      style="width:62px;text-align:center;font-size:17px;font-weight:800;border:1.5px solid #86efac;border-radius:8px;padding:3px;color:#065f46">
+    <button class="btn btn-s btn-sm" onclick="pSetVigasN(${_pVigasN}+1)" style="padding:2px 10px">+</button>
+    <span style="font-size:10px;color:#6b7280;flex:1">pendientes: <strong>${pendVigas}</strong> de ${planVigas}</span>
+    <button class="btn btn-s btn-sm" onclick="pSetVigasN(${pendVigas})" ${pendVigas<=0?'disabled':''}>Todas las pendientes</button>
+  </div>
+  ${_pVigasN>pendVigas?`<div class="alert alert-warn" style="margin-bottom:.5rem;font-size:11px">Con ${_pVigasN} vigas se pasa del plan (${pendVigas} pendientes). Revisa antes de guardar.</div>`:''}
   <div style="display:flex;gap:6px;margin-bottom:.5rem">
     <button class="btn btn-s btn-sm" onclick="pMarcarTodasPartes(true)">✔ Marcar todas</button>
     <button class="btn btn-s btn-sm" onclick="pMarcarTodasPartes(false)">✕ Desmarcar todas</button>
   </div>
   <div style="border:1px solid var(--gl);border-radius:8px;overflow:hidden">${filas}</div>
-  <div style="display:flex;justify-content:space-between;padding:.625rem .75rem;background:var(--sd);color:#fff;border-radius:8px;margin-top:.5rem">
-    <span style="font-size:12px;font-weight:700">${nActivas} de ${c.partes.length} partes · ${c.cantidad} vigas</span>
+  <div style="display:flex;justify-content:space-between;align-items:center;padding:.625rem .75rem;background:var(--sd);color:#fff;border-radius:8px;margin-top:.5rem">
+    <span style="font-size:12px;font-weight:700">${nActivas} de ${c.partes.length} partes · ${_pVigasN} viga${_pVigasN>1?'s':''}</span>
     <span style="font-size:14px;font-weight:800">${pesoTotal.toFixed(1)} kg</span>
   </div>`;
+}
+
+// Cambia cuántas vigas trae el lote, conservando las partes desmarcadas.
+function pSetVigasN(valor){
+  const cj = document.getElementById('p-cj')?.value;
+  const c = PLAN.conjuntos.find(x=>x.conjunto===cj);
+  if(!c) return;
+  const n = Math.max(1, parseInt(valor)||1);
+  _pVigasN = n;
+  pVigasData = _vigasLote(c, n, _pPartesOff);
+  pRenderVigas();
+  pUpdateInfo();
 }
 
 function pTogglePartePorConjunto(idx, on){
@@ -5256,16 +5482,8 @@ function pTogglePartePorConjunto(idx, on){
   const c = PLAN.conjuntos.find(x=>x.conjunto===cj);
   if(!c) return;
   const p = c.partes[idx];
-  const v = pVigasData[0] || (pVigasData[0] = {qty:{}, subQty:{}});
-  const planVigas = Number(c.cantidad) || 1;
-  const uds = Math.round((Number(p.cantidad)||0)/planVigas) || 1;
-  const piezasHI = PIEZAS_HI_SUP[p.perfil];
-  if(piezasHI){
-    v.subQty[p.parte] = {};
-    piezasHI.forEach(sp=>{ v.subQty[p.parte][sp.tipo] = on ? sp.qty*uds : 0; });
-  } else {
-    v.qty[p.parte] = on ? uds : 0;
-  }
+  if(on) delete _pPartesOff[p.parte]; else _pPartesOff[p.parte] = true;
+  pVigasData = _vigasLote(c, _pVigasN, _pPartesOff);
   pRenderVigas();
   pUpdateInfo();
 }
@@ -5274,7 +5492,9 @@ function pMarcarTodasPartes(on){
   const cj = document.getElementById('p-cj')?.value;
   const c = PLAN.conjuntos.find(x=>x.conjunto===cj);
   if(!c) return;
-  pVigasData[0] = on ? _vigaCompletaTemplate(c, 0) : {qty:{}, subQty:{}};
+  _pPartesOff = {};
+  if(!on) c.partes.forEach(p=>{ _pPartesOff[p.parte] = true; });
+  pVigasData = _vigasLote(c, _pVigasN, _pPartesOff);
   pRenderVigas();
   pUpdateInfo();
 }
@@ -5468,11 +5688,8 @@ function pCalcResumenDia(){
     if(piezasHI) return piezasHI.some(sp=>Number(v.subQty?.[p.parte]?.[sp.tipo]||0)>0);
     return Number(v.qty?.[p.parte]||0)>0;
   });
-  const vigasCompletas = pVigasData.filter(v=>c.partes.every(p=>{
-    const piezasHI = PIEZAS_HI_SUP[p.perfil];
-    if(piezasHI) return piezasHI.every(sp=>Number(v.subQty?.[p.parte]?.[sp.tipo]||0)>0);
-    return Number(v.qty?.[p.parte]||0)>0;
-  })).length;
+  const _faseAct = document.getElementById('p-fase')?.value || 'Armado';
+  const vigasCompletas = pVigasData.filter(v=>_vigaCompleta(v, c, _faseAct)).length;
   // Solo cuentan como incompletas las vigas EMPEZADAS a medias. Una fila
   // recién abierta y todavía en blanco no es una viga incompleta — antes
   // el formulario mostraba "INCOMPLETAS 1" nada más abrirlo. (1 sep 2026)
@@ -5687,11 +5904,7 @@ function addProd(){
   }
 
   const c=PLAN.conjuntos.find(x=>x.conjunto===cj);
-  const vigasCompletas=pVigasData.filter(v=>c?.partes.every(p=>{
-    const piezasHI=PIEZAS_HI_SUP[p.perfil];
-    if(piezasHI) return piezasHI.every(sp=>Number(v.subQty?.[p.parte]?.[sp.tipo]||0)>0);
-    return Number(v.qty?.[p.parte]||0)>0;
-  })).length;
+  const vigasCompletas=c?pVigasData.filter(v=>_vigaCompleta(v, c, fase)).length:0;
   const qty=pVigasData.length;
   const op=ST.ops.find(o=>o.id==opId);
 
@@ -5773,9 +5986,23 @@ function addProd(){
   };
 
   // Si es Perforaciones, recordar cuántos huecos lleva cada parte para
-  // autocompletarlo la próxima vez. (2 sep 2026)
+  // autocompletarlo la próxima vez, y guardar el total de huecos ejecutados
+  // en el registro para poder informarlo. (2 sep 2026)
   if(fase==='Perforaciones' && pVigasData[0]?.perf){
-    guardarPerfCatalogo(cj, pVigasData[0].perf);
+    const v0 = pVigasData[0];
+    guardarPerfCatalogo(cj, v0.perf);
+    let huecos = 0;
+    c.partes.forEach(p=>{
+      const porPieza = Number(v0.perf[p.parte])||0;
+      if(!porPieza) return;
+      const piezasHI = PIEZAS_HI_SUP[p.perfil];
+      const hechas = piezasHI
+        ? Math.min(...piezasHI.map(sp=>Math.floor(Number(v0.subQty?.[p.parte]?.[sp.tipo]||0)/(sp.qty||1))))
+        : Number(v0.qty?.[p.parte]||0);
+      if(isFinite(hechas) && hechas>0) huecos += porPieza * hechas;
+    });
+    rec.perforaciones = huecos;
+    rec.perf_detalle = JSON.stringify(v0.perf);
   }
 
   ST.prods.push(rec);
@@ -5794,6 +6021,7 @@ function clearProd(){
   document.getElementById('p-vigas-section').style.display='none';
   document.getElementById('p-resumen-dia').style.display='none';
   pVigasData=[];
+  _pVigasN = 1; _pPartesOff = {};
   const list=document.getElementById('p-vigas-list');
   if(list) list.innerHTML='';
 }
@@ -9078,6 +9306,78 @@ async function intentarLogin(){
     err.textContent = 'Error de conexión: '+e.message;
     err.style.display='';
     btn.disabled=false; btn.textContent='Entrar';
+  }
+}
+
+// ── Diagnóstico del correo de recuperación ───────────────────────────
+// La pantalla de recuperación responde siempre lo mismo (para no revelar
+// quién tiene cuenta), así que sin esto no había forma de saber por qué no
+// llegaba el correo. (26 oct 2026)
+function _diagEscribir(html, color){
+  const el = document.getElementById('diag-salida');
+  if(!el) return;
+  el.innerHTML = html;
+  el.style.color = color || 'var(--gd)';
+  el.style.display = '';
+}
+
+async function correoDiagnosticar(){
+  const email = document.getElementById('diag-email')?.value.trim() || '';
+  _diagEscribir('Revisando...', 'var(--gm)');
+  try{
+    const r = await GAS.post('diagnosticoCorreo', {email});
+    if(!r || r.error){ _diagEscribir('❌ ' + ((r&&r.error)||'sin respuesta'), '#991b1b'); return; }
+
+    let html = '';
+    if(r.resultado){
+      const malo = r.causa === 'correo_no_registrado' || r.causa === 'usuario_no_habilitado';
+      html += `<div style="background:${malo?'#fef2f2':'#f0fdf4'};border:1.5px solid ${malo?'#fca5a5':'#86efac'};border-radius:8px;padding:.5rem .625rem;margin-bottom:.5rem;color:${malo?'#991b1b':'#166534'};font-weight:600">${malo?'❌':'✅'} ${r.resultado}</div>`;
+    }
+    html += `<div style="margin-bottom:.375rem"><strong>Envía desde:</strong> ${r.cuenta||'—'}</div>`;
+    html += `<div style="margin-bottom:.5rem"><strong>Correos que puede enviar hoy:</strong> ${r.cuota>=0?r.cuota:'no se pudo leer'}${r.cuota===0?' <span style="color:#991b1b;font-weight:700">(cuota agotada — vuelve a intentar mañana)</span>':''}</div>`;
+    html += `<div style="margin-bottom:.375rem"><strong>Usuarios:</strong> ${r.total} registrados · ${r.conCorreo} con correo · ${r.habilitados} pueden recuperar</div>`;
+
+    if(Array.isArray(r.usuarios) && r.usuarios.length){
+      html += '<div style="border:1px solid var(--gl);border-radius:8px;overflow:hidden;margin:.5rem 0">';
+      r.usuarios.forEach(u=>{
+        html += `<div style="display:flex;justify-content:space-between;gap:6px;padding:4px 8px;border-bottom:1px solid var(--gl);background:${u.puedeRecuperar?'#f0fdf4':'#fff7ed'}">
+          <span style="flex:1;min-width:0"><strong>${u.nombre||'—'}</strong> <span style="color:var(--gm)">· ${u.rol}${u.estado==='inactivo'?' · inactivo':''}</span><br>
+            <span style="font-size:10px;color:${u.email==='(sin correo)'?'#b45309':'var(--gm)'}">${u.email}</span></span>
+          <span style="font-size:14px">${u.puedeRecuperar?'✅':'⚠'}</span>
+        </div>`;
+      });
+      html += '</div>';
+    }
+
+    if(Array.isArray(r.ultimos) && r.ultimos.length){
+      html += '<div style="font-weight:700;margin-top:.5rem;margin-bottom:.25rem">Últimos intentos de envío</div>';
+      r.ultimos.forEach(l=>{
+        const mal = String(l.estado||'').indexOf('FALL')>=0 || l.estado==='sin usuario';
+        html += `<div style="padding:3px 0;border-bottom:1px dotted var(--gl);color:${mal?'#991b1b':'#166534'}">
+          ${String(l.fecha||'').slice(0,16).replace('T',' ')} · ${l.correo} · <strong>${l.estado}</strong>${l.detalle?`<br><span style="font-size:10px;color:var(--gm)">${l.detalle}</span>`:''}</div>`;
+      });
+    } else {
+      html += '<div style="margin-top:.5rem;color:var(--gm)">No hay intentos de envío anotados todavía. Pide la recuperación una vez y vuelve a revisar aquí.</div>';
+    }
+    _diagEscribir(html);
+  }catch(e){
+    _diagEscribir('❌ No se pudo conectar: ' + e.message, '#991b1b');
+  }
+}
+
+async function correoProbar(){
+  const email = document.getElementById('diag-email')?.value.trim() || '';
+  if(!email){ _diagEscribir('⚠ Escribe un correo de destino para la prueba.', '#b45309'); return; }
+  _diagEscribir('Enviando correo de prueba a ' + email + '...', 'var(--gm)');
+  try{
+    const r = await GAS.post('probarCorreo', {email});
+    if(r && r.ok){
+      _diagEscribir(`✅ ${r.msg}${r.cuota>=0?`<br><span style="color:var(--gm)">Quedan ${r.cuota} correos por hoy.</span>`:''}`, '#166534');
+    } else {
+      _diagEscribir(`❌ ${(r&&r.msg)||'Falló el envío'}${r&&r.detalle?`<div style="background:#fffbeb;border:1.5px solid #fcd34d;border-radius:8px;padding:.5rem;margin-top:.5rem;color:#92400e">${r.detalle}</div>`:''}`, '#991b1b');
+    }
+  }catch(e){
+    _diagEscribir('❌ No se pudo conectar: ' + e.message, '#991b1b');
   }
 }
 
