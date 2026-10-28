@@ -1668,7 +1668,8 @@ const PROYECTO_SCOPED_POST = ['addRegistro','addOperario','addCorreccion','addAl
 const ACCIONES_SOLO_ADMIN = new Set([
   'clearRegistros','addProyecto','archivarProyecto','addPlanConjuntos',
   'getUsuarios','addUsuario','desactivarUsuario','resetPasswordUsuario',
-  'guardarCatalogoConsumibles','deleteRegistros','diagnosticoCorreo','probarCorreo'
+  'guardarCatalogoConsumibles','deleteRegistros','diagnosticoCorreo','probarCorreo',
+  'actualizarUsuario'
 ]);
 const ACCIONES_ADMIN_O_SUPERVISOR = new Set([
   'addOperario','bulkOperarios','desactivarOperario','reactivarOperario'
@@ -7364,12 +7365,14 @@ async function cargarUsuarios(){
       <tr style="${u.estado==='inactivo'?'opacity:.5':''}">
         <td>${u.nombre}</td>
         <td>${u.cedula}</td>
-        <td>${u.rol==='admin'?'👤 Admin':u.rol==='supervisor'?'🏭 Supervisor':'👁 Visor'}</td>
+        <td>${u.rol==='admin'?'👤 Admin':u.rol==='supervisor'?'🏭 Supervisor':'👁 Visor'}<br>
+          <span style="font-size:10px;color:${u.email?'var(--gm)':'#b45309'}">${u.email||'sin correo'}</span></td>
         <td>${u.estado==='inactivo'?'⛔ Inactivo':'✅ Activo'}</td>
         <td style="font-size:11px;color:var(--gm)">${u.ultimo_acceso ? new Date(u.ultimo_acceso).toLocaleString('es-EC') : 'Nunca'}</td>
         <td class="c">
           <button class="btn btn-g btn-sm" onclick="compartirAccesoUsuario('${u.nombre}')" title="Compartir acceso (link + QR)">🔗</button>
           <button class="btn btn-g btn-sm" onclick="reiniciarClaveUsuario('${u.id}','${u.nombre}')" title="Volver la clave a la cédula original">🔁</button>
+          <button class="btn btn-g btn-sm" onclick="editarUsuarioUI('${u.id}','${u.nombre}','${u.email||''}','${u.rol||'viewer'}')" title="Cambiar correo o función">✏️</button>
           ${u.estado!=='inactivo' ? `<button class="btn btn-g btn-sm" onclick="desactivarUsuarioUI('${u.id}','${u.nombre}')" title="Desactivar acceso" style="color:#991b1b">⛔</button>` : ''}
         </td>
       </tr>`).join('');
@@ -7460,6 +7463,27 @@ async function reiniciarClaveUsuario(id, nombre){
   const resp = await GAS.post('resetPasswordUsuario', {id});
   if(resp && resp.ok){ alert('✅ Contraseña reiniciada a la cédula original.'); }
   else{ alert('❌ No se pudo reiniciar la contraseña.'); }
+}
+
+// Corregir el correo o la función de un usuario ya creado. Sin correo, la
+// recuperación de contraseña no tiene a quién enviarle. (27 oct 2026)
+async function editarUsuarioUI(id, nombre, emailActual, rolActual){
+  const email = prompt(`Correo de ${nombre}\n\n(Se usa para recuperar la contraseña. Déjalo vacío para quitarlo.)`, emailActual||'');
+  if(email === null) return;
+  const limpio = email.trim().toLowerCase();
+  if(limpio && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(limpio)){
+    toast('⚠ Ese correo no parece válido'); return;
+  }
+  const rol = prompt(
+    `Función de ${nombre}\n\nEscribe una de estas tres:\n  admin — control total\n  supervisor — aprueba correcciones (3 días) y gestiona operarios\n  viewer — solo ver`,
+    rolActual||'viewer');
+  if(rol === null) return;
+  const rolLimpio = ['admin','supervisor','viewer'].includes(rol.trim().toLowerCase()) ? rol.trim().toLowerCase() : null;
+  if(!rolLimpio){ toast('⚠ Función no reconocida. Usa admin, supervisor o viewer'); return; }
+
+  const r = await _postConPermisoAdmin('actualizarUsuario', {id, email:limpio, rol:rolLimpio});
+  if(r && r.ok){ toast(`✓ ${nombre} actualizado`); cargarUsuarios(); }
+  else toast('❌ ' + ((r && (r.msg||r.error)) || 'No se pudo actualizar'));
 }
 
 async function desactivarUsuarioUI(id, nombre){
@@ -9327,11 +9351,26 @@ function _diagEscribir(html, color){
   el.style.display = '';
 }
 
+// El permiso de administrador guardado en el navegador puede quedar viejo
+// (cambió la contraseña, u otra sesión). Cuando el servidor lo rechaza, en vez
+// de dejar al usuario con un "No autorizado" sin salida, se le pide la clave
+// en el momento y se reintenta — igual que al borrar registros. (27 oct 2026)
+async function _postConPermisoAdmin(action, data){
+  let r = await GAS.post(action, data);
+  const rechazado = r && !r.ok && String(r.error||'').toLowerCase().includes('no autorizado');
+  if(rechazado && typeof pedirClaveAdmin==='function'){
+    const clave = await pedirClaveAdmin('El permiso guardado en este navegador ya no es válido.');
+    if(!clave) return r;
+    r = await GAS.post(action, {...(data||{}), authToken: clave});
+  }
+  return r;
+}
+
 async function correoDiagnosticar(){
   const email = document.getElementById('diag-email')?.value.trim() || '';
   _diagEscribir('Revisando...', 'var(--gm)');
   try{
-    const r = await GAS.post('diagnosticoCorreo', {email});
+    const r = await _postConPermisoAdmin('diagnosticoCorreo', {email});
     if(!r || r.error || r.ok===false){
       _diagEscribir('❌ ' + ((r && (r.error||r.msg)) || 'El servidor no respondió'), '#991b1b'); return; }
 
@@ -9377,7 +9416,7 @@ async function correoProbar(){
   if(!email){ _diagEscribir('⚠ Escribe un correo de destino para la prueba.', '#b45309'); return; }
   _diagEscribir('Enviando correo de prueba a ' + email + '...', 'var(--gm)');
   try{
-    const r = await GAS.post('probarCorreo', {email});
+    const r = await _postConPermisoAdmin('probarCorreo', {email});
     if(r && r.ok){
       _diagEscribir(`✅ ${r.msg}${r.cuota>=0?`<br><span style="color:var(--gm)">Quedan ${r.cuota} correos por hoy.</span>`:''}`, '#166534');
     } else {
