@@ -1358,6 +1358,24 @@ global.Chart = class {
       <div class="fg fix" id="rpt-fecha-wrap"><label>Fecha</label>
         <input type="date" id="rpt-fecha" onchange="renderInforme()">
       </div>
+      <!-- Rango de semanas (informe semanal de una o varias semanas) -->
+      <div class="fg fix" id="rpt-sem-desde-wrap" style="display:none;"><label>Desde semana</label>
+        <input type="week" id="rpt-sem-desde" onchange="renderInforme()">
+      </div>
+      <div class="fg fix" id="rpt-sem-hasta-wrap" style="display:none;"><label>Hasta semana</label>
+        <input type="week" id="rpt-sem-hasta" onchange="renderInforme()">
+      </div>
+      <!-- Rango de meses (informe mensual de uno o varios meses) -->
+      <div class="fg fix" id="rpt-mes-desde-wrap" style="display:none;"><label>Desde mes</label>
+        <input type="month" id="rpt-mes-desde" onchange="renderInforme()">
+      </div>
+      <div class="fg fix" id="rpt-mes-hasta-wrap" style="display:none;"><label>Hasta mes</label>
+        <input type="month" id="rpt-mes-hasta" onchange="renderInforme()">
+      </div>
+      <!-- Hasta opcional del informe diario (para ver varios días seguidos) -->
+      <div class="fg fix" id="rpt-dia-hasta-wrap" style="display:none;"><label>Hasta (opcional)</label>
+        <input type="date" id="rpt-dia-hasta" onchange="renderInforme()">
+      </div>
       <!-- Rango personalizado -->
       <div class="fg fix" id="rpt-desde-wrap" style="display:none;"><label>Desde</label>
         <input type="date" id="rpt-desde" onchange="renderInforme()">
@@ -7800,10 +7818,69 @@ function downloadTemplate(){
 
 // ======================= INFORMES =======================
 function setRptDate(){const el=document.getElementById('rpt-fecha');if(el&&!el.value)el.value=today();}
+// ── Semanas y meses como rango ─────────────────────────────────────────
+// El informe semanal y el mensual trabajaban sobre una sola fecha, así que no
+// había forma de comparar varias semanas o varios meses seguidos. (28 oct 2026)
+
+const _isoFecha = d => d.toISOString().split('T')[0];
+
+// "2026-W44" → lunes de esa semana (norma ISO: el 4 de enero siempre cae en
+// la semana 1)
+function _lunesDeSemana(valor){
+  const m = /^(\d{4})-W(\d{1,2})$/.exec(String(valor||''));
+  if(!m) return null;
+  const anio = +m[1], sem = +m[2];
+  const ene4 = new Date(Date.UTC(anio, 0, 4));
+  const dow = ene4.getUTCDay() || 7;
+  const lunSem1 = new Date(ene4);
+  lunSem1.setUTCDate(ene4.getUTCDate() - dow + 1);
+  const lun = new Date(lunSem1);
+  lun.setUTCDate(lunSem1.getUTCDate() + (sem - 1) * 7);
+  return lun;
+}
+
+// Fecha "2026-10-28" → "2026-W44"
+function _semanaDeFecha(fechaStr){
+  const d = new Date((fechaStr || today()) + 'T00:00:00Z');
+  if(isNaN(d)) return '';
+  const jue = new Date(d);
+  jue.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+  const anio = jue.getUTCFullYear();
+  const ene1 = new Date(Date.UTC(anio, 0, 1));
+  const sem = Math.ceil(((jue - ene1) / 86400000 + 1) / 7);
+  return `${anio}-W${String(sem).padStart(2,'0')}`;
+}
+
+// Rellena los selectores nuevos la primera vez que se usan, para que el
+// informe salga con algo razonable sin tener que elegir nada.
+function _rptPonerDefectos(tipo){
+  const base = document.getElementById('rpt-fecha')?.value || today();
+  if(tipo==='semanal'){
+    const sd = document.getElementById('rpt-sem-desde');
+    const sh = document.getElementById('rpt-sem-hasta');
+    if(sd && !sd.value) sd.value = _semanaDeFecha(base);
+    if(sh && !sh.value) sh.value = sd.value;
+  }
+  if(tipo==='mensual'){
+    const md = document.getElementById('rpt-mes-desde');
+    const mh = document.getElementById('rpt-mes-hasta');
+    if(md && !md.value) md.value = base.slice(0,7);
+    if(mh && !mh.value) mh.value = md.value;
+  }
+}
+
 function onRptTipoChange(){
   const tipo=document.getElementById('rpt-tipo')?.value||'diario';
   // Show/hide controls based on type
-  document.getElementById('rpt-fecha-wrap').style.display  = ['diario','semanal','mensual','avance_proceso','avance_peso'].includes(tipo)?'':'none';
+  document.getElementById('rpt-fecha-wrap').style.display  = ['diario','avance_proceso','avance_peso'].includes(tipo)?'':'none';
+  // Semanal y Mensual ahora trabajan por rango, para poder comparar varias
+  // semanas o varios meses seguidos en un solo informe. (28 oct 2026)
+  document.getElementById('rpt-sem-desde-wrap').style.display = tipo==='semanal'?'':'none';
+  document.getElementById('rpt-sem-hasta-wrap').style.display = tipo==='semanal'?'':'none';
+  document.getElementById('rpt-mes-desde-wrap').style.display = tipo==='mensual'?'':'none';
+  document.getElementById('rpt-mes-hasta-wrap').style.display = tipo==='mensual'?'':'none';
+  document.getElementById('rpt-dia-hasta-wrap').style.display = tipo==='diario'?'':'none';
+  _rptPonerDefectos(tipo);
   document.getElementById('rpt-desde-wrap').style.display  = ['rango','consumibles'].includes(tipo)?'':'none';
   document.getElementById('rpt-hasta-wrap').style.display  = ['rango','consumibles'].includes(tipo)?'':'none';
   document.getElementById('rpt-op-wrap').style.display        = tipo==='operario'?'':'none';
@@ -7968,19 +8045,52 @@ function renderInforme(){
   let filtro,lbl;
 
   if(tipo==='diario'){
-    filtro=r=>r.fecha===fecha;
-    lbl=`Informe Diario — ${fecha}`;
+    // Admite un solo día o varios seguidos, si se llena el "Hasta".
+    const hastaDia=document.getElementById('rpt-dia-hasta')?.value||'';
+    if(hastaDia && hastaDia>=fecha){
+      filtro=r=>r.fecha>=fecha&&r.fecha<=hastaDia;
+      const dias=Math.round((new Date(hastaDia)-new Date(fecha))/86400000)+1;
+      lbl=`Informe Diario — ${fecha} al ${hastaDia} (${dias} días)`;
+    } else {
+      filtro=r=>r.fecha===fecha;
+      lbl=`Informe Diario — ${fecha}`;
+    }
   } else if(tipo==='semanal'){
-    const d=new Date(fecha),day=d.getDay()||7;
-    const lun=new Date(d);lun.setDate(d.getDate()-day+1);
-    const dom=new Date(lun);dom.setDate(lun.getDate()+6);
-    const f0=lun.toISOString().split('T')[0],f1=dom.toISOString().split('T')[0];
-    filtro=r=>r.fecha>=f0&&r.fecha<=f1;
-    lbl=`Informe Semanal — ${f0} al ${f1}`;
+    // Una semana o varias seguidas. (28 oct 2026)
+    let sd=document.getElementById('rpt-sem-desde')?.value||'';
+    let sh=document.getElementById('rpt-sem-hasta')?.value||'';
+    if(!sd) sd=_semanaDeFecha(fecha);
+    if(!sh) sh=sd;
+    if(sh<sd){ const t=sd; sd=sh; sh=t; }
+    const lun=_lunesDeSemana(sd);
+    const lunFin=_lunesDeSemana(sh);
+    if(!lun||!lunFin){
+      filtro=r=>false; lbl='Informe Semanal — elige las semanas';
+    } else {
+      const dom=new Date(lunFin); dom.setUTCDate(lunFin.getUTCDate()+6);
+      const f0=_isoFecha(lun), f1=_isoFecha(dom);
+      filtro=r=>r.fecha>=f0&&r.fecha<=f1;
+      const nSem=Math.round((lunFin-lun)/(7*86400000))+1;
+      lbl=nSem>1
+        ? `Informe Semanal — ${nSem} semanas (${sd} a ${sh}) · ${f0} al ${f1}`
+        : `Informe Semanal — ${f0} al ${f1}`;
+    }
   } else if(tipo==='mensual'){
-    const mes=fecha.slice(0,7);
-    filtro=r=>r.fecha.startsWith(mes);
-    lbl=`Informe Mensual — ${mes}`;
+    // Un mes o varios seguidos. (28 oct 2026)
+    let md=document.getElementById('rpt-mes-desde')?.value||'';
+    let mh=document.getElementById('rpt-mes-hasta')?.value||'';
+    if(!md) md=fecha.slice(0,7);
+    if(!mh) mh=md;
+    if(mh<md){ const t=md; md=mh; mh=t; }
+    const [aF,mF]=mh.split('-').map(Number);
+    const ultimo=new Date(Date.UTC(aF, mF, 0));   // día 0 del mes siguiente
+    const f0=md+'-01', f1=_isoFecha(ultimo);
+    filtro=r=>r.fecha>=f0&&r.fecha<=f1;
+    const [aI,mI]=md.split('-').map(Number);
+    const nMeses=(aF-aI)*12+(mF-mI)+1;
+    lbl=nMeses>1
+      ? `Informe Mensual — ${nMeses} meses (${md} a ${mh})`
+      : `Informe Mensual — ${md}`;
   } else if(tipo==='rango'){
     const desde=document.getElementById('rpt-desde')?.value||today();
     const hasta=document.getElementById('rpt-hasta')?.value||today();
