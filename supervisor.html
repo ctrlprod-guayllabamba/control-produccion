@@ -1660,9 +1660,15 @@ const PROYECTO_SCOPED_POST = ['addRegistro','addOperario','addCorreccion','addAl
 // addRegistro/addCorreccion/addAlerta/bulkRegistros NO están protegidas:
 // esas las usan los operarios desde worker.html y deben seguir
 // funcionando sin contraseña de administrador.
+// Esta lista TIENE que coincidir con la del Code.gs. Si una acción está en
+// la del servidor pero falta aquí, el navegador no adjunta el permiso de
+// administrador y el servidor la rechaza con "No autorizado" — que fue lo que
+// pasó con el diagnóstico de correo y con la carga del catálogo de
+// consumibles desde Excel, las dos fallando en silencio. (27 oct 2026)
 const ACCIONES_SOLO_ADMIN = new Set([
   'clearRegistros','addProyecto','archivarProyecto','addPlanConjuntos',
-  'getUsuarios','addUsuario','desactivarUsuario','resetPasswordUsuario'
+  'getUsuarios','addUsuario','desactivarUsuario','resetPasswordUsuario',
+  'guardarCatalogoConsumibles','deleteRegistros','diagnosticoCorreo','probarCorreo'
 ]);
 const ACCIONES_ADMIN_O_SUPERVISOR = new Set([
   'addOperario','bulkOperarios','desactivarOperario','reactivarOperario'
@@ -9326,7 +9332,8 @@ async function correoDiagnosticar(){
   _diagEscribir('Revisando...', 'var(--gm)');
   try{
     const r = await GAS.post('diagnosticoCorreo', {email});
-    if(!r || r.error){ _diagEscribir('❌ ' + ((r&&r.error)||'sin respuesta'), '#991b1b'); return; }
+    if(!r || r.error || r.ok===false){
+      _diagEscribir('❌ ' + ((r && (r.error||r.msg)) || 'El servidor no respondió'), '#991b1b'); return; }
 
     let html = '';
     if(r.resultado){
@@ -9374,7 +9381,8 @@ async function correoProbar(){
     if(r && r.ok){
       _diagEscribir(`✅ ${r.msg}${r.cuota>=0?`<br><span style="color:var(--gm)">Quedan ${r.cuota} correos por hoy.</span>`:''}`, '#166534');
     } else {
-      _diagEscribir(`❌ ${(r&&r.msg)||'Falló el envío'}${r&&r.detalle?`<div style="background:#fffbeb;border:1.5px solid #fcd34d;border-radius:8px;padding:.5rem;margin-top:.5rem;color:#92400e">${r.detalle}</div>`:''}`, '#991b1b');
+      const motivo = (r && (r.msg || r.error)) || 'Falló el envío (el servidor no devolvió ningún motivo)';
+      _diagEscribir(`❌ ${motivo}${r&&r.detalle?`<div style="background:#fffbeb;border:1.5px solid #fcd34d;border-radius:8px;padding:.5rem;margin-top:.5rem;color:#92400e">${r.detalle}</div>`:''}`, '#991b1b');
     }
   }catch(e){
     _diagEscribir('❌ No se pudo conectar: ' + e.message, '#991b1b');
