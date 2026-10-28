@@ -1075,7 +1075,7 @@ global.Chart = class {
         <thead><tr>
           <th>Fecha</th><th>Conjunto</th><th>Parte</th><th>Fase</th>
           <th>Operario</th><th class="r">Vigas completas</th><th class="r">Kg ejecutado</th>
-          <th class="r">Sold. (ml)</th><th>Cal.</th><th class="c no-print">Acc.</th>
+          <th class="r">Huecos</th><th class="r">Sold. (ml)</th><th>Cal.</th><th class="c no-print">Acc.</th>
         </tr></thead>
         <tbody id="pr-tbody"></tbody>
       </table>
@@ -6060,6 +6060,43 @@ function getPesoRegistro(r){
   return pesoMostrar;
 }
 
+// Cuántos huecos trae un registro de Perforaciones. Los registros nuevos lo
+// guardan en el campo 'perforaciones'; para los anteriores se reconstruye
+// multiplicando los huecos por pieza (los guardados en el registro, o los del
+// catálogo) por las piezas perforadas. (27 oct 2026)
+function getHuecosRegistro(r){
+  if(!r || r.fase!=='Perforaciones') return 0;
+  const directo = Number(r.perforaciones)||0;
+  if(directo > 0) return directo;
+
+  const cj = r.conjunto || r.cj;
+  const c = PLAN.conjuntos.find(x=>x.conjunto===cj);
+  if(!c) return 0;
+  let porParte = {};
+  try{ porParte = JSON.parse(r.perf_detalle||'{}') || {}; }catch(e){ porParte = {}; }
+
+  let vigas = [];
+  try{ vigas = JSON.parse(r.detalle_vigas||'[]'); }catch(e){ vigas = []; }
+
+  let total = 0;
+  c.partes.forEach(p=>{
+    const huecosPorPieza = Number(porParte[p.parte]) || perfDeParte(cj, p.parte) || 0;
+    if(!huecosPorPieza) return;
+    const piezasHI = PIEZAS_HI_SUP[p.perfil];
+    let piezas = 0;
+    vigas.forEach(v=>{
+      if(piezasHI){
+        const n = Math.min(...piezasHI.map(sp=>Math.floor(Number(v.subQty?.[p.parte]?.[sp.tipo]||0)/(sp.qty||1))));
+        if(isFinite(n) && n>0) piezas += n;
+      } else {
+        piezas += Number(v.qty?.[p.parte]||0);
+      }
+    });
+    total += huecosPorPieza * piezas;
+  });
+  return total;
+}
+
 // Pide la clave de administrador, la valida contra el servidor y renueva la
 // sesión. Devuelve la clave si es correcta, o null si se canceló / falló.
 // Se usa como paso de autorización antes de borrar: así la acción se ejecuta
@@ -6187,6 +6224,7 @@ function renderProd(){
       : '';
 
     const pesoMostrar = getPesoRegistro(r);
+    const huecos = getHuecosRegistro(r);
     return `<tr>
     <td>${r.fecha}</td>
     <td><strong>${cj}</strong></td>
@@ -6198,6 +6236,7 @@ function renderProd(){
       ${badgeIncomp}
     </td>
     <td class="r">${pesoMostrar.toFixed(1)}</td>
+    <td class="r">${huecos>0?`<span style="font-size:12px;font-weight:800;color:#1e40af;">${huecos}</span>`:'—'}</td>
     <td class="r">${r.sold_ml?`<span style="font-size:11px;font-weight:700;color:#1e40af;">${r.sold_ml} ml</span>`:'—'}</td>
     <td>${calBadge(r.calidad||r.cal||'ok')}</td>
     <td class="c no-print" style="white-space:nowrap">
@@ -6205,11 +6244,17 @@ function renderProd(){
       <button class="btn btn-d btn-sm" onclick="borrarRegistroProd(${r.id})">✕</button>
     </td>
   </tr>`;
-  }).join(''):'<tr><td colspan="9" style="text-align:center;padding:1.5rem;color:var(--gm);">Sin registros</td></tr>';
+  }).join(''):'<tr><td colspan="10" style="text-align:center;padding:1.5rem;color:var(--gm);">Sin registros</td></tr>';
 
   const tot=recs.reduce((s,r)=>s+_vigasCompletasDe(r),0);
-  const totkg=recs.reduce((s,r)=>s+(r.peso||r.pesoReal||r.kg||0),0);
-  document.getElementById('pr-tot').textContent=recs.length?`Total: ${tot} vigas completas — ${totkg.toFixed(1)} kg`:'';
+  // El total se calculaba con una fórmula distinta a la de cada fila, así que
+  // podía decir 0.0 kg mientras las filas mostraban el peso correcto. Ahora
+  // ambos usan getPesoRegistro(). (27 oct 2026)
+  const totkg=recs.reduce((s,r)=>s+getPesoRegistro(r),0);
+  const totHuecos=recs.reduce((s,r)=>s+getHuecosRegistro(r),0);
+  document.getElementById('pr-tot').textContent=recs.length
+    ? `Total: ${tot} vigas completas — ${totkg.toFixed(1)} kg` + (totHuecos>0?` — ${totHuecos} huecos`:'')
+    : '';
 }
 
 function completarVigas(recId){
