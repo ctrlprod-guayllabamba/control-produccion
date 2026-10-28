@@ -1706,6 +1706,40 @@ function guardarSesion(rol, token, nombre){
   ROL_ACTUAL = rol; AUTH_TOKEN = token; NOMBRE_USUARIO = nombre || (rol==='admin'?'Administrador':rol==='supervisor'?'Supervisor':'Visor');
   try{ localStorage.setItem('sup_rol', rol); localStorage.setItem('sup_auth_token', token); localStorage.setItem('sup_nombre', NOMBRE_USUARIO); }catch(e){}
 }
+// Comprueba en segundo plano que la credencial guardada siga sirviendo.
+// Solo cierra la sesión si el servidor responde que NO es válida; si hay
+// problemas de red se deja pasar, para no dejar a nadie fuera por estar sin
+// internet. (28 oct 2026)
+async function verificarSesionGuardada(){
+  if(!GAS.configured() || !AUTH_TOKEN) return;
+  let resp;
+  try{
+    resp = await GAS.post('login', {password: AUTH_TOKEN});
+  }catch(e){
+    return;   // sin conexión: no tocar la sesión
+  }
+  if(!resp) return;
+  if(resp.ok){
+    // Puede haber cambiado el rol o el nombre desde la última vez
+    if(resp.role && resp.role !== ROL_ACTUAL){
+      guardarSesion(resp.role, AUTH_TOKEN, resp.nombre);
+      document.getElementById('rol-badge')?.remove();
+      try{ iniciarApp(); }catch(e){}
+    }
+    return;
+  }
+  // El servidor dice que esta credencial ya no sirve
+  ROL_ACTUAL=''; AUTH_TOKEN=''; NOMBRE_USUARIO='';
+  try{ localStorage.removeItem('sup_rol'); localStorage.removeItem('sup_auth_token'); localStorage.removeItem('sup_nombre'); }catch(e){}
+  const gate = document.getElementById('login-gate');
+  const err  = document.getElementById('login-error');
+  if(err){
+    err.textContent = 'Tu sesión caducó. Vuelve a entrar.';
+    err.style.display = '';
+  }
+  if(gate){ gate.style.display='flex'; document.getElementById('login-user')?.focus(); }
+}
+
 function cerrarSesion(){
   ROL_ACTUAL=''; AUTH_TOKEN=''; NOMBRE_USUARIO='';
   try{ localStorage.removeItem('sup_rol'); localStorage.removeItem('sup_auth_token'); localStorage.removeItem('sup_nombre'); }catch(e){}
@@ -1831,8 +1865,9 @@ async function _reintentarSiNoAutorizado(resp, action, data){
   _reintentandoAuth = true;
   try{
     const pass = prompt(
-      'Tu sesión ya no tiene permisos válidos (probablemente la contraseña cambió).\n\n' +
-      'Escribe la contraseña de Administrador para continuar:');
+      'El servidor no reconoce tu sesión, así que esta acción no se realizó.\n\n' +
+      'Escribe la contraseña de Administrador para continuar.\n' +
+      '(Si esto se repite, usa Salir y vuelve a entrar.)');
     if(!pass) return resp;
 
     const login = await GAS.post('login', {password: pass});
@@ -9783,6 +9818,12 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   if(ROL_ACTUAL && AUTH_TOKEN){
     document.getElementById('login-gate').style.display='none';
     iniciarApp();
+    // Comprobar la sesión guardada contra el servidor. Antes se entraba
+    // confiando en lo que hubiera en el navegador, así que una credencial
+    // vencida te dejaba pasar con el distintivo ADMIN y solo fallaba —
+    // pidiendo la contraseña a mitad de camino — cuando intentabas algo que
+    // de verdad tocaba el servidor. (28 oct 2026)
+    verificarSesionGuardada();
   } else {
     document.getElementById('login-gate').style.display='flex';
     document.getElementById('login-pass')?.focus();
