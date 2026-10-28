@@ -5543,6 +5543,11 @@ function pRenderVigas(){
   // el operario desmarca lo que no aplique.
   if(FASES_POR_CONJUNTO.includes(fase)){
     pRenderPorConjunto(c, cont, fase);
+    // Hay que recalcular el resumen y el PESO EJECUTADO igual que en el resto
+    // de fases. Al salir antes de tiempo, el formulario mostraba 0.0 kg y
+    // GUARDABA el registro con peso 0 — el peso solo reaparecía después
+    // porque los informes lo reconstruyen desde las piezas. (28 oct 2026)
+    pCalcResumenDia();
     return;
   }
 
