@@ -6514,7 +6514,7 @@ function openModalFase(cj, parte, fase) {
     ${recs.length ? `<div class="tw"><table><thead><tr><th>Fecha</th><th>Operario</th><th class="r">Qty</th>${fase==='Corte'?'<th class="r">Kg partes</th><th class="r">Sobrante</th><th class="r">Desp.</th>':'<th class="r">Kg</th>'}<th>Obs.</th></tr></thead>
     <tbody>${recs.map(r=>fase==='Corte'
       ? `<tr><td>${r.fecha||'—'}</td><td>${r.opNom||'—'}</td><td class="r">${r.qty||0}</td><td class="r">${Number(r.pesoParts||r.pesoPzas||0).toFixed(1)}</td><td class="r"><span class="stock-tag">${Number(r.sobPeso||r.sob_peso||0).toFixed(1)}</span></td><td class="r" style="color:#991b1b;">${Number(r.desperdicio||0).toFixed(1)}</td><td style="font-size:10px;">${r.obs||'—'}</td></tr>`
-      : `<tr><td>${r.fecha||'—'}</td><td>${r.opNom||'—'}</td><td class="r">${r.qty||0}</td><td class="r">${Number(r.kg||r.pesoPzas||0).toFixed(1)}</td><td style="font-size:10px;">${r.obs||'—'}</td></tr>`
+      : `<tr><td>${r.fecha||'—'}</td><td>${r.opNom||'—'}</td><td class="r">${r.qty||0}</td><td class="r">${getPesoRegistro(r).toFixed(1)}</td><td style="font-size:10px;">${r.obs||'—'}</td></tr>`
     ).join('')}</tbody></table></div>`
     : '<div style="text-align:center;padding:1.5rem;color:#6c757d;font-size:12px;">Sin registros de ejecución para esta fase</div>'}
     <div class="act-row" style="margin-top:.75rem;">
@@ -8371,7 +8371,10 @@ function renderInformeAvancePeso(refFecha){
     const by={};
     FASES.forEach(f=>{
       if(f==='Corte') by[f]=rw.filter(r=>r.fase==='Corte').reduce((a,r)=>a+Number(r.pesoParts||r.pesoPzas||0),0);
-      else by[f]=rw.filter(r=>r.fase===f).reduce((a,r)=>a+Number(r.kg||r.peso||0),0);
+      // Antes sumaba r.kg||r.peso, que viene vacío en los registros cuyo peso
+      // se reconstruye desde las piezas — por eso la línea de "ejecutado"
+      // salía plana en cero. (28 oct 2026)
+      else by[f]=rw.filter(r=>r.fase===f).reduce((a,r)=>a+getPesoRegistro(r),0);
     });
     return{...s,by,tot:Object.values(by).reduce((a,b)=>a+b,0)};
   });
