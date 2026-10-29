@@ -1700,10 +1700,11 @@ const ACCIONES_ADMIN_O_SUPERVISOR = new Set([
   'addOperario','bulkOperarios','desactivarOperario','reactivarOperario'
 ]);
 const DIAS_LIMITE_CORRECCION = 3;
-let ROL_ACTUAL  = (()=>{ try{ return localStorage.getItem('sup_rol') || ''; }catch(e){ return ''; } })();
+let ROL_ACTUAL  = (()=>{ try{ return String(localStorage.getItem('sup_rol')||'').trim().toLowerCase(); }catch(e){ return ''; } })();
 let AUTH_TOKEN  = (()=>{ try{ return localStorage.getItem('sup_auth_token') || ''; }catch(e){ return ''; } })();
 let NOMBRE_USUARIO = (()=>{ try{ return localStorage.getItem('sup_nombre') || ''; }catch(e){ return ''; } })();
 function guardarSesion(rol, token, nombre){
+  rol = String(rol||'').trim().toLowerCase();
   ROL_ACTUAL = rol; AUTH_TOKEN = token; NOMBRE_USUARIO = nombre || (rol==='admin'?'Administrador':rol==='supervisor'?'Supervisor':'Visor');
   try{ localStorage.setItem('sup_rol', rol); localStorage.setItem('sup_auth_token', token); localStorage.setItem('sup_nombre', NOMBRE_USUARIO); }catch(e){}
 }
@@ -1857,9 +1858,15 @@ const GAS = {
 // obligaba a cerrar sesión manualmente y el mensaje "No autorizado" no
 // explicaba por qué. (1 sep 2026)
 let _reintentandoAuth = false;
+// Los reintentos automáticos de fondo (la sincronización que corre cada 60
+// segundos) NO deben abrir un cuadro de contraseña: el aviso reaparecía solo,
+// una y otra vez, aunque el usuario no estuviera haciendo nada. Mientras esto
+// vale true, un rechazo se devuelve en silencio. (28 oct 2026)
+let EN_SEGUNDO_PLANO = false;
 async function _reintentarSiNoAutorizado(resp, action, data){
   const msg = resp && (resp.error || resp.msg) || '';
   if(!/no autorizado/i.test(String(msg))) return resp;
+  if(EN_SEGUNDO_PLANO) return resp;           // tarea automática: no molestar
   if(_reintentandoAuth) return resp;          // evitar bucles
   if(!ACCIONES_SOLO_ADMIN.has(action) && !ACCIONES_ADMIN_O_SUPERVISOR.has(action)) return resp;
 
@@ -7711,6 +7718,16 @@ function _marcarOpComoPendiente(op){
 }
 
 async function reintentarOpsPendientes(silencioso){
+  // Si corre sola (cada 60 s), que no interrumpa con cuadros de contraseña
+  if(silencioso) EN_SEGUNDO_PLANO = true;
+  try{
+    return await _reintentarOpsPendientes(silencioso);
+  } finally {
+    if(silencioso) EN_SEGUNDO_PLANO = false;
+  }
+}
+
+async function _reintentarOpsPendientes(silencioso){
   if(!GAS.configured()){
     if(!silencioso) alert('⚠ No hay conexión configurada con Google Sheets.');
     return;
@@ -9607,6 +9624,20 @@ async function revisarSesion(){
       html += `<div><strong>Tu credencial no corresponde a ningún usuario de la hoja.</strong></div>`;
     }
     html += `<div><strong>Contraseña fija de Administrador:</strong> ${r.claveFijaConfigurada?(r.coincideClaveFija?'coincide con la tuya':'configurada, pero no es la tuya'):'no configurada'}</div>`;
+    html += `<div><strong>Credencial enviada por el navegador:</strong> ${r.tokenRecibido?`sí (${(AUTH_TOKEN||'').length} caracteres)`:'<span style="color:#991b1b;font-weight:700">NINGUNA — por eso te rechaza</span>'}</div>`;
+    // Operarios que quedaron en cola: son los que disparan el reintento
+    // automático cada 60 segundos.
+    try{
+      const pend = LS.load(OPS_PENDING_KEY(), []) || [];
+      if(pend.length){
+        html += `<div style="background:#fffbeb;border:1.5px solid #fcd34d;border-radius:8px;padding:.5rem;margin-top:.5rem;color:#92400e">`+
+          `⚠ Hay <strong>${pend.length}</strong> operario(s) esperando sincronizarse: ${pend.map(o=>`${o.nom||''} ${o.ape||''}`.trim()||'(sin nombre)').join(', ')}.<br>`+
+          `El programa los reintenta solo cada minuto; si alguno es basura vieja, puedes descartarlos.<br>`+
+          `<button class="btn btn-s btn-sm" style="margin-top:.375rem" onclick="descartarOpsPendientes()">🗑 Descartar la cola</button></div>`;
+      } else {
+        html += `<div style="margin-top:.375rem;color:var(--gm)">No hay operarios en cola de sincronización.</div>`;
+      }
+    }catch(e){}
     if(!ok){
       html += `<div style="background:#fffbeb;border:1.5px solid #fcd34d;border-radius:8px;padding:.5rem;margin-top:.5rem;color:#92400e">`+
         `Qué hacer: si arriba dice que tu rol no es "admin", corrígelo con el botón ✏️ de tu fila en la lista de usuarios. `+
@@ -9616,6 +9647,17 @@ async function revisarSesion(){
   }catch(e){
     _diagEscribir('❌ No se pudo conectar: ' + e.message, '#991b1b');
   }
+}
+
+// Vacía la cola de operarios pendientes. Son los que hacen que el reintento
+// automático siga golpeando el servidor cada minuto. (28 oct 2026)
+function descartarOpsPendientes(){
+  const pend = LS.load(OPS_PENDING_KEY(), []) || [];
+  if(!pend.length){ toast('No hay nada en la cola'); return; }
+  if(!confirm(`Se van a descartar ${pend.length} operario(s) que no se pudieron guardar en Google.\n\nSi alguno hace falta, habrá que registrarlo de nuevo.\n\n¿Continuar?`)) return;
+  LS.save(OPS_PENDING_KEY(), []);
+  toast(`🗑 Cola vaciada (${pend.length})`);
+  revisarSesion();
 }
 
 async function correoDiagnosticar(){
@@ -9835,6 +9877,7 @@ async function iniciarApp(){
     if(_refreshBusy || _importando) return;
     _refreshBusy = true;
     _refreshCnt++;
+    EN_SEGUNDO_PLANO = true;
     try {
       await loadFromServer();
       renderDashboard();
@@ -9843,6 +9886,7 @@ async function iniciarApp(){
       if(si) si.textContent = `🟢 Auto-sync ${t} (#${_refreshCnt})`;
       si && (si.style.color = 'var(--gt)');
     } catch(e) {}
+    EN_SEGUNDO_PLANO = false;
     _refreshBusy = false;
   }, 30000);
 }
