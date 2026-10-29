@@ -1314,6 +1314,7 @@ global.Chart = class {
         <div style="display:flex;gap:6px;flex-wrap:wrap">
           <button class="btn btn-s btn-sm" onclick="correoDiagnosticar()">🔍 Revisar</button>
           <button class="btn btn-s btn-sm" onclick="correoProbar()">✉ Enviar prueba</button>
+          <button class="btn btn-s btn-sm" onclick="revisarSesion()" title="Dice por qué el servidor acepta o rechaza tus permisos">🔐 Revisar mi sesión</button>
         </div>
         <div id="diag-salida" style="display:none;margin-top:.625rem;font-size:11px;line-height:1.5"></div>
       </div>
@@ -9570,6 +9571,51 @@ async function _postConPermisoAdmin(action, data){
     r = await GAS.post(action, {...(data||{}), authToken: clave});
   }
   return r;
+}
+
+// Explica por qué el servidor acepta o rechaza los permisos de quien está
+// usando el programa, y de paso dice qué versión del backend está publicada.
+// Antes, un "No autorizado" no daba ninguna pista de dónde estaba el fallo:
+// si en la credencial guardada, en el rol del usuario, o en que el Code.gs
+// publicado fuera una versión anterior. (28 oct 2026)
+async function revisarSesion(){
+  _diagEscribir('Revisando la sesión...', 'var(--gm)');
+  try{
+    const r = await GAS.post('diagnosticoSesion', {authToken: AUTH_TOKEN});
+    if(!r || r.error){
+      const txt = String((r && r.error) || '');
+      if(/desconocida/i.test(txt)){
+        _diagEscribir(
+          '<div style="background:#fef2f2;border:1.5px solid #fca5a5;border-radius:8px;padding:.625rem;color:#991b1b;font-weight:600">'+
+          '❌ El Code.gs publicado es una versión ANTERIOR.<br><br>'+
+          'El servidor no conoce esta comprobación, lo que significa que la implementación de Apps Script no está actualizada. '+
+          'Pega el Code.gs nuevo y haz <strong>Implementar → Administrar implementaciones → ✏️ → Nueva versión → Implementar</strong>.</div>',
+          '#991b1b');
+        return;
+      }
+      _diagEscribir('❌ ' + (txt || 'El servidor no respondió'), '#991b1b');
+      return;
+    }
+    const ok = !!r.esAdmin;
+    let html = `<div style="background:${ok?'#f0fdf4':'#fef2f2'};border:1.5px solid ${ok?'#86efac':'#fca5a5'};border-radius:8px;padding:.625rem;margin-bottom:.5rem;color:${ok?'#166534':'#991b1b'};font-weight:600">`+
+      `${ok?'✅ El servidor te reconoce como Administrador.':'❌ El servidor NO te reconoce como Administrador.'}<br>${r.motivo||''}</div>`;
+    html += `<div><strong>Versión del servidor:</strong> ${r.version||'—'}</div>`;
+    html += `<div><strong>Sesión en este navegador:</strong> ${ROL_ACTUAL||'(ninguna)'} · ${NOMBRE_USUARIO||'—'}</div>`;
+    if(r.usuario){
+      html += `<div><strong>Tu credencial corresponde a:</strong> ${r.usuario.nombre} · rol "${r.usuario.rol}" · ${r.usuario.estado}</div>`;
+    } else {
+      html += `<div><strong>Tu credencial no corresponde a ningún usuario de la hoja.</strong></div>`;
+    }
+    html += `<div><strong>Contraseña fija de Administrador:</strong> ${r.claveFijaConfigurada?(r.coincideClaveFija?'coincide con la tuya':'configurada, pero no es la tuya'):'no configurada'}</div>`;
+    if(!ok){
+      html += `<div style="background:#fffbeb;border:1.5px solid #fcd34d;border-radius:8px;padding:.5rem;margin-top:.5rem;color:#92400e">`+
+        `Qué hacer: si arriba dice que tu rol no es "admin", corrígelo con el botón ✏️ de tu fila en la lista de usuarios. `+
+        `Si dice que tu credencial no corresponde a nadie, pulsa Salir y vuelve a entrar.</div>`;
+    }
+    _diagEscribir(html);
+  }catch(e){
+    _diagEscribir('❌ No se pudo conectar: ' + e.message, '#991b1b');
+  }
 }
 
 async function correoDiagnosticar(){
