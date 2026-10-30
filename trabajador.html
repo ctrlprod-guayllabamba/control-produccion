@@ -150,6 +150,12 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);min-height
     </select>
   </div>
   <div id="worker-list"></div>
+  <!-- Sello de versión: sirve para confirmar en el celular que la subida a
+       GitHub tomó efecto. Si acá no aparece la versión que se subió, es caché:
+       cerrar la pestaña y volver a abrir, o borrar datos del sitio. -->
+  <div style="text-align:center;margin-top:1.5rem;font-size:10px;color:#9ca3af">
+    Track Metal V-01 · versión <span id="wk-sello-version">—</span>
+  </div>
 </div>
 
 <!-- PIN — confirmación rápida de identidad, una vez al día por operario -->
@@ -644,8 +650,14 @@ function stepbar(cur,labels){
 }
 
 // ======= INIT =======
+// Sello de versión de esta pantalla. Se sube cada vez que se cambia el
+// archivo, para poder confirmar en el celular que la subida tomó efecto.
+const VERSION_WK = '2026-10-29.1';
+
 document.addEventListener('DOMContentLoaded',()=>{
   const d=new Date();
+  const _sello=document.getElementById('wk-sello-version');
+  if(_sello) _sello.textContent = VERSION_WK;
   document.getElementById('top-date').textContent=d.toLocaleDateString('es-EC',{day:'numeric',month:'short'});
   document.getElementById('home-date').textContent=todayStr();
   // Cargar el plan actualizado del servidor en segundo plano (no bloquea el arranque)
