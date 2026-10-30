@@ -1,6 +1,18 @@
+<!--
+  TRACK METAL V-01 — Sistema de control de producción de estructura metálica
+  Copyright (c) 2026 José Luis Loor Cevallos. Todos los derechos reservados.
+
+  Software propietario. Su uso requiere licencia vigente otorgada por el
+  titular. Queda prohibida su copia, distribución, cesión, publicación o
+  modificación, total o parcial, sin autorización escrita.
+-->
 <!DOCTYPE html>
 <html lang="es">
 <head>
+<meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
+<meta name="googlebot" content="noindex, nofollow">
+<meta name="author" content="José Luis Loor Cevallos">
+<meta name="copyright" content="© 2026 José Luis Loor Cevallos — Todos los derechos reservados">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0">
 <title>Mi Trabajo — Producción</title>
@@ -535,6 +547,20 @@ const PLAN_SEED=[{"cj":"E-T-1","desc":"VIGA — 113 uds","partes":[{"pr":"pr64",
 // (para funcionar sin red) y se reemplaza con lo que traiga el servidor apenas
 // esté disponible — así el celular y el supervisor leen siempre el mismo plan.
 let PLAN = PLAN_SEED;
+
+// Cuántas VIGAS (unidades de conjunto) trae el plan. El supervisor usa el campo
+// 'cantidad' del conjunto; el celular venía deduciéndolo con min(plan de las
+// partes), que coincide en 50 de los 53 conjuntos pero NO en E-PM-1, E-PM-2 y
+// E-PM-3 (postes), donde todas las partes van varias veces por viga. Ahí el
+// celular repartía las piezas entre 6 vigas en vez de 2. (26 oct 2026)
+function planVigasDe(c){
+  if(!c) return 1;
+  if(Number(c.cant) > 0) return Number(c.cant);
+  const m = String(c.desc||'').match(/—\s*([\d.]+)\s*uds/);
+  if(m && Number(m[1]) > 0) return Number(m[1]);
+  const mn = (c.partes||[]).reduce((s,p)=>Math.min(s, Number(p.plan)||0), Infinity);
+  return (isFinite(mn) && mn>0) ? mn : 1;
+}
 const PROYECTO_DEFAULT_FRONT = 'PRY-0001'; // debe coincidir con PROYECTO_DEFAULT del backend
 
 async function cargarPlanDesdeServidor(){
@@ -546,6 +572,7 @@ async function cargarPlanDesdeServidor(){
       // al formato que usa este celular (cj/desc/partes:[{pr,plan,...}])
       PLAN = conjuntos.map(c => ({
         cj: c.conjunto,
+        cant: Number(c.cantidad) || 0,
         desc: `${c.perfil || ''} — ${c.cantidad || 0} uds`,
         partes: (c.partes || []).map(p => ({
           pr: p.parte, perfil: p.perfil, long: p.longitud, plan: p.cantidad, pu: p.peso_unit
@@ -623,6 +650,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('home-date').textContent=todayStr();
   // Cargar el plan actualizado del servidor en segundo plano (no bloquea el arranque)
   cargarPlanDesdeServidor();
+  loadPerforacionesWk();   // catálogo de huecos por parte (no bloquea el arranque)
   poblarSelectorProyectosW();
   // Show workers from cache immediately — never blank screen
   const cachedOps = LS.g(WORKER_OPS_KEY(), null);
@@ -3707,16 +3735,26 @@ function _buildFormVigas(){
   const ej = totalExec(selCj.cj,'—',fase);
   const plan = c.partes.reduce((s,p)=>s+p.plan,0)/c.partes.length; // vigas plan = plan del conjunto
   // Buscar plan de vigas del conjunto
-  const planVigas = selCj.partes[0]?.plan || 0; // primera parte como referencia de vigas
+  const planVigas = planVigasDe(selCj);
 
-  wkVigasData = [{qty:{}, subQty:{}}];
+  // Fases por conjunto: arrancan con TODAS las partes marcadas (1 viga), y no
+  // usan el flujo de "agregar viga por viga".
+  const porConjunto = WK_FASES_POR_CONJUNTO.includes(fase);
+  if(porConjunto){
+    _wkVigasN = 1; _wkPartesOff = {};
+    wkVigasData = (fase==='Perforaciones')
+      ? [_wkVigaCompletaTemplate(selCj, 0)]
+      : _wkVigasLote(selCj, 1, {});
+  } else {
+    wkVigasData = [{qty:{}, subQty:{}}];
+  }
 
   const infoHtml = `
     <div style="background:#fffbeb;border:1.5px solid #fcd34d;border-radius:10px;padding:.75rem;margin-bottom:.75rem">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:.5rem">
         <div style="background:#fff;border-radius:8px;padding:6px;text-align:center;border:1px solid #e5e7eb">
           <div style="font-size:9px;font-weight:800;color:#6b7280">📐 PLAN</div>
-          <div style="font-size:18px;font-weight:800;color:#1a2b4a">${selCj.partes.reduce((s,p)=>Math.min(s,p.plan),999)} vigas</div>
+          <div style="font-size:18px;font-weight:800;color:#1a2b4a">${planVigasDe(selCj)} vigas</div>
         </div>
         <div style="background:#f0fdf4;border-radius:8px;padding:6px;text-align:center;border:1px solid #86efac">
           <div style="font-size:9px;font-weight:800;color:#065f46">✅ ${fase}</div>
@@ -3726,10 +3764,10 @@ function _buildFormVigas(){
     </div>
 
     <div style="font-size:11px;font-weight:800;color:#1e40af;text-transform:uppercase;margin-bottom:.5rem">
-      🔧 Vigas trabajadas hoy
+      ${porConjunto ? '🧽 Partes del conjunto' : '🔧 Vigas trabajadas hoy'}
     </div>
     <div id="wk-vigas-list"></div>
-
+${porConjunto ? '' : `
     <!-- Registro rápido de vigas completas idénticas (igual que supervisor.html) -->
     <div style="display:flex;gap:8px;align-items:center;background:#f0fdf4;border:1.5px solid #86efac;border-radius:10px;padding:.625rem;margin-bottom:.625rem">
       <span style="font-size:12px;font-weight:700;color:#065f46;white-space:nowrap">✅ Vigas 100% completas:</span>
@@ -3745,7 +3783,7 @@ function _buildFormVigas(){
 
     <button onclick="wkAddViga()" style="width:100%;padding:.625rem;background:#eef4ff;color:#1e40af;border:1.5px dashed #93c5fd;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:.75rem">
       + Agregar viga
-    </button>
+    </button>`}
 
     <div id="wk-vigas-resumen" style="display:none;background:#1a2b4a;color:#fff;border-radius:10px;padding:.875rem;margin-bottom:.75rem">
       <div style="font-size:10px;font-weight:700;opacity:.7;margin-bottom:.5rem">Resumen del día</div>
@@ -3765,7 +3803,7 @@ function _buildFormVigas(){
     <button class="btn-main" onclick="wkGuardarVigas()">✔ Guardar trabajo del día</button>`;
 
   document.getElementById('form-content').innerHTML = infoHtml;
-  document.getElementById('sb-form').innerHTML = stepbar(2,['Conjunto','Armado']);
+  document.getElementById('sb-form').innerHTML = stepbar(2,['Conjunto',fase]);
   document.getElementById('form-back-btn').onclick = ()=>go('sc-cj');
   go('sc-form');
   wkRenderVigas();
@@ -3775,6 +3813,15 @@ function wkRenderVigas(){
   const cont = document.getElementById('wk-vigas-list');
   if(!cont) return;
   const partes = selCj?.partes || [];
+
+  // Limpieza Mecánica / Pintura / Perforaciones: se trabaja el conjunto
+  // completo, así que en vez de escribir cantidad por cantidad se muestran las
+  // partes marcadas y el operario desmarca lo que no aplique. (26 oct 2026)
+  if(WK_FASES_POR_CONJUNTO.includes(selFase) && selCj){
+    wkRenderPorConjunto(selCj, cont, selFase);
+    wkCalcResumenVigas();
+    return;
+  }
 
   cont.innerHTML = wkVigasData.map((v,i)=>{
     let pesoViga = 0;
@@ -3834,7 +3881,7 @@ function wkRenderVigas(){
           </div>`;
         } else {
           const qty = v.qty?.[p.pr]||0;
-          const planVigas = Math.round((p.plan||0)/(selCj.partes[0]?.plan||1));
+          const planVigas = Math.round((p.plan||0)/(planVigasDe(selCj)||1));
           return `<div style="border:1.5px solid ${qty>0?'#86efac':'#e2e8f0'};border-radius:10px;padding:.625rem;margin-bottom:.5rem;background:${qty>0?'#f0fdf4':'#fff'};display:flex;align-items:center;gap:10px">
             <div style="flex:1">
               <div style="font-size:12px;font-weight:700;color:#374151">📋 ${p.pr} <span style="font-family:monospace;font-size:10px;font-weight:400;color:#6b7280">${p.perfil}</span></div>
@@ -3865,7 +3912,7 @@ function wkRmViga(i){ wkVigasData.splice(i,1); wkRenderVigas(); }
 // sumando más piezas de las que hay en el plan.
 function _wkVigaCompletaTemplate(c, idx=0){
   const v = {qty:{}, subQty:{}};
-  const planVigas = c.partes.reduce((s,p)=>Math.min(s,p.plan),999) || 1;
+  const planVigas = planVigasDe(c) || 1;
   c.partes.forEach(p=>{
     const piezasHI = PIEZAS_HI[p.perfil];
     const cant = p.plan||0;
@@ -3880,6 +3927,314 @@ function _wkVigaCompletaTemplate(c, idx=0){
     }
   });
   return v;
+}
+
+// ════════════════════════════════════════════════════════════
+// FASES POR CONJUNTO en el celular — Limpieza Mecánica, Pintura y
+// Perforaciones se trabajan sobre el conjunto completo: al elegir el conjunto
+// se marcan TODAS sus partes y el operario solo desmarca las que no apliquen
+// (p.ej. si el cliente decidió no colocar una parte). Antes el celular pedía
+// escribir la cantidad de cada parte una por una, que es justo lo que no se
+// puede hacer con el teléfono en el taller. (26 oct 2026)
+// ════════════════════════════════════════════════════════════
+const WK_FASES_POR_CONJUNTO = ['Limpieza Mecánica','Pintura','Perforaciones'];
+let _wkVigasN = 1;
+let _wkPartesOff = {};
+
+// Catálogo de huecos por parte: {"E-T-1|pr64": 8, ...}
+let _wkPerfPorParte = {};
+async function loadPerforacionesWk(){
+  try{
+    if(!GAS.configured()) return;
+    const data = await GAS.get('getPerforaciones');
+    if(Array.isArray(data)){
+      _wkPerfPorParte = {};
+      data.forEach(p=>{ _wkPerfPorParte[`${p.conjunto}|${p.parte}`] = Number(p.perforaciones)||0; });
+      LS.s('wk_perf_cache', _wkPerfPorParte);
+    }
+  }catch(e){
+    // sin conexión: usar lo último que se alcanzó a guardar
+    const cache = LS.g('wk_perf_cache', null);
+    if(cache) _wkPerfPorParte = cache;
+  }
+}
+function perfDeParteWk(cj, pr){ return Number(_wkPerfPorParte[`${cj}|${pr}`])||0; }
+
+// Arma el lote de n vigas completas, respetando las partes desmarcadas.
+function _wkVigasLote(c, n, off){
+  const lote = [];
+  for(let i=0; i<n; i++){
+    const v = _wkVigaCompletaTemplate(c, i);
+    Object.keys(off||{}).forEach(pr=>{
+      if(!off[pr]) return;
+      if(v.subQty && v.subQty[pr]) Object.keys(v.subQty[pr]).forEach(t=>{ v.subQty[pr][t] = 0; });
+      if(v.qty && v.qty[pr] !== undefined) v.qty[pr] = 0;
+    });
+    lote.push(v);
+  }
+  return lote;
+}
+
+// Piezas de una parte que trae el lote actual (lo que de verdad se guardará).
+function _wkUdsLoteDeParte(p){
+  const piezasHI = PIEZAS_HI[p.perfil];
+  let total = 0;
+  wkVigasData.forEach(v=>{
+    if(piezasHI){
+      const n = Math.min(...piezasHI.map(sp=>Math.floor(Number(v.subQty?.[p.pr]?.[sp.tipo]||0)/(sp.qty||1))));
+      if(isFinite(n) && n>0) total += n;
+    } else {
+      total += Number(v.qty?.[p.pr]||0);
+    }
+  });
+  return total;
+}
+
+// Una viga cuenta como completa si todas las partes QUE CORRESPONDEN tienen
+// cantidad: las desmarcadas no deben impedir que la viga cuente como hecha.
+function _wkPartesQueCuentan(c, fase){
+  if(WK_FASES_POR_CONJUNTO.includes(fase)) return (c.partes||[]).filter(p=>!_wkPartesOff[p.pr]);
+  return c.partes||[];
+}
+function _wkVigaCompleta(v, c, fase){
+  const partes = _wkPartesQueCuentan(c, fase);
+  if(!partes.length) return false;
+  return partes.every(p=>{
+    const piezasHI = PIEZAS_HI[p.perfil];
+    if(piezasHI) return piezasHI.every(sp=>Number(v.subQty?.[p.pr]?.[sp.tipo]||0)>0);
+    return Number(v.qty?.[p.pr]||0)>0;
+  });
+}
+
+function wkSetVigasN(valor){
+  const c = selCj; if(!c) return;
+  _wkVigasN = Math.max(1, parseInt(valor)||1);
+  wkVigasData = _wkVigasLote(c, _wkVigasN, _wkPartesOff);
+  wkRenderVigas();
+}
+
+function wkTogglePartePorConjunto(idx, on){
+  const c = selCj; if(!c) return;
+  const p = c.partes[idx];
+  if(on) delete _wkPartesOff[p.pr]; else _wkPartesOff[p.pr] = true;
+  wkVigasData = _wkVigasLote(c, _wkVigasN, _wkPartesOff);
+  wkRenderVigas();
+}
+
+function wkMarcarTodasPartes(on){
+  const c = selCj; if(!c) return;
+  _wkPartesOff = {};
+  if(!on) c.partes.forEach(p=>{ _wkPartesOff[p.pr] = true; });
+  wkVigasData = _wkVigasLote(c, _wkVigasN, _wkPartesOff);
+  wkRenderVigas();
+}
+
+function wkRenderPorConjunto(c, cont, fase){
+  if(fase==='Perforaciones'){ wkRenderPerforaciones(c, cont); return; }
+  const planVigas = planVigasDe(c) || 1;
+  const yaReg = totalExec(c.cj,'—',fase);
+  const pend  = Math.max(0, planVigas - yaReg);
+
+  let pesoTotal = 0, nActivas = 0;
+  const filas = c.partes.map((p,i)=>{
+    const uds = _wkUdsLoteDeParte(p);
+    const on  = !_wkPartesOff[p.pr];
+    const peso = (Number(p.pu)||0) * uds;
+    const porViga = Math.round((Number(p.plan)||0)/planVigas) || 1;
+    if(on){ pesoTotal += peso; nActivas++; }
+    return `
+    <label style="display:flex;align-items:center;gap:10px;padding:.625rem .5rem;border-bottom:1px solid #e5e7eb;background:${on?'#f0fdf4':'#fafafa'}">
+      <input type="checkbox" ${on?'checked':''} onchange="wkTogglePartePorConjunto(${i},this.checked)" style="width:22px;height:22px;flex-shrink:0">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:700;color:${on?'#166534':'#9ca3af'}">${p.pr}</div>
+        <div style="font-size:10px;color:#6b7280;font-family:monospace">${p.perfil} · ${porViga}/viga</div>
+      </div>
+      <div style="text-align:right;flex-shrink:0">
+        <div style="font-size:13px;font-weight:800;color:${on?'#166534':'#d1d5db'}">${on?uds:0} uds</div>
+        <div style="font-size:10px;font-weight:700;color:${on?'#1e40af':'#d1d5db'}">${(on?peso:0).toFixed(1)} kg</div>
+      </div>
+    </label>`;
+  }).join('');
+
+  cont.innerHTML = `
+  <div style="background:#eff6ff;border:1.5px solid #bfdbfe;border-radius:10px;padding:.625rem;margin-bottom:.625rem">
+    <div style="font-size:13px;font-weight:800;color:#1e40af">🧽 ${fase} — por conjunto</div>
+    <div style="font-size:11px;color:#3b82f6;margin-top:2px">Vienen marcadas todas las partes. Desmarca las que no se trabajaron e indica cuántas vigas hiciste.</div>
+  </div>
+  <div style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:10px;padding:.625rem;margin-bottom:.625rem">
+    <div style="font-size:12px;font-weight:800;color:#065f46;margin-bottom:.5rem">¿Cuántas vigas trabajaste?</div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button onclick="wkSetVigasN(${_wkVigasN}-1)" style="width:44px;height:44px;background:#fff;border:1.5px solid #86efac;border-radius:10px;font-size:22px;font-weight:800;color:#065f46">−</button>
+      <input type="number" min="1" value="${_wkVigasN}" inputmode="numeric" onchange="wkSetVigasN(this.value)"
+        style="flex:1;text-align:center;font-size:26px;font-weight:800;border:2px solid #86efac;border-radius:10px;padding:5px;color:#065f46">
+      <button onclick="wkSetVigasN(${_wkVigasN}+1)" style="width:44px;height:44px;background:#fff;border:1.5px solid #86efac;border-radius:10px;font-size:22px;font-weight:800;color:#065f46">+</button>
+    </div>
+    <div style="display:flex;gap:6px;margin-top:.5rem;align-items:center">
+      <span style="font-size:10px;color:#6b7280;flex:1">Pendientes: <strong>${pend}</strong> de ${planVigas}</span>
+      ${pend>0?`<button onclick="wkSetVigasN(${pend})" style="padding:5px 10px;background:#dcfce7;color:#065f46;border:1px solid #86efac;border-radius:8px;font-size:11px;font-weight:700">Todas las pendientes</button>`:''}
+    </div>
+  </div>
+  ${_wkVigasN>pend?`<div style="background:#fef3c7;border:1.5px solid #fcd34d;border-radius:10px;padding:.5rem .625rem;margin-bottom:.625rem;font-size:11px;color:#92400e;font-weight:600">⚠ Con ${_wkVigasN} vigas se pasa del plan (quedan ${pend}). Revisa antes de guardar.</div>`:''}
+  <div style="display:flex;gap:6px;margin-bottom:.5rem">
+    <button onclick="wkMarcarTodasPartes(true)" style="flex:1;padding:.5rem;background:#eef4ff;color:#1e40af;border:1.5px solid #93c5fd;border-radius:8px;font-size:12px;font-weight:700">✔ Marcar todas</button>
+    <button onclick="wkMarcarTodasPartes(false)" style="flex:1;padding:.5rem;background:#fff;color:#6b7280;border:1.5px solid #d1d5db;border-radius:8px;font-size:12px;font-weight:700">✕ Desmarcar</button>
+  </div>
+  <div style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;background:#fff">${filas}</div>
+  <div style="display:flex;justify-content:space-between;align-items:center;padding:.75rem;background:#1a2b4a;color:#fff;border-radius:10px;margin-top:.625rem">
+    <span style="font-size:12px;font-weight:700">${nActivas}/${c.partes.length} partes · ${_wkVigasN} viga${_wkVigasN>1?'s':''}</span>
+    <span style="font-size:17px;font-weight:800;color:#93c5fd">${pesoTotal.toFixed(1)} kg</span>
+  </div>`;
+}
+
+// Perforaciones en el celular: se marcan las partes que llevan huecos, el
+// sistema autocompleta cuántos según lo ya registrado (editable), y se anota
+// cuántas PIEZAS se perforaron — eso es lo que alimenta el peso de avance.
+function wkRenderPerforaciones(c, cont){
+  const v = wkVigasData[0] || (wkVigasData[0] = {qty:{}, subQty:{}});
+  if(!v.perf) v.perf = {};
+
+  if(!v._perfInit){
+    c.partes.forEach(p=>{
+      const n = perfDeParteWk(c.cj, p.pr);
+      if(n > 0) v.perf[p.pr] = n;
+    });
+    v._perfInit = true;
+  }
+
+  let totalHuecos = 0, nActivas = 0, sinDato = 0, pesoTotal = 0, totalPzas = 0;
+  const filas = c.partes.map((p,i)=>{
+    const porPieza = Number(v.perf[p.pr])||0;
+    const on = porPieza > 0;
+    const uds = Number(p.plan)||0;
+    const piezasHI = PIEZAS_HI[p.perfil];
+    const hechas = piezasHI
+      ? Math.min(...piezasHI.map(sp=>Math.floor(Number(v.subQty?.[p.pr]?.[sp.tipo]||0)/(sp.qty||1))))
+      : Number(v.qty?.[p.pr]||0);
+    const nHechas = (isFinite(hechas) && hechas>0) ? hechas : 0;
+    const pesoParte = (Number(p.pu)||0) * nHechas;
+    const huecosParte = porPieza * nHechas;
+    if(on) nActivas++;
+    if(perfDeParteWk(c.cj, p.pr) <= 0) sinDato++;
+    totalHuecos += huecosParte; pesoTotal += pesoParte; totalPzas += nHechas;
+    return `
+    <div style="padding:.625rem .5rem;border-bottom:1px solid #e5e7eb;background:${on?'#f0fdf4':'#fafafa'}">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:.5rem">
+        <input type="checkbox" ${on?'checked':''} onchange="wkTogglePerf(${i},this.checked)" style="width:22px;height:22px;flex-shrink:0">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:700;color:${on?'#166534':'#9ca3af'}">${p.pr}
+            ${perfDeParteWk(c.cj,p.pr)>0?'<span style="font-size:9px;color:#3b82f6;font-weight:600"> · guardado</span>':'<span style="font-size:9px;color:#b45309;font-weight:600"> · sin dato</span>'}
+          </div>
+          <div style="font-size:10px;color:#6b7280;font-family:monospace">${p.perfil} · plan ${uds} uds</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          <div style="font-size:12px;font-weight:700;color:${nHechas>0?'#166534':'#d1d5db'}">${huecosParte} huecos</div>
+          <div style="font-size:10px;font-weight:700;color:${nHechas>0?'#1e40af':'#d1d5db'}">${pesoParte.toFixed(1)} kg</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <div style="flex:1;background:#fff;border:1.5px solid ${on?'#86efac':'#e5e7eb'};border-radius:8px;padding:5px;text-align:center">
+          <div style="font-size:9px;font-weight:800;color:#6b7280">HUECOS / PIEZA</div>
+          <input type="number" min="0" value="${porPieza}" inputmode="numeric"
+            style="width:100%;text-align:center;font-size:20px;font-weight:800;border:none;outline:none;color:#166534;background:transparent"
+            onchange="wkSetPerf(${i},this.value)">
+        </div>
+        <div style="flex:1;background:#fff;border:1.5px solid #93c5fd;border-radius:8px;padding:5px;text-align:center">
+          <div style="font-size:9px;font-weight:800;color:#1e40af">PZAS PERFORADAS</div>
+          <input type="number" min="0" max="${uds}" value="${nHechas}" inputmode="numeric"
+            style="width:100%;text-align:center;font-size:20px;font-weight:800;border:none;outline:none;color:#1e40af;background:transparent"
+            onchange="wkSetPerfQty(${i},this.value)">
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+
+  cont.innerHTML = `
+  <div style="background:#eff6ff;border:1.5px solid #bfdbfe;border-radius:10px;padding:.625rem;margin-bottom:.625rem">
+    <div style="font-size:13px;font-weight:800;color:#1e40af">🔩 Perforaciones — por conjunto</div>
+    <div style="font-size:11px;color:#3b82f6;margin-top:2px">Se marcan solas las partes con perforaciones ya registradas. Corrige los huecos si hace falta y anota cuántas piezas perforaste.</div>
+  </div>
+  ${sinDato>0?`<div style="background:#fef3c7;border:1.5px solid #fcd34d;border-radius:10px;padding:.5rem .625rem;margin-bottom:.625rem;font-size:11px;color:#92400e;font-weight:600">${sinDato} parte(s) sin dato de huecos. Lo que escribas queda guardado para la próxima vez.</div>`:''}
+  <div style="display:flex;gap:6px;margin-bottom:.5rem">
+    <button onclick="wkPerfTodasPzas(true)" style="flex:1;padding:.5rem;background:#eef4ff;color:#1e40af;border:1.5px solid #93c5fd;border-radius:8px;font-size:12px;font-weight:700">✔ Todas las piezas</button>
+    <button onclick="wkPerfTodasPzas(false)" style="flex:1;padding:.5rem;background:#fff;color:#6b7280;border:1.5px solid #d1d5db;border-radius:8px;font-size:12px;font-weight:700">✕ Limpiar</button>
+  </div>
+  <div style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;background:#fff">${filas}</div>
+  <div style="display:flex;justify-content:space-between;align-items:center;padding:.75rem;background:#1a2b4a;color:#fff;border-radius:10px;margin-top:.625rem">
+    <span style="font-size:12px;font-weight:700">${nActivas}/${c.partes.length} con huecos<br><span style="font-size:11px;opacity:.8">${totalPzas} pzas perforadas</span></span>
+    <span style="text-align:right">
+      <div style="font-size:17px;font-weight:800;color:#fde68a">${totalHuecos} huecos</div>
+      <div style="font-size:13px;font-weight:700;color:#93c5fd">${pesoTotal.toFixed(1)} kg</div>
+    </span>
+  </div>`;
+}
+
+function wkTogglePerf(idx, on){
+  const c = selCj; if(!c) return;
+  const p = c.partes[idx];
+  const v = wkVigasData[0] || (wkVigasData[0] = {qty:{}, subQty:{}});
+  if(!v.perf) v.perf = {};
+  if(on){
+    const conocido = perfDeParteWk(c.cj, p.pr);
+    v.perf[p.pr] = conocido > 0 ? conocido : 1;
+  } else {
+    v.perf[p.pr] = 0;
+    wkSetPerfQty(idx, 0, true);
+  }
+  wkRenderVigas();
+}
+
+function wkSetPerf(idx, valor){
+  const c = selCj; if(!c) return;
+  const p = c.partes[idx];
+  const v = wkVigasData[0] || (wkVigasData[0] = {qty:{}, subQty:{}});
+  if(!v.perf) v.perf = {};
+  v.perf[p.pr] = Math.max(0, parseInt(valor)||0);
+  wkRenderVigas();
+}
+
+// Cuántas PIEZAS se perforaron. Se guarda en los mismos campos que el resto de
+// fases (qty / subQty) para que el peso y los informes de avance lo tomen sin
+// ningún cambio.
+function wkSetPerfQty(idx, valor, sinRender){
+  const c = selCj; if(!c) return;
+  const p = c.partes[idx];
+  const v = wkVigasData[0] || (wkVigasData[0] = {qty:{}, subQty:{}});
+  const max = Number(p.plan)||0;
+  const n = Math.max(0, Math.min(max, parseInt(valor)||0));
+  const piezasHI = PIEZAS_HI[p.perfil];
+  if(piezasHI){
+    if(!v.subQty) v.subQty = {};
+    v.subQty[p.pr] = {};
+    piezasHI.forEach(sp=>{ v.subQty[p.pr][sp.tipo] = sp.qty * n; });
+  } else {
+    if(!v.qty) v.qty = {};
+    v.qty[p.pr] = n;
+  }
+  if(!sinRender) wkRenderVigas();
+}
+
+function wkPerfTodasPzas(llenar){
+  const c = selCj; if(!c) return;
+  const v = wkVigasData[0] || (wkVigasData[0] = {qty:{}, subQty:{}});
+  if(!v.perf) v.perf = {};
+  c.partes.forEach((p,i)=>{
+    const tienePerf = Number(v.perf[p.pr])>0;
+    wkSetPerfQty(i, llenar && tienePerf ? (Number(p.plan)||0) : 0, true);
+  });
+  wkRenderVigas();
+}
+
+// Guarda en el catálogo los huecos que escribió el operario, para que la
+// próxima vez se autocompleten solos.
+async function guardarPerfCatalogoWk(cj, perf){
+  const items = Object.keys(perf||{})
+    .filter(pr => Number(perf[pr])>0)
+    .map(pr => ({conjunto:cj, parte:pr, perforaciones:Number(perf[pr])}));
+  if(!items.length || !GAS.configured()) return;
+  try{
+    const r = await GAS.post('guardarPerforaciones', {items});
+    if(r && r.ok) items.forEach(it=>{ _wkPerfPorParte[`${it.conjunto}|${it.parte}`] = it.perforaciones; });
+  }catch(e){ /* si falla, el registro igual se guarda */ }
 }
 
 function wkAddVigasCompletas(){
@@ -3951,14 +4306,10 @@ async function wkGuardarVigas(){
   }));
   if(!tieneDatos){alert('Ingresa al menos una cantidad');return;}
 
-  const vigasCompletas=wkVigasData.filter(v=>partes.every(p=>{
-    const piezasHI=PIEZAS_HI[p.perfil];
-    if(piezasHI) return piezasHI.every(sp=>Number(v.subQty?.[p.pr]?.[sp.tipo]||0)>0);
-    return Number(v.qty?.[p.pr]||0)>0;
-  })).length;
+  const vigasCompletas=wkVigasData.filter(v=>_wkVigaCompleta(v, selCj, selFase)).length;
 
   // ── Verificar plan ─────────────────────────────
-  const planVigas = Math.min(...partes.map(p=>p.plan));
+  const planVigas = planVigasDe(selCj);
   const yaArmado = totalExec(selCj.cj,'—',selFase);
   const pendiente = Math.max(0, planVigas - yaArmado);
 
@@ -3998,6 +4349,25 @@ async function wkGuardarVigas(){
     calidad, obs:document.getElementById('f-obs')?.value.trim()||'',
     detalle_vigas:JSON.stringify(wkVigasData),
   };
+
+  // Perforaciones: recordar cuántos huecos lleva cada parte para autocompletarlo
+  // la próxima vez, y guardar el total de huecos hechos para los informes.
+  if(selFase==='Perforaciones' && wkVigasData[0]?.perf){
+    const v0 = wkVigasData[0];
+    guardarPerfCatalogoWk(selCj.cj, v0.perf);
+    let huecos = 0;
+    partes.forEach(p=>{
+      const porPieza = Number(v0.perf[p.pr])||0;
+      if(!porPieza) return;
+      const piezasHI = PIEZAS_HI[p.perfil];
+      const hechas = piezasHI
+        ? Math.min(...piezasHI.map(sp=>Math.floor(Number(v0.subQty?.[p.pr]?.[sp.tipo]||0)/(sp.qty||1))))
+        : Number(v0.qty?.[p.pr]||0);
+      if(isFinite(hechas) && hechas>0) huecos += porPieza * hechas;
+    });
+    rec.perforaciones = huecos;
+    rec.perf_detalle = JSON.stringify(v0.perf);
+  }
 
   saveRec(rec);
   setSync(true,'ok');

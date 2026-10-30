@@ -1,6 +1,18 @@
+<!--
+  TRACK METAL V-01 — Sistema de control de producción de estructura metálica
+  Copyright (c) 2026 José Luis Loor Cevallos. Todos los derechos reservados.
+
+  Software propietario. Su uso requiere licencia vigente otorgada por el
+  titular. Queda prohibida su copia, distribución, cesión, publicación o
+  modificación, total o parcial, sin autorización escrita.
+-->
 <!DOCTYPE html>
 <html lang="es">
 <head>
+<meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
+<meta name="googlebot" content="noindex, nofollow">
+<meta name="author" content="José Luis Loor Cevallos">
+<meta name="copyright" content="© 2026 José Luis Loor Cevallos — Todos los derechos reservados">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Track Metal V-01 — Supervisor</title>
@@ -1696,6 +1708,8 @@ const ACCIONES_SOLO_ADMIN = new Set([
   'guardarCatalogoConsumibles','deleteRegistros','diagnosticoCorreo','probarCorreo',
   'actualizarUsuario'
 ]);
+// 'verificarLicencia' y 'version' son públicas a propósito: se consultan
+// antes de que nadie se haya identificado.
 const ACCIONES_ADMIN_O_SUPERVISOR = new Set([
   'addOperario','bulkOperarios','desactivarOperario','reactivarOperario'
 ]);
@@ -9891,7 +9905,63 @@ async function iniciarApp(){
   }, 30000);
 }
 
+// ════════════════════════════════════════════════════════════
+// CONTROL DE INSTALACIÓN
+// Cada copia entregada lleva su código. Si el servidor no la reconoce o la
+// marcaron como suspendida o vencida, el programa no arranca. El código se
+// escribe aquí al preparar la copia de cada cliente. (29 oct 2026)
+// ════════════════════════════════════════════════════════════
+const CODIGO_INSTALACION = 'TM-000-INTERNA';   // copia propia del titular
+const DIAS_SIN_CONEXION  = 15;                 // margen para trabajar sin internet
+
+function _bloquearPorLicencia(mensaje){
+  document.body.innerHTML =
+    `<div style="position:fixed;inset:0;background:#151b26;color:#fff;display:flex;
+       align-items:center;justify-content:center;font-family:system-ui,sans-serif;padding:2rem">
+      <div style="max-width:420px;text-align:center">
+        <div style="font-size:15px;font-weight:800;letter-spacing:.14em;margin-bottom:1.25rem">
+          ⚙ TRACK <span style="color:#ff5a1f">METAL</span> V-01</div>
+        <div style="font-size:40px;margin-bottom:1rem">🔒</div>
+        <div style="font-size:15px;font-weight:700;margin-bottom:.75rem">Instalación no autorizada</div>
+        <div style="font-size:13px;line-height:1.6;opacity:.85">${mensaje||''}</div>
+        <div style="font-size:11px;opacity:.5;margin-top:1.75rem">
+          Código de instalación: ${CODIGO_INSTALACION}<br>
+          © 2026 José Luis Loor Cevallos — Todos los derechos reservados</div>
+      </div></div>`;
+}
+
+// Devuelve true si se puede seguir. Si no hay conexión, concede un margen
+// a partir de la última comprobación válida, para no dejar al taller parado.
+async function comprobarLicencia(){
+  const CLAVE = 'tm_lic_ok';
+  try{
+    const r = await GAS.post('verificarLicencia', {
+      codigo: CODIGO_INSTALACION,
+      origen: location.hostname + ' · ' + (navigator.platform||'')
+    });
+    if(r && r.ok){
+      try{ localStorage.setItem(CLAVE, String(Date.now())); }catch(e){}
+      return true;
+    }
+    if(r && r.ok===false){
+      _bloquearPorLicencia(r.msg || 'Esta copia no está autorizada para funcionar.');
+      return false;
+    }
+  }catch(e){ /* sin conexión: se evalúa el margen abajo */ }
+
+  // No se pudo preguntar: permitir dentro del margen desde la última vez
+  let ultima = 0;
+  try{ ultima = Number(localStorage.getItem(CLAVE)) || 0; }catch(e){}
+  const dias = ultima ? (Date.now() - ultima) / 86400000 : 999;
+  if(dias <= DIAS_SIN_CONEXION) return true;
+  _bloquearPorLicencia(
+    `No se ha podido verificar la licencia en ${DIAS_SIN_CONEXION} días.<br><br>` +
+    `Conecta el equipo a internet y vuelve a abrir el programa.`);
+  return false;
+}
+
 document.addEventListener('DOMContentLoaded', async ()=>{
+  if(!(await comprobarLicencia())) return;
   // Si el link trae ?resetToken=..., siempre se prioriza la pantalla de
   // "definir contraseña nueva", sin importar si ya había sesión iniciada.
   const params = new URLSearchParams(window.location.search);
