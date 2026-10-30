@@ -1717,6 +1717,27 @@ const DIAS_LIMITE_CORRECCION = 3;
 let ROL_ACTUAL  = (()=>{ try{ return String(localStorage.getItem('sup_rol')||'').trim().toLowerCase(); }catch(e){ return ''; } })();
 let AUTH_TOKEN  = (()=>{ try{ return localStorage.getItem('sup_auth_token') || ''; }catch(e){ return ''; } })();
 let NOMBRE_USUARIO = (()=>{ try{ return localStorage.getItem('sup_nombre') || ''; }catch(e){ return ''; } })();
+// ════════════════════════════════════════════════════════════
+// SOLO LECTURA
+// El rol Visor dice "solo puede ver, no puede modificar nada", pero el
+// formulario de Producción y el de Corte le aparecían completos y
+// funcionales: si los llenaba, el registro entraba. Esta guardia cierra esa
+// puerta en todas las acciones que escriben. (29 oct 2026)
+// ════════════════════════════════════════════════════════════
+function esSoloLectura(){
+  return ROL_ACTUAL === 'viewer';
+}
+
+// Devuelve true si puede continuar. Si es Visor, avisa y corta.
+function puedeEscribir(queAccion){
+  if(!esSoloLectura()) return true;
+  alert('👁 Tu acceso es de SOLO LECTURA.\n\n' +
+    (queAccion ? 'No puedes ' + queAccion + '.\n\n' : '') +
+    'Puedes consultar el avance, los informes y todas las pantallas, pero no modificar datos.\n\n' +
+    'Si necesitas registrar, pide al administrador que te cambie la función.');
+  return false;
+}
+
 function guardarSesion(rol, token, nombre){
   rol = String(rol||'').trim().toLowerCase();
   ROL_ACTUAL = rol; AUTH_TOKEN = token; NOMBRE_USUARIO = nombre || (rol==='admin'?'Administrador':rol==='supervisor'?'Supervisor':'Visor');
@@ -1750,7 +1771,7 @@ async function verificarSesionGuardada(){
   const gate = document.getElementById('login-gate');
   const err  = document.getElementById('login-error');
   if(err){
-    err.textContent = 'Tu sesión caducó. Vuelve a entrar.';
+    err.textContent = 'Tu acceso ya no está activo. Consulta con el administrador.';
     err.style.display = '';
   }
   if(gate){ gate.style.display='flex'; document.getElementById('login-user')?.focus(); }
@@ -4438,6 +4459,7 @@ function calcCorte() {
   }
 }
 function addCorte() {
+  if(!puedeEscribir('registrar cortes')) return;
   const fecha=document.getElementById('c-fecha').value;
   const cj=document.getElementById('c-cj').value;
   const parte=document.getElementById('c-parte').value;
@@ -5992,6 +6014,7 @@ function pCalcPeso(){
   pCalcResumenDia?.();
 }
 function addProd(){
+  if(!puedeEscribir('registrar producción')) return;
   const fecha=document.getElementById('p-fecha').value;
   const cj=document.getElementById('p-cj').value;
   const fase=document.getElementById('p-fase').value;
@@ -7697,6 +7720,7 @@ async function reactivarOp(id, nombre){
 function OPS_PENDING_KEY(){ return LSK('ops_pending'); }
 
 async function addOp(){
+  if(!puedeEscribir('dar de alta operarios')) return;
   const nom=document.getElementById('op-nom').value.trim();
   const ape=document.getElementById('op-ape').value.trim();
   if(!nom||!ape){toast('⚠ Nombre y apellido requeridos');return;}
@@ -9872,6 +9896,30 @@ async function iniciarApp(){
       .forEach(b=>b.style.display='none');
   }
 
+  // Solo lectura: esconder los botones que escriben, para que no aparezcan
+  // opciones que de todos modos van a ser rechazadas. La guardia de
+  // puedeEscribir() sigue ahí por si alguno se escapa. (29 oct 2026)
+  if(esSoloLectura()){
+    const QUE_ESCRIBEN = ['addCorte','addProd','addOp','crearUsuario','crearProyecto',
+      'catGuardar','catAgregarFila','importarOperarios','importarDatosOperario',
+      'borrarRegistrosFiltrados','limpiarRegistros','sincronizarOperarios',
+      'pAddViga','pAddVigasCompletas','resetCrono'];
+    QUE_ESCRIBEN.forEach(fn=>{
+      document.querySelectorAll(`[onclick*="${fn}("]`).forEach(b=>{ b.style.display='none'; });
+    });
+    // Aviso visible, para que entienda por qué no ve esos botones
+    document.querySelectorAll('#panel-corte .container, #panel-produccion .container, #panel-operarios .container')
+      .forEach(cont=>{
+        if(cont.querySelector('.aviso-solo-lectura')) return;
+        const av = document.createElement('div');
+        av.className = 'aviso-solo-lectura';
+        av.style.cssText = 'background:#fffbeb;border:1.5px solid #fcd34d;border-radius:10px;'
+          + 'padding:.75rem 1rem;margin-bottom:1rem;color:#92400e;font-size:13px;font-weight:600;';
+        av.textContent = '👁 Tu acceso es de solo lectura. Puedes consultar todo, pero no registrar ni modificar.';
+        cont.insertBefore(av, cont.firstChild);
+      });
+  }
+
   await cargarPlanDesdeServidor();
   await loadFromServer();
   renderDashboard();
@@ -9893,6 +9941,11 @@ async function iniciarApp(){
   // Check pending corrections
   checkPendingSolicitudes();
   setInterval(checkPendingSolicitudes, 60000);
+
+  // Revisar cada 5 minutos que la sesión siga siendo válida. Sin esto,
+  // desactivar a alguien no surtía efecto hasta que cerrara la pestaña: podía
+  // seguir trabajando con el programa abierto. Ahora se le cierra solo. (29 oct 2026)
+  setInterval(verificarSesionGuardada, 5*60*1000);
 
   // Load alertas
   loadAlertas();
@@ -9930,7 +9983,7 @@ async function iniciarApp(){
 // Versión de ESTA pantalla. Sirve para saber si el navegador está usando el
 // archivo recién subido o una copia vieja en caché — una duda que ya nos costó
 // tiempo dos veces. Se ve en Usuarios → Revisar mi sesión. (29 oct 2026)
-const VERSION_PANTALLA = '2026-10-29.3';
+const VERSION_PANTALLA = '2026-10-29.5';
 
 const CODIGO_INSTALACION = 'TM-000-INTERNA';   // copia propia del titular
 const DIAS_SIN_CONEXION  = 15;                 // margen para trabajar sin internet
