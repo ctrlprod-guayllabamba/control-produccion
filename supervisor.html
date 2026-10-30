@@ -1850,8 +1850,13 @@ const GAS = {
     try {
       const ctrl = new AbortController();
       setTimeout(()=>ctrl.abort(), 20000);
+      // El permiso va además fuera de 'data': cuando el contenido es un
+      // ARREGLO (bulkOperarios, bulkRegistros), JSON.stringify descarta las
+      // propiedades que no son índices y el authToken se perdía por el
+      // camino. El servidor lo rechazaba sin credencial, con razón. (29 oct 2026)
+      const _tok = (data && !Array.isArray(data) && data.authToken) || AUTH_TOKEN || '';
       const r=await fetch(GAS_URL,{method:'POST',redirect:'follow',
-        body:JSON.stringify({action,data}), signal:ctrl.signal});
+        body:JSON.stringify({action, data, authToken:_tok}), signal:ctrl.signal});
       const txt=await r.text();
       if(txt&&(txt.startsWith('{')||txt.startsWith('['))){
         const resp = JSON.parse(txt);
@@ -1860,7 +1865,8 @@ const GAS = {
     } catch(e) {}
     // Fallback GET/JSONP para POST también
     try {
-      const resp = await GAS.get(action,{data:JSON.stringify(data)});
+      const _tok2 = (data && !Array.isArray(data) && data.authToken) || AUTH_TOKEN || '';
+      const resp = await GAS.get(action,{data:JSON.stringify(data), authToken:_tok2});
       return await _reintentarSiNoAutorizado(resp, action, data);
     } catch(e){ return null; }
   },
@@ -9639,6 +9645,8 @@ async function revisarSesion(){
     let html = `<div style="background:${ok?'#f0fdf4':'#fef2f2'};border:1.5px solid ${ok?'#86efac':'#fca5a5'};border-radius:8px;padding:.625rem;margin-bottom:.5rem;color:${ok?'#166534':'#991b1b'};font-weight:600">`+
       `${ok?'✅ El servidor te reconoce como Administrador.':'❌ El servidor NO te reconoce como Administrador.'}<br>${r.motivo||''}</div>`;
     html += `<div><strong>Versión del servidor:</strong> ${r.version||'—'}</div>`;
+    html += `<div><strong>Versión de esta pantalla:</strong> ${VERSION_PANTALLA}`
+         +  ` <span style="color:var(--gm);font-size:10px">(si no coincide con la que acabas de subir, el navegador tiene una copia vieja: refresca con Ctrl+Shift+R)</span></div>`;
     html += `<div><strong>Sesión en este navegador:</strong> ${ROL_ACTUAL||'(ninguna)'} · ${NOMBRE_USUARIO||'—'}</div>`;
     if(r.usuario){
       html += `<div><strong>Tu credencial corresponde a:</strong> ${r.usuario.nombre} · rol "${r.usuario.rol}" · ${r.usuario.estado}</div>`;
@@ -9919,6 +9927,11 @@ async function iniciarApp(){
 // marcaron como suspendida o vencida, el programa no arranca. El código se
 // escribe aquí al preparar la copia de cada cliente. (29 oct 2026)
 // ════════════════════════════════════════════════════════════
+// Versión de ESTA pantalla. Sirve para saber si el navegador está usando el
+// archivo recién subido o una copia vieja en caché — una duda que ya nos costó
+// tiempo dos veces. Se ve en Usuarios → Revisar mi sesión. (29 oct 2026)
+const VERSION_PANTALLA = '2026-10-29.3';
+
 const CODIGO_INSTALACION = 'TM-000-INTERNA';   // copia propia del titular
 const DIAS_SIN_CONEXION  = 15;                 // margen para trabajar sin internet
 
