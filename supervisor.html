@@ -1880,15 +1880,23 @@ let EN_SEGUNDO_PLANO = false;
 async function _reintentarSiNoAutorizado(resp, action, data){
   const msg = resp && (resp.error || resp.msg) || '';
   if(!/no autorizado/i.test(String(msg))) return resp;
-  if(EN_SEGUNDO_PLANO) return resp;           // tarea automática: no molestar
+  if(EN_SEGUNDO_PLANO){
+    console.warn('[Track Metal] acción rechazada en segundo plano:', action, resp);
+    return resp;                              // tarea automática: no molestar
+  }
   if(_reintentandoAuth) return resp;          // evitar bucles
   if(!ACCIONES_SOLO_ADMIN.has(action) && !ACCIONES_ADMIN_O_SUPERVISOR.has(action)) return resp;
 
   _reintentandoAuth = true;
   try{
+    // Decir SIEMPRE qué acción fue rechazada: sin ese dato no hay forma de
+    // saber si el problema es la credencial o una acción concreta. (29 oct 2026)
+    console.warn('[Track Metal] acción rechazada por el servidor:', action, resp);
     const pass = prompt(
-      'El servidor no reconoce tu sesión, así que esta acción no se realizó.\n\n' +
-      'Escribe la contraseña de Administrador para continuar.\n' +
+      'El servidor rechazó esta acción, así que no se realizó.\n\n' +
+      'Acción: ' + action + '\n' +
+      'Respuesta del servidor: ' + String(msg).slice(0, 160) + '\n\n' +
+      'Escribe la contraseña de Administrador para reintentarla.\n' +
       '(Si esto se repite, usa Salir y vuelve a entrar.)');
     if(!pass) return resp;
 
