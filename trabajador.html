@@ -652,7 +652,7 @@ function stepbar(cur,labels){
 // ======= INIT =======
 // Sello de versión de esta pantalla. Se sube cada vez que se cambia el
 // archivo, para poder confirmar en el celular que la subida tomó efecto.
-const VERSION_WK = '2026-10-29.1';
+const VERSION_WK = '2026-10-30.1';
 
 document.addEventListener('DOMContentLoaded',()=>{
   const d=new Date();
@@ -710,19 +710,13 @@ function WORKER_RECS_LS(){ return WORKER_RECS_LS_BASE+'_'+PROYECTO_ACTUAL; }
 function PENDING_SYNC_KEY(){ return 'prod_pending_sync_'+PROYECTO_ACTUAL; }
 function PENDING_CORR_KEY(){ return 'prod_pending_corr_'+PROYECTO_ACTUAL; }
 
-const DEFAULT_WORKERS=[
-  // Operarios reales del proyecto (siempre visibles sin red)
-  {id:1777596148121,nom:'Jose Luis',    ape:'Loor Cevallos',rol:'Cortador',     fase:'Corte',            icon:'✂', est:'activo'},
-  {id:1777690982765,nom:'Teresa Nathaly',ape:'Loor Quiroz', rol:'Cortador',     fase:'Corte',            icon:'✂', est:'activo'},
-  // Operarios de referencia
-  {id:1,nom:'Carlos', ape:'Mendoza', rol:'Cortador',     fase:'Corte',            icon:'✂'},
-  {id:2,nom:'Pedro',  ape:'Vargas',  rol:'Armador',      fase:'Armado',           icon:'🔧'},
-  {id:3,nom:'Luis',   ape:'Torres',  rol:'Soldador',     fase:'Soldadura',        icon:'🔥'},
-  {id:4,nom:'Marco',  ape:'Reyes',   rol:'Perforador',   fase:'Perforaciones',    icon:'🔩'},
-  {id:5,nom:'Jorge',  ape:'Castillo',rol:'Ayudante',     fase:'Limpieza Mecánica',icon:'🧹'},
-  {id:6,nom:'Andrés', ape:'Salazar', rol:'Pintor',       fase:'Pintura',          icon:'🎨'},
-  {id:7,nom:'Raúl',   ape:'Mora',    rol:'Operador Grúa',fase:'Soporte',          icon:'🏗'},
-];
+// Vacío a propósito. Antes había nueve operarios quemados aquí (dos reales y
+// siete de ejemplo) que se mostraban cuando el celular no tenía caché. En un
+// proyecto nuevo eso ponía en pantalla a gente que no trabaja en esa obra, y
+// el operario podía tocar un nombre ajeno y registrar producción a su cuenta.
+// Sin red y sin caché previa es correcto no mostrar a nadie: la lista real
+// llega del servidor y queda cacheada por proyecto. (30 oct 2026)
+const DEFAULT_WORKERS=[];
 
 // Acciones que deben filtrarse/etiquetarse por proyecto automáticamente.
 const PROYECTO_SCOPED_GET_W  = ['getOperarios','getRegistros','getCorrecciones','getAlertas','getPlanConjuntos','getConsumibles'];

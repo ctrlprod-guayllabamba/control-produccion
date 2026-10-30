@@ -2007,6 +2007,14 @@ async function loadFromServer(){
           GAS.post('bulkOperarios', {proyectoId: PROYECTO_ACTUAL,
                                      operarios: opsDeEsteProyecto}).catch(()=>{});
         }
+        // En pantalla solo deben quedar los de ESTE proyecto. Lo que no lleve
+        // esta etiqueta es resto de otro proyecto o de la lista de ejemplo que
+        // antes venía quemada: no es personal de esta obra.
+        ST.ops = opsDeEsteProyecto;
+        LS.save(LSK('ops'), ST.ops);
+      } else if(Array.isArray(ops) && ops.length===0) {
+        ST.ops = [];
+        LS.save(LSK('ops'), ST.ops);
       }
 
       // Cargar registros — solo sobreescribir si GAS tiene datos
@@ -2617,15 +2625,13 @@ async function confirmarCargaPlan(){
 const FASES = ['Corte','Armado','Soldadura','Perforaciones','Limpieza Mecánica','Pintura'];
 
 const ST = {
-  ops: [
-    {id:1,nom:'Carlos',ape:'Mendoza',ced:'1712345678',rol:'Cortador',fase:'Corte'},
-    {id:2,nom:'Pedro',ape:'Vargas',ced:'1723456789',rol:'Armador',fase:'Armado'},
-    {id:3,nom:'Luis',ape:'Torres',ced:'1734567890',rol:'Soldador',fase:'Soldadura'},
-    {id:4,nom:'Marco',ape:'Reyes',ced:'1745678901',rol:'Perforador',fase:'Perforaciones'},
-    {id:5,nom:'Jorge',ape:'Castillo',ced:'1756789012',rol:'Ayudante',fase:'Limpieza Mecánica'},
-    {id:6,nom:'Andrés',ape:'Salazar',ced:'1767890123',rol:'Pintor',fase:'Pintura'},
-    {id:7,nom:'Raúl',ape:'Mora',ced:'1778901234',rol:'Operador Grúa',fase:'Soporte'},
-  ],
+  // Arranca VACÍO a propósito. Antes venían siete operarios de ejemplo
+  // quemados aquí (Carlos Mendoza, Pedro Vargas, Luis Torres…), y como un
+  // proyecto nuevo devuelve lista vacía del servidor, esos siete se quedaban
+  // en pantalla como si fueran personal del proyecto — y la sincronización
+  // llegaba a escribirlos en la hoja. Así aparecieron en PRY-0001 con cédulas
+  // inventadas. Un proyecto sin operarios debe verse vacío. (30 oct 2026)
+  ops: [],
   cortes: [],    // {id,fecha,turno,conjunto,parte,perfil,qty,pesoParts,sobLargo,sobPeso,destSob,sobRef,desperdicio,colada,material,espesor,ancho,largo,pesoPlancha,obs,opId,opNom}
   prods: [],     // {id,fecha,turno,conjunto,parte,qty,kg,fase,opId,opNom,cal,obs}
   // Execution counter: key = `${conjunto}::${parte}`
@@ -7734,6 +7740,15 @@ function _saveRestaurados(arr){ localStorage.setItem(LSK('_stockRestaurados'),JS
 function delStock(id){ST.cortes=ST.cortes.filter(c=>c.id!==id);renderStock();}
 
 // ======================= OPERARIOS =======================
+
+// Nombre del proyecto activo, para los avisos. Se lee del selector, que es lo
+// que el usuario tiene a la vista; PLAN.proyecto queda de respaldo.
+function _nombreProyectoActual(){
+  const sel = document.getElementById('topbar-proyecto-select');
+  const txt = sel && sel.selectedIndex >= 0 ? sel.options[sel.selectedIndex].text : '';
+  return (txt || PLAN.proyecto || 'Este proyecto').split(' · ')[0];
+}
+
 async function sincronizarOperarios(){
   const st = document.getElementById('op-sync-status');
   if(st) st.textContent = '⏳ Sincronizando con Google Sheets...';
@@ -7751,7 +7766,11 @@ async function sincronizarOperarios(){
       if(st) st.textContent = `✅ ${ops.length} operarios sincronizados · ${new Date().toLocaleTimeString('es-EC',{hour:'2-digit',minute:'2-digit'})}`;
       toast(`✓ ${ops.length} operarios cargados de Google Sheets`);
     } else {
-      if(st) st.textContent = '⚠ Google Sheets no tiene operarios — revisa la hoja';
+      // Lista vacía NO es un error: es lo normal en un proyecto recién creado.
+      ST.ops = [];
+      LS.save(LSK('ops'), ST.ops);
+      renderOps();
+      if(st) st.textContent = `📋 "${_nombreProyectoActual()}" todavía no tiene operarios registrados — da de alta al personal con el formulario de la izquierda`;
     }
   } catch(e){
     if(st) st.textContent = '❌ Error al conectar con Google Sheets';
@@ -10421,7 +10440,7 @@ async function iniciarApp(){
 // Versión de ESTA pantalla. Sirve para saber si el navegador está usando el
 // archivo recién subido o una copia vieja en caché — una duda que ya nos costó
 // tiempo dos veces. Se ve en Usuarios → Revisar mi sesión. (29 oct 2026)
-const VERSION_PANTALLA = '2026-10-30.2';
+const VERSION_PANTALLA = '2026-10-30.3';
 
 const CODIGO_INSTALACION = 'TM-000-INTERNA';   // copia propia del titular
 const DIAS_SIN_CONEXION  = 15;                 // margen para trabajar sin internet
