@@ -1380,6 +1380,7 @@ global.Chart = class {
           <option value="avance_proceso">📈 Avance semanal por proceso</option>
           <option value="avance_peso">⚖️ Avance semanal por peso / Curva S</option>
           <option value="cronograma">📋 Cronograma por cuadrilla</option>
+          <option value="consolidado">📊 Consolidado de proyectos (parcial y acumulado)</option>
           <option value="rendimiento">🏅 Rendimiento por persona (todos los proyectos)</option>
           <option value="consumibles">🧰 Consumibles vs. kg producidos</option>
         </select>
@@ -1418,6 +1419,17 @@ global.Chart = class {
         <select id="rpt-op" onchange="renderInforme()">
           <option value="">Todos</option>
         </select>
+      </div>
+      <!-- Selección de proyectos (informe consolidado) -->
+      <div class="fg" id="rpt-proys-wrap" style="display:none;min-width:320px">
+        <label>Proyectos a incluir</label>
+        <div id="rpt-proys-lista" style="border:1.5px solid #d1d5db;border-radius:8px;padding:.5rem .625rem;max-height:150px;overflow-y:auto;background:#fff">
+          <div style="font-size:12px;color:#94a3b8">Cargando proyectos…</div>
+        </div>
+        <div style="margin-top:4px;display:flex;gap:6px">
+          <button class="btn btn-g" style="font-size:10px;padding:3px 8px" onclick="rptProysTodos(true)">Todos</button>
+          <button class="btn btn-g" style="font-size:10px;padding:3px 8px" onclick="rptProysTodos(false)">Ninguno</button>
+        </div>
       </div>
       <!-- Por conjunto -->
       <div class="fg fix" id="rpt-cj-wrap" style="display:none;"><label>Conjunto</label>
@@ -8278,8 +8290,10 @@ function onRptTipoChange(){
   document.getElementById('rpt-hasta-wrap').style.display  = ['rango','consumibles'].includes(tipo)?'':'none';
   document.getElementById('rpt-op-wrap').style.display        = tipo==='operario'?'':'none';
   document.getElementById('rpt-cj-wrap').style.display        = tipo==='conjunto'?'':'none';
-  document.getElementById('rpt-op-desde-wrap').style.display  = ['operario','conjunto','rendimiento'].includes(tipo)?'':'none';
-  document.getElementById('rpt-op-hasta-wrap').style.display  = ['operario','conjunto','rendimiento'].includes(tipo)?'':'none';
+  document.getElementById('rpt-op-desde-wrap').style.display  = ['operario','conjunto','rendimiento','consolidado'].includes(tipo)?'':'none';
+  document.getElementById('rpt-op-hasta-wrap').style.display  = ['operario','conjunto','rendimiento','consolidado'].includes(tipo)?'':'none';
+  document.getElementById('rpt-proys-wrap').style.display     = tipo==='consolidado'?'':'none';
+  if(tipo==='consolidado') cargarListaProyectosInforme();
   // Populate operario selector
   if(tipo==='operario'){
     const sel=document.getElementById('rpt-op');
@@ -8293,6 +8307,212 @@ function onRptTipoChange(){
       PLAN.conjuntos.map(c=>`<option value="${c.conjunto}">${c.conjunto} — ${c.perfil}</option>`).join('');
   }
   renderInforme();
+}
+
+// ══════════════════════════════════════════════════════════════
+// INFORME: CONSOLIDADO DE PROYECTOS
+//
+// Producción parcial (del período elegido) y acumulada (desde el inicio) de
+// los proyectos que se marquen. Lo pueden ver Visor, Supervisor y Admin: es
+// una lectura, no modifica nada. (30 oct 2026)
+// ══════════════════════════════════════════════════════════════
+let _rptProysCache = null;
+
+async function cargarListaProyectosInforme(){
+  const cont = document.getElementById('rpt-proys-lista');
+  if(!cont) return;
+  if(!_rptProysCache){
+    try{
+      const ps = await GAS.get('getProyectos');
+      _rptProysCache = Array.isArray(ps) ? ps : [];
+    }catch(e){ _rptProysCache = []; }
+  }
+  const activos = _rptProysCache.filter(p => (p.estado||'activo') !== 'archivado');
+  if(!activos.length){
+    cont.innerHTML = '<div style="font-size:12px;color:#94a3b8">No hay proyectos para listar.</div>';
+    return;
+  }
+  // Por defecto van todos marcados; el proyecto activo queda resaltado.
+  cont.innerHTML = activos.map(p=>`
+    <label style="display:flex;align-items:center;gap:7px;padding:3px 0;font-size:12px;cursor:pointer;
+                  ${p.id===PROYECTO_ACTUAL?'font-weight:700;color:#0f172a':'color:#475569'}">
+      <input type="checkbox" class="rpt-proy-chk" value="${p.id}" checked
+        onchange="renderInforme()" style="width:15px;height:15px;cursor:pointer">
+      <span>${p.nombre||p.id}${p.codigo?` · ${p.codigo}`:''}${p.id===PROYECTO_ACTUAL?' (activo)':''}</span>
+    </label>`).join('');
+}
+
+function rptProysTodos(valor){
+  document.querySelectorAll('.rpt-proy-chk').forEach(c=>{ c.checked = !!valor; });
+  renderInforme();
+}
+
+async function renderConsolidadoProyectos(){
+  const area = document.getElementById('informe-area');
+  const desde = document.getElementById('rpt-op-desde')?.value || '';
+  const hasta = document.getElementById('rpt-op-hasta')?.value || '';
+  const sel = Array.from(document.querySelectorAll('.rpt-proy-chk'))
+                   .filter(c=>c.checked).map(c=>c.value);
+
+  if(!sel.length){
+    area.innerHTML = `<div class="card" style="margin-top:1rem;padding:1.5rem;color:#64748b">
+      Marca al menos un proyecto para ver el consolidado.</div>`;
+    return;
+  }
+
+  area.innerHTML = `<div class="card" style="margin-top:1rem;padding:2rem;text-align:center;color:#64748b">
+    ⏳ Reuniendo la producción de ${sel.length} proyecto(s)…</div>`;
+
+  let resp;
+  try{
+    resp = await GAS.get('getResumenProyectos',
+      {desde, hasta, proyectos: JSON.stringify(sel)});
+  }catch(e){ resp = null; }
+
+  if(!resp || !resp.ok || !Array.isArray(resp.filas)){
+    area.innerHTML = `<div class="card" style="margin-top:1rem;padding:1.5rem">
+      <div style="font-weight:700;color:#991b1b;margin-bottom:.5rem">No se pudo leer el consolidado</div>
+      <div style="font-size:13px;color:#64748b">
+        Si el servidor responde pero no reconoce la acción, el <strong>Code.gs</strong>
+        publicado es anterior a 2026-10-30.3. Compruébalo con <code>?action=version</code>.
+      </div></div>`;
+    return;
+  }
+
+  const filas = resp.filas.slice().sort((a,b)=>b.acum-a.acum);
+  const hayPeriodo = !!(desde||hasta);
+  const n = v => Number(v||0).toLocaleString('es-EC',{maximumFractionDigits:1});
+  const t = v => (Number(v||0)/1000).toLocaleString('es-EC',{maximumFractionDigits:1});
+
+  // Fases presentes en cualquiera de los proyectos, en orden de proceso
+  const ORDEN = ['Corte','Armado','Soldadura','Perforaciones','Limpieza Mecánica','Pintura'];
+  const fasesSet = {};
+  filas.forEach(f=>f.fases.forEach(x=>{ fasesSet[x.fase]=true; }));
+  const fases = Object.keys(fasesSet).sort((a,b)=>{
+    const ia=ORDEN.indexOf(a), ib=ORDEN.indexOf(b);
+    return (ia<0?99:ia)-(ib<0?99:ib) || a.localeCompare(b);
+  });
+
+  const tot = filas.reduce((s,f)=>({
+    planKg: s.planKg+f.planKg, acum: s.acum+f.acum, periodo: s.periodo+f.periodo
+  }), {planKg:0, acum:0, periodo:0});
+  const pctTot = tot.planKg>0 ? tot.acum/tot.planKg*100 : 0;
+
+  const lblRango = hayPeriodo ? `${desde||'inicio'} → ${hasta||'hoy'}` : 'sin período (todo el histórico)';
+
+  area.innerHTML = `
+  <div class="card" style="margin-top:1rem">
+    <div class="card-hdr" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5rem">
+      <span>📊 Consolidado de proyectos — ${filas.length} seleccionado(s)</span>
+      <button class="btn btn-s" onclick="window.print()" style="font-size:11px">🖨 Imprimir</button>
+    </div>
+
+    <!-- Totales -->
+    <div style="display:flex;gap:.75rem;flex-wrap:wrap;margin-bottom:1.25rem">
+      <div style="flex:1;min-width:150px;background:#0f172a;color:#fff;border-radius:10px;padding:.875rem 1rem">
+        <div style="font-size:11px;opacity:.75">Planificado</div>
+        <div style="font-size:22px;font-weight:800">${t(tot.planKg)} t</div>
+      </div>
+      <div style="flex:1;min-width:150px;background:#065f46;color:#fff;border-radius:10px;padding:.875rem 1rem">
+        <div style="font-size:11px;opacity:.85">Acumulado ejecutado</div>
+        <div style="font-size:22px;font-weight:800">${t(tot.acum)} t</div>
+        <div style="font-size:11px;opacity:.85">${pctTot.toFixed(1)}% del plan</div>
+      </div>
+      <div style="flex:1;min-width:150px;background:${hayPeriodo?'#1d4ed8':'#64748b'};color:#fff;border-radius:10px;padding:.875rem 1rem">
+        <div style="font-size:11px;opacity:.85">Parcial del período</div>
+        <div style="font-size:22px;font-weight:800">${hayPeriodo?t(tot.periodo)+' t':'—'}</div>
+        <div style="font-size:11px;opacity:.85">${lblRango}</div>
+      </div>
+    </div>
+
+    ${!hayPeriodo?`<div style="background:#fffbeb;border:1.5px solid #fcd34d;border-radius:8px;padding:.625rem .875rem;font-size:12px;color:#92400e;margin-bottom:1rem">
+      Elige "Desde" y "Hasta" arriba para ver también el <strong>parcial</strong> de un período. Sin período, la columna parcial queda igual al acumulado.
+    </div>`:''}
+
+    <!-- Tabla por proyecto -->
+    <div style="overflow-x:auto;margin-bottom:1.5rem">
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead><tr style="background:#0f172a;color:#fff;font-size:11px">
+          <th style="padding:8px 10px;text-align:left;min-width:170px">Proyecto</th>
+          <th style="padding:8px;text-align:center;min-width:85px">Planificado<br><small>kg</small></th>
+          <th style="padding:8px;text-align:center;min-width:85px;background:#065f46">Acumulado<br><small>kg</small></th>
+          <th style="padding:8px;text-align:center;min-width:70px">Avance</th>
+          <th style="padding:8px;text-align:center;min-width:85px;background:#1d4ed8">Parcial<br><small>del período</small></th>
+          <th style="padding:8px;text-align:center;min-width:70px">Días con<br><small>registro</small></th>
+          <th style="padding:8px;text-align:center;min-width:120px">Primer / último<br><small>registro</small></th>
+        </tr></thead>
+        <tbody>
+          ${filas.map((f,i)=>`
+          <tr style="border-bottom:1px solid #e2e8f0;${i%2?'background:#fafafa':''}">
+            <td style="padding:7px 10px">
+              <div style="font-weight:700">${f.nombre}</div>
+              <div style="font-size:10px;color:#94a3b8">${f.id}${f.codigo?` · ${f.codigo}`:''}</div>
+            </td>
+            <td style="padding:7px;text-align:center">${f.planKg>0?n(f.planKg):'<span style="color:#cbd5e1">sin plan</span>'}</td>
+            <td style="padding:7px;text-align:center;font-weight:800;color:#065f46">${n(f.acum)}</td>
+            <td style="padding:7px;text-align:center;min-width:70px">
+              ${f.planKg>0?`<div style="background:#e2e8f0;border-radius:4px;height:18px;position:relative">
+                <div style="background:#059669;height:18px;border-radius:4px;width:${Math.min(100,f.pct)}%"></div>
+                <span style="position:absolute;top:0;left:0;right:0;text-align:center;font-size:10px;font-weight:700;line-height:18px;color:${f.pct>50?'#fff':'#0f172a'}">${f.pct.toFixed(1)}%</span>
+              </div>`:'<span style="color:#cbd5e1">—</span>'}
+            </td>
+            <td style="padding:7px;text-align:center;font-weight:700;color:#1d4ed8">${hayPeriodo?n(f.periodo):'—'}</td>
+            <td style="padding:7px;text-align:center">${f.diasConRegistro||'—'}</td>
+            <td style="padding:7px;text-align:center;font-size:10px;color:#64748b">
+              ${f.primera?`${f.primera}<br>${f.ultima}`:'sin producción'}
+            </td>
+          </tr>`).join('')}
+        </tbody>
+        <tfoot><tr style="background:#0f172a;color:#fff;font-weight:800;font-size:12px">
+          <td style="padding:8px 10px">TOTAL ${filas.length} proyecto(s)</td>
+          <td style="padding:8px;text-align:center">${n(tot.planKg)}</td>
+          <td style="padding:8px;text-align:center;background:#065f46">${n(tot.acum)}</td>
+          <td style="padding:8px;text-align:center">${pctTot.toFixed(1)}%</td>
+          <td style="padding:8px;text-align:center;background:#1d4ed8">${hayPeriodo?n(tot.periodo):'—'}</td>
+          <td colspan="2"></td>
+        </tr></tfoot>
+      </table>
+    </div>
+
+    <!-- Detalle por fase -->
+    <div style="font-size:13px;font-weight:700;color:#0f172a;margin-bottom:.5rem">
+      🔧 Detalle por proceso — ${hayPeriodo?'acumulado · parcial del período':'acumulado'}
+    </div>
+    <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead><tr style="background:#334155;color:#fff;font-size:11px">
+          <th style="padding:8px 10px;text-align:left;min-width:170px">Proyecto</th>
+          ${fases.map(f=>`<th style="padding:8px;text-align:center;min-width:95px">${f}</th>`).join('')}
+        </tr></thead>
+        <tbody>
+          ${filas.map((f,i)=>{
+            const porFase={}; f.fases.forEach(x=>porFase[x.fase]=x);
+            return `<tr style="border-bottom:1px solid #e2e8f0;${i%2?'background:#fafafa':''}">
+              <td style="padding:7px 10px;font-weight:700">${f.nombre}</td>
+              ${fases.map(fa=>{
+                const x=porFase[fa];
+                if(!x||!x.acum) return `<td style="padding:7px;text-align:center;color:#cbd5e1">—</td>`;
+                return `<td style="padding:7px;text-align:center">
+                  <div style="font-weight:700;color:#065f46">${n(x.acum)}</div>
+                  ${hayPeriodo?`<div style="font-size:10px;color:#1d4ed8;font-weight:700">+${n(x.periodo)}</div>`:''}
+                </td>`;
+              }).join('')}
+            </tr>`;
+          }).join('')}
+        </tbody>
+        <tfoot><tr style="background:#334155;color:#fff;font-weight:800;font-size:12px">
+          <td style="padding:8px 10px">TOTAL</td>
+          ${fases.map(fa=>{
+            let a=0,p=0;
+            filas.forEach(f=>f.fases.forEach(x=>{ if(x.fase===fa){a+=x.acum;p+=x.periodo;} }));
+            return `<td style="padding:8px;text-align:center">
+              <div>${n(a)}</div>${hayPeriodo?`<div style="font-size:10px;opacity:.85">+${n(p)}</div>`:''}
+            </td>`;
+          }).join('')}
+        </tr></tfoot>
+      </table>
+    </div>
+  </div>`;
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -8697,6 +8917,9 @@ function renderInforme(){
   } else if(tipo==='rendimiento'){
     renderRendimientoPersonas();
     return;
+  } else if(tipo==='consolidado'){
+    renderConsolidadoProyectos();
+    return;
   } else if(tipo==='consumibles'){
     renderInformeConsumibles();
     return;
@@ -8756,6 +8979,7 @@ function renderInforme(){
     }).join('')}
     <tr style="background:var(--sp);font-weight:800;"><td>TOTAL</td><td class="r">${totCorteQty+totProdQty}</td><td class="r">${(totKgCorte+prods.reduce((s,p)=>s+Number(p.kg||p.pesoPzas||0),0)).toFixed(1)}</td><td class="r">${ST.prods.filter(filtro).reduce((s,p)=>s+parseFloat(p.sold_ml||0),0).toFixed(1)} ml</td><td class="r">${ST.cortes.filter(filtro).reduce((s,c)=>s+Number(c.desperdicio||0),0).toFixed(1)}</td></tr>
     </tbody></table></div>
+    ${_tablaRendimientoDiario(cortes, prods)}
     ${cortes.length?`<div style="font-size:12px;font-weight:800;color:var(--sd);margin:.75rem 0 .5rem;">Detalle de Cortes – Plancha</div>
     <div class="tw" style="margin-bottom:.75rem;"><table><thead><tr><th>Fecha</th><th>Conjunto</th><th>Parte</th><th class="r">Qty</th><th class="r">Kg partes</th><th>Plancha</th><th class="r">Sobrante (kg)</th><th class="r">Desp. (kg)</th></tr></thead>
     <tbody>${cortes.map(c=>`<tr><td>${c.fecha||'—'}</td><td>${c.conjunto||c.cj||'—'}</td><td>${c.parte||c.pr||'—'}</td><td class="r">${c.qty||0}</td><td class="r">${Number(c.pesoParts||c.pesoPzas||0).toFixed(1)}</td><td style="font-size:10px;">${c.pl_num||c.colada||'—'} ${c.pl_mat||c.material||''}</td><td class="r"><span class="stock-tag">${Number(c.sob_peso||c.sobPeso||0).toFixed(1)}</span></td><td class="r" style="color:var(--rt);">${Number(c.desperdicio||0).toFixed(1)}</td></tr>`).join('')}</tbody></table></div>`:''}
@@ -8765,6 +8989,125 @@ function renderInforme(){
   </div>`;
 }
 
+
+// ══════════════════════════════════════════════════════════════
+// TABLA DE RENDIMIENTO DIARIO
+//
+// Se arma con los MISMOS registros ya filtrados del informe, así que sirve
+// igual para "Por operario", "Por conjunto" y los informes por fecha: una
+// fila por día, abierta por fase, con el total del día.
+//
+// El promedio se saca sobre días CON registro, no sobre días de calendario:
+// un domingo sin trabajo no debe bajar el rendimiento. (30 oct 2026)
+// ══════════════════════════════════════════════════════════════
+function _tablaRendimientoDiario(cortes, prods){
+  const dias = {};   // fecha -> {kg:{fase:kg}, uds:{fase:uds}, total, udsTot}
+  const slot = fecha => {
+    if(!dias[fecha]) dias[fecha] = {fecha, kg:{}, uds:{}, total:0, udsTot:0};
+    return dias[fecha];
+  };
+
+  cortes.forEach(c=>{
+    const f = fxD(c.fecha); if(!f) return;
+    const kg = Number(c.pesoParts||c.pesoPzas||0);
+    const q  = Number(c.qty||0);
+    const d  = slot(f);
+    d.kg['Corte']  = (d.kg['Corte']||0) + kg;
+    d.uds['Corte'] = (d.uds['Corte']||0) + q;
+    d.total += kg; d.udsTot += q;
+  });
+  prods.forEach(p=>{
+    const f = fxD(p.fecha); if(!f) return;
+    const fase = p.fase || '(sin fase)';
+    const kg = Number(getPesoRegistro(p)) || 0;
+    const q  = Number(p.qty||0);
+    const d  = slot(f);
+    d.kg[fase]  = (d.kg[fase]||0) + kg;
+    d.uds[fase] = (d.uds[fase]||0) + q;
+    d.total += kg; d.udsTot += q;
+  });
+
+  const lista = Object.values(dias).sort((a,b)=>a.fecha.localeCompare(b.fecha));
+  if(!lista.length) return '';
+
+  // Solo las fases que realmente aparecen, en orden de fabricación
+  const usadas = FASES.filter(f=>lista.some(d=>(d.kg[f]||0) > 0 || (d.uds[f]||0) > 0));
+  const otras  = [];
+  lista.forEach(d=>Object.keys(d.kg).forEach(f=>{
+    if(!usadas.includes(f) && !otras.includes(f) && d.kg[f]>0) otras.push(f);
+  }));
+  const cols = usadas.concat(otras);
+
+  const totalKg  = lista.reduce((s,d)=>s+d.total,0);
+  const totalUds = lista.reduce((s,d)=>s+d.udsTot,0);
+  const prom     = totalKg / lista.length;
+  const mejor    = lista.reduce((a,b)=>b.total>a.total?b:a, lista[0]);
+  const peor     = lista.reduce((a,b)=>b.total<a.total?b:a, lista[0]);
+
+  const n  = v => Number(v||0).toLocaleString('es-EC',{maximumFractionDigits:1});
+  const dw = f => {
+    const d = new Date(f+'T12:00:00');
+    return isNaN(d.getTime()) ? '' : d.toLocaleDateString('es-EC',{weekday:'short'});
+  };
+
+  return `
+  <div style="font-size:12px;font-weight:800;color:var(--sd);margin:1.25rem 0 .5rem;">
+    Rendimiento diario
+    <span style="font-weight:400;color:var(--gm);font-size:11px;"> — ${lista.length} día(s) con registro · promedio ${n(prom)} kg/día</span>
+  </div>
+
+  <div style="display:flex;gap:.625rem;flex-wrap:wrap;margin-bottom:.625rem;">
+    <div style="flex:1;min-width:130px;background:#0f172a;color:#fff;border-radius:8px;padding:.625rem .875rem;">
+      <div style="font-size:10px;opacity:.75;">Promedio diario</div>
+      <div style="font-size:19px;font-weight:800;">${n(prom)} <span style="font-size:11px;font-weight:600;">kg/día</span></div>
+    </div>
+    <div style="flex:1;min-width:130px;background:#065f46;color:#fff;border-radius:8px;padding:.625rem .875rem;">
+      <div style="font-size:10px;opacity:.85;">Mejor día</div>
+      <div style="font-size:19px;font-weight:800;">${n(mejor.total)}</div>
+      <div style="font-size:10px;opacity:.85;">${mejor.fecha}</div>
+    </div>
+    <div style="flex:1;min-width:130px;background:#b45309;color:#fff;border-radius:8px;padding:.625rem .875rem;">
+      <div style="font-size:10px;opacity:.85;">Día más bajo</div>
+      <div style="font-size:19px;font-weight:800;">${n(peor.total)}</div>
+      <div style="font-size:10px;opacity:.85;">${peor.fecha}</div>
+    </div>
+    <div style="flex:1;min-width:130px;background:var(--su);border:1.5px solid var(--gl);border-radius:8px;padding:.625rem .875rem;">
+      <div style="font-size:10px;color:var(--gm);">Total del informe</div>
+      <div style="font-size:19px;font-weight:800;color:var(--sd);">${n(totalKg)} <span style="font-size:11px;font-weight:600;">kg</span></div>
+      <div style="font-size:10px;color:var(--gm);">${n(totalUds)} uds</div>
+    </div>
+  </div>
+
+  <div class="tw" style="margin-bottom:.75rem;"><table>
+    <thead><tr>
+      <th>Fecha</th><th>Día</th>
+      ${cols.map(f=>`<th class="r">${f}<br><small style="font-weight:400;">kg</small></th>`).join('')}
+      <th class="r">Total kg</th><th class="r">Uds</th><th class="r">vs. promedio</th>
+    </tr></thead>
+    <tbody>${lista.map(d=>{
+      const dif = prom>0 ? (d.total-prom)/prom*100 : 0;
+      const col = dif>=0 ? '#166534' : '#b91c1c';
+      return `<tr>
+        <td>${d.fecha}</td>
+        <td style="color:var(--gm);text-transform:capitalize;">${dw(d.fecha)}</td>
+        ${cols.map(f=>`<td class="r">${d.kg[f]?n(d.kg[f]):'<span style="color:#cbd5e1">—</span>'}</td>`).join('')}
+        <td class="r" style="font-weight:800;">${n(d.total)}</td>
+        <td class="r">${d.udsTot||'—'}</td>
+        <td class="r" style="color:${col};font-weight:700;">${dif>=0?'+':''}${dif.toFixed(0)}%</td>
+      </tr>`;
+    }).join('')}
+    <tr style="background:var(--sp);font-weight:800;">
+      <td>TOTAL</td><td>${lista.length} días</td>
+      ${cols.map(f=>`<td class="r">${n(lista.reduce((s,d)=>s+(d.kg[f]||0),0))}</td>`).join('')}
+      <td class="r">${n(totalKg)}</td><td class="r">${totalUds}</td><td class="r">—</td>
+    </tr>
+    <tr style="background:#ecfdf5;font-weight:700;color:#065f46;">
+      <td colspan="2">PROMEDIO POR DÍA</td>
+      ${cols.map(f=>`<td class="r">${n(lista.reduce((s,d)=>s+(d.kg[f]||0),0)/lista.length)}</td>`).join('')}
+      <td class="r">${n(prom)}</td><td class="r">${(totalUds/lista.length).toFixed(0)}</td><td class="r">—</td>
+    </tr>
+    </tbody></table></div>`;
+}
 
 // ======================= INFORME AVANCE SEMANAL POR PROCESO =======================
 function fxD(dateStr){ return (dateStr||'').substring(0,10); } // normalizar fecha a YYYY-MM-DD
@@ -10440,7 +10783,7 @@ async function iniciarApp(){
 // Versión de ESTA pantalla. Sirve para saber si el navegador está usando el
 // archivo recién subido o una copia vieja en caché — una duda que ya nos costó
 // tiempo dos veces. Se ve en Usuarios → Revisar mi sesión. (29 oct 2026)
-const VERSION_PANTALLA = '2026-10-30.3';
+const VERSION_PANTALLA = '2026-10-30.5';
 
 const CODIGO_INSTALACION = 'TM-000-INTERNA';   // copia propia del titular
 const DIAS_SIN_CONEXION  = 15;                 // margen para trabajar sin internet
