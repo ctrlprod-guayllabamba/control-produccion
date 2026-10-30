@@ -1380,6 +1380,7 @@ global.Chart = class {
           <option value="avance_proceso">📈 Avance semanal por proceso</option>
           <option value="avance_peso">⚖️ Avance semanal por peso / Curva S</option>
           <option value="cronograma">📋 Cronograma por cuadrilla</option>
+          <option value="rendimiento">🏅 Rendimiento por persona (todos los proyectos)</option>
           <option value="consumibles">🧰 Consumibles vs. kg producidos</option>
         </select>
       </div>
@@ -1707,7 +1708,7 @@ function LSK(key){ return `${key}_${PROYECTO_ACTUAL}`; }
 // Así no hay que tocar cada llamada suelta por el código — el selector de
 // proyecto activo (PROYECTO_ACTUAL) se inyecta solo.
 const PROYECTO_SCOPED_GET  = ['getOperarios','getRegistros','getCorrecciones','getAlertas','getPlanConjuntos','getConsumibles'];
-const PROYECTO_SCOPED_POST = ['addRegistro','addOperario','addCorreccion','addAlerta','addPlanConjuntos','clearRegistros'];
+const PROYECTO_SCOPED_POST = ['addRegistro','addOperario','addCorreccion','addAlerta','addPlanConjuntos','clearRegistros','bulkOperarios'];
 
 // ── Acceso: admin (control total) / supervisor (operativo, 3 días) / viewer (solo lectura) ──
 // addRegistro/addCorreccion/addAlerta/bulkRegistros NO están protegidas:
@@ -1992,7 +1993,20 @@ async function loadFromServer(){
         ST.ops = [...ops, ...faltantes];
         LS.save(LSK('ops'), ST.ops);
       } else if(Array.isArray(ops) && ops.length===0 && ST.ops.length>0) {
-        GAS.post('bulkOperarios', ST.ops).catch(()=>{});
+        // Un proyecto sin operarios es un estado NORMAL (recién creado), no una
+        // pérdida de datos. Antes se reenviaba aquí la caché completa del
+        // navegador, y como el lote iba sin proyecto el servidor reescribía la
+        // hoja entera: se borraban los operarios de los demás proyectos y se
+        // perdía la columna 'pin'. Ahora solo se reenvían los operarios que
+        // declaran ser DE ESTE proyecto, y el proyecto viaja en el sobre —
+        // los arreglos sueltos no llevan etiqueta (ver PROYECTO_SCOPED_POST).
+        // (30 oct 2026)
+        const opsDeEsteProyecto = ST.ops.filter(o =>
+          String(o.proyecto_id || '') === String(PROYECTO_ACTUAL));
+        if(opsDeEsteProyecto.length){
+          GAS.post('bulkOperarios', {proyectoId: PROYECTO_ACTUAL,
+                                     operarios: opsDeEsteProyecto}).catch(()=>{});
+        }
       }
 
       // Cargar registros — solo sobreescribir si GAS tiene datos
@@ -7750,9 +7764,11 @@ async function limpiarRegistros(){
   if(!confirm(`⚠ Esto eliminará TODOS los ${n} registros del Google Sheets y del navegador.\n\n¿Estás seguro? Esta acción no se puede deshacer.`)) return;
   if(!confirm('Confirma una vez más: ¿eliminar TODOS los registros?')) return;
   try {
-    // Borrar en GAS: enviar registros vacíos
-    await GAS.post('bulkRegistros', {registros: []});
-    // Borrar en Sheets directamente (el GAS deberá soportar clearRegistros)
+    // Borrar de verdad es tarea de clearRegistros, que es acción de
+    // administrador. Antes aquí se mandaba además bulkRegistros con lista
+    // vacía para "vaciar"; eso dependía de que bulkRegistros borrara la hoja,
+    // que es justamente lo que hacía que el celular arrasara la producción al
+    // subir sus pendientes. Ya no: bulkRegistros solo agrega. (30 oct 2026)
     await GAS.post('clearRegistros', {});
     // Limpiar local
     ST.cortes=[]; ST.prods=[]; ST.exec={};
@@ -8243,8 +8259,8 @@ function onRptTipoChange(){
   document.getElementById('rpt-hasta-wrap').style.display  = ['rango','consumibles'].includes(tipo)?'':'none';
   document.getElementById('rpt-op-wrap').style.display        = tipo==='operario'?'':'none';
   document.getElementById('rpt-cj-wrap').style.display        = tipo==='conjunto'?'':'none';
-  document.getElementById('rpt-op-desde-wrap').style.display  = ['operario','conjunto'].includes(tipo)?'':'none';
-  document.getElementById('rpt-op-hasta-wrap').style.display  = ['operario','conjunto'].includes(tipo)?'':'none';
+  document.getElementById('rpt-op-desde-wrap').style.display  = ['operario','conjunto','rendimiento'].includes(tipo)?'':'none';
+  document.getElementById('rpt-op-hasta-wrap').style.display  = ['operario','conjunto','rendimiento'].includes(tipo)?'':'none';
   // Populate operario selector
   if(tipo==='operario'){
     const sel=document.getElementById('rpt-op');
@@ -8258,6 +8274,177 @@ function onRptTipoChange(){
       PLAN.conjuntos.map(c=>`<option value="${c.conjunto}">${c.conjunto} — ${c.perfil}</option>`).join('');
   }
   renderInforme();
+}
+
+// ══════════════════════════════════════════════════════════════
+// INFORME: RENDIMIENTO POR PERSONA
+//
+// El operario se da de alta por proyecto, así que la misma persona tiene un
+// 'id' distinto en cada obra y su producción queda partida. La cédula sí es
+// la misma en todas: por eso el servidor agrupa por cédula y devuelve una
+// fila por persona × fase × proyecto. Aquí se muestra el detalle por proyecto
+// y el acumulado de cada persona.
+//
+// Este es el número que le falta al cronograma: los rendimientos que trae por
+// defecto son valores de fábrica, no medidos. (30 oct 2026)
+// ══════════════════════════════════════════════════════════════
+async function renderRendimientoPersonas(){
+  const area = document.getElementById('informe-area');
+  const desde = document.getElementById('rpt-op-desde')?.value || '';
+  const hasta = document.getElementById('rpt-op-hasta')?.value || '';
+  area.innerHTML = `<div class="card" style="margin-top:1rem;padding:2rem;text-align:center;color:#64748b">
+    ⏳ Sumando la producción de todos los proyectos…</div>`;
+
+  let resp;
+  try{
+    resp = await GAS.get('getRendimientoPersonas', {desde, hasta});
+  }catch(e){ resp = null; }
+
+  if(!resp || !resp.ok || !Array.isArray(resp.filas)){
+    area.innerHTML = `<div class="card" style="margin-top:1rem;padding:1.5rem">
+      <div style="font-weight:700;color:#991b1b;margin-bottom:.5rem">No se pudo leer el rendimiento</div>
+      <div style="font-size:13px;color:#64748b">
+        Si el servidor responde pero no reconoce la acción, es que el
+        <strong>Code.gs</strong> publicado todavía es anterior a 2026-10-30.1.
+        Compruébalo con <code>?action=version</code>.
+      </div></div>`;
+    return;
+  }
+
+  const filas = resp.filas;
+  if(!filas.length){
+    area.innerHTML = `<div class="card" style="margin-top:1rem;padding:1.5rem;color:#64748b">
+      No hay producción registrada en el rango seleccionado.</div>`;
+    return;
+  }
+
+  // Agrupar: persona → fase → proyectos
+  const PERS = {};
+  filas.forEach(f=>{
+    if(!PERS[f.ced]) PERS[f.ced] = {ced:f.ced, nom:f.nom||'', rol:f.rol||'', fases:{}};
+    if(!PERS[f.ced].nom && f.nom) PERS[f.ced].nom = f.nom;
+    if(!PERS[f.ced].rol && f.rol) PERS[f.ced].rol = f.rol;
+    const F = PERS[f.ced].fases;
+    if(!F[f.fase]) F[f.fase] = {fase:f.fase, kg:0, dias:0, proyectos:[]};
+    F[f.fase].kg   += f.kg;
+    F[f.fase].dias += f.dias;
+    F[f.fase].proyectos.push(f);
+  });
+
+  // Promedio por fase entre todas las personas — es el candidato a
+  // rendimiento del cronograma (kg/día/persona).
+  const PORFASE = {};
+  filas.forEach(f=>{
+    if(!PORFASE[f.fase]) PORFASE[f.fase] = {kg:0, dias:0, personas:{}};
+    PORFASE[f.fase].kg   += f.kg;
+    PORFASE[f.fase].dias += f.dias;
+    PORFASE[f.fase].personas[f.ced] = true;
+  });
+
+  const n  = v => Number(v||0).toLocaleString('es-EC',{maximumFractionDigits:1});
+  const personas = Object.values(PERS).sort((a,b)=>{
+    const ka = Object.values(a.fases).reduce((s,x)=>s+x.kg,0);
+    const kb = Object.values(b.fases).reduce((s,x)=>s+x.kg,0);
+    return kb-ka;
+  });
+  const lblRango = (desde||hasta) ? `${desde||'inicio'} → ${hasta||'hoy'}` : 'todo el histórico';
+
+  area.innerHTML = `
+  <div class="card" style="margin-top:1rem">
+    <div class="card-hdr" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5rem">
+      <span>🏅 Rendimiento por persona — ${lblRango}</span>
+      <button class="btn btn-s" onclick="window.print()" style="font-size:11px">🖨 Imprimir</button>
+    </div>
+
+    <div style="background:#f0f4ff;border:1.5px solid #93c5fd;border-radius:10px;padding:.875rem 1rem;margin-bottom:1.25rem;font-size:12px;color:#1e40af">
+      Los días son <strong>días con registro</strong>, no días de calendario: si
+      alguien no registró, ese día no le baja el promedio. Se agrupa por cédula,
+      así que la misma persona suma aunque trabaje en varias obras.
+    </div>
+
+    <!-- Promedio por fase: el insumo del cronograma -->
+    <div style="font-size:13px;font-weight:700;color:#0f172a;margin-bottom:.5rem">
+      📐 Promedio por proceso — kg/día/persona
+      <span style="font-size:11px;font-weight:400;color:#64748b"> — esto es lo que va en la casilla "Rend." del cronograma</span>
+    </div>
+    <div style="overflow-x:auto;margin-bottom:1.5rem">
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead><tr style="background:#0f172a;color:#fff;font-size:11px">
+          <th style="padding:8px 10px;text-align:left">Proceso</th>
+          <th style="padding:8px;text-align:center">Personas</th>
+          <th style="padding:8px;text-align:center">kg totales</th>
+          <th style="padding:8px;text-align:center">Días-persona</th>
+          <th style="padding:8px;text-align:center;background:#065f46">kg/día/persona</th>
+        </tr></thead>
+        <tbody>
+          ${Object.keys(PORFASE).sort().map((fase,i)=>{
+            const p = PORFASE[fase];
+            const kgDia = p.dias>0 ? p.kg/p.dias : 0;
+            const nPers = Object.keys(p.personas).length;
+            return `<tr style="border-bottom:1px solid #e2e8f0;${i%2?'background:#fafafa':''}">
+              <td style="padding:7px 10px;font-weight:700">${fase}</td>
+              <td style="padding:7px;text-align:center">${nPers}</td>
+              <td style="padding:7px;text-align:center">${n(p.kg)}</td>
+              <td style="padding:7px;text-align:center">${p.dias}</td>
+              <td style="padding:7px;text-align:center;font-weight:800;font-size:14px;color:#065f46">${n(kgDia)}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Detalle por persona -->
+    <div style="font-size:13px;font-weight:700;color:#0f172a;margin-bottom:.5rem">
+      👷 Detalle por persona — acumulado y desglose por obra
+    </div>
+    ${personas.map(p=>{
+      const totKg   = Object.values(p.fases).reduce((s,x)=>s+x.kg,0);
+      const sinCed  = String(p.ced).indexOf('SIN-CED:')===0;
+      return `
+      <div style="border:1.5px solid #e2e8f0;border-radius:10px;padding:.875rem 1rem;margin-bottom:.875rem">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:.5rem;margin-bottom:.5rem">
+          <div>
+            <span style="font-weight:800;font-size:14px">${p.nom||'(sin nombre)'}</span>
+            <span style="font-size:11px;color:#64748b;margin-left:.5rem">${p.rol||''}</span>
+            ${sinCed
+              ? `<span title="Este operario no tiene cédula en la hoja, así que su producción no se puede acumular entre obras" style="background:#fef3c7;color:#92400e;font-size:10px;font-weight:700;padding:1px 7px;border-radius:8px;margin-left:.5rem">⚠ sin cédula</span>`
+              : `<span style="font-size:11px;color:#94a3b8;margin-left:.5rem">cédula ${p.ced}</span>`}
+          </div>
+          <div style="font-weight:800;color:#065f46">${n(totKg)} kg</div>
+        </div>
+        <table style="width:100%;border-collapse:collapse;font-size:11px">
+          <thead><tr style="background:#f1f5f9;color:#475569">
+            <th style="padding:5px 8px;text-align:left">Proceso</th>
+            <th style="padding:5px;text-align:left">Obra</th>
+            <th style="padding:5px;text-align:center">kg</th>
+            <th style="padding:5px;text-align:center">Días</th>
+            <th style="padding:5px;text-align:center">kg/día</th>
+          </tr></thead>
+          <tbody>
+          ${Object.values(p.fases).sort((a,b)=>b.kg-a.kg).map(f=>{
+            const acumKgDia = f.dias>0 ? f.kg/f.dias : 0;
+            const varias = f.proyectos.length>1;
+            return f.proyectos.sort((a,b)=>b.kg-a.kg).map((pr,k)=>`
+              <tr style="border-bottom:1px solid #f1f5f9">
+                <td style="padding:5px 8px">${k===0?`<strong>${f.fase}</strong>`:''}</td>
+                <td style="padding:5px;color:#64748b">${pr.proyecto}</td>
+                <td style="padding:5px;text-align:center">${n(pr.kg)}</td>
+                <td style="padding:5px;text-align:center">${pr.dias}</td>
+                <td style="padding:5px;text-align:center;font-weight:700">${n(pr.kgDia)}</td>
+              </tr>`).join('') + (varias?`
+              <tr style="border-bottom:1.5px solid #cbd5e1;background:#ecfdf5">
+                <td style="padding:5px 8px"></td>
+                <td style="padding:5px;font-weight:700;color:#065f46">Acumulado ${f.fase}</td>
+                <td style="padding:5px;text-align:center;font-weight:800;color:#065f46">${n(f.kg)}</td>
+                <td style="padding:5px;text-align:center;font-weight:800;color:#065f46">${f.dias}</td>
+                <td style="padding:5px;text-align:center;font-weight:800;color:#065f46">${n(acumKgDia)}</td>
+              </tr>`:'');
+          }).join('')}
+          </tbody>
+        </table>
+      </div>`;
+    }).join('')}
+  </div>`;
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -8487,6 +8674,9 @@ function renderInforme(){
     return;
   } else if(tipo==='cronograma'){
     renderCronograma();
+    return;
+  } else if(tipo==='rendimiento'){
+    renderRendimientoPersonas();
     return;
   } else if(tipo==='consumibles'){
     renderInformeConsumibles();
@@ -10231,7 +10421,7 @@ async function iniciarApp(){
 // Versión de ESTA pantalla. Sirve para saber si el navegador está usando el
 // archivo recién subido o una copia vieja en caché — una duda que ya nos costó
 // tiempo dos veces. Se ve en Usuarios → Revisar mi sesión. (29 oct 2026)
-const VERSION_PANTALLA = '2026-10-29.7';
+const VERSION_PANTALLA = '2026-10-30.2';
 
 const CODIGO_INSTALACION = 'TM-000-INTERNA';   // copia propia del titular
 const DIAS_SIN_CONEXION  = 15;                 // margen para trabajar sin internet
